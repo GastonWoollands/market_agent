@@ -25,6 +25,8 @@ export type Health = {
   event_items?: number;
   evidence_packs?: number;
   outlook_reports?: number;
+  valuation_instruments?: number;
+  metric_ttm?: number;
   jobs: JobStatus[];
 };
 
@@ -272,6 +274,38 @@ export async function fetchOutlook(asOf?: string): Promise<OutlookTape | null> {
       return null;
     }
     return (await response.json()) as OutlookTape;
+  } catch {
+    return null;
+  }
+}
+
+export type ValuationMember = {
+  ticker: string;
+  name: string;
+  exchange: string | null;
+  cik: string | null;
+  as_of: string | null;
+  revenue: number | null;
+  ebitda: number | null;
+  fcf: number | null;
+  net_debt: number | null;
+};
+
+export type ValuationTape = {
+  as_of: string | null;
+  stale: boolean;
+  min_revenue: number;
+  count: number;
+  members: ValuationMember[];
+};
+
+export async function fetchValuation(): Promise<ValuationTape | null> {
+  try {
+    const response = await fetch(`${API_URL}/valuation`, { cache: "no-store" });
+    if (!response.ok) {
+      return null;
+    }
+    return (await response.json()) as ValuationTape;
   } catch {
     return null;
   }

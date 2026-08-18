@@ -39,6 +39,7 @@ market-news = "jobs.ingest_news:main"
 market-calendar = "jobs.ingest_calendar:main"
 market-pack = "jobs.build_pack:main"
 market-outlook = "jobs.generate_outlook:main"
+market-sec = "jobs.ingest_sec:main"
 
 [tool.setuptools.packages.find]
 include = ["api*", "store*", "jobs*", "ingest*", "analytics*", "agent*"]

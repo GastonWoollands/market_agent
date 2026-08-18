@@ -32,7 +32,7 @@ class Instrument(Base):
     asset_class: Mapped[str] = mapped_column(String(16), nullable=False)
     sector: Mapped[str | None] = mapped_column(String(64))
     industry: Mapped[str | None] = mapped_column(String(128))
-    cik: Mapped[str | None] = mapped_column(String(10))
+    cik: Mapped[str | None] = mapped_column(String(10), index=True)
     figi: Mapped[str | None] = mapped_column(String(12))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -269,3 +269,20 @@ class OutlookReport(Base):
     __table_args__ = (
         CheckConstraint("status IN ('ok', 'fallback')", name="ck_outlook_report_status"),
     )
+
+
+class MetricTtm(Base):
+    __tablename__ = "metric_ttm"
+
+    instrument_id: Mapped[int] = mapped_column(
+        ForeignKey("instrument.id", ondelete="CASCADE"), primary_key=True
+    )
+    as_of: Mapped[date] = mapped_column(Date, primary_key=True)
+    revenue: Mapped[Decimal] = mapped_column(Numeric(20, 2), nullable=False)
+    ebitda: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
+    fcf: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
+    net_debt: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
+    shares: Mapped[Decimal | None] = mapped_column(Numeric(20, 4))
+    source: Mapped[str] = mapped_column(String(16), nullable=False)
+
+    instrument: Mapped[Instrument] = relationship()

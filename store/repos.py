@@ -16,6 +16,9 @@ from store.canonical import (
     OddsPoint,
     QuoteSnapshot,
 )
+from store.canonical import (
+    MetricTtm as TtmSnapshot,
+)
 from store.catalog import CatalogInstrument, FredSeriesItem
 from store.models import (
     BarDaily,
@@ -25,6 +28,7 @@ from store.models import (
     JobRun,
     MacroObservation,
     MacroSeries,
+    MetricTtm,
     NewsItem,
     OddsSnapshot,
     OutlookReport,
@@ -47,6 +51,7 @@ def upsert_instrument(session: Session, item: CatalogInstrument) -> Instrument:
             asset_class=item.asset_class,
             sector=item.sector,
             industry=item.industry,
+            cik=item.cik,
             is_active=True,
         )
         .on_conflict_do_update(
@@ -58,6 +63,7 @@ def upsert_instrument(session: Session, item: CatalogInstrument) -> Instrument:
                 "asset_class": item.asset_class,
                 "sector": item.sector,
                 "industry": item.industry,
+                "cik": item.cik,
                 "is_active": True,
                 "updated_at": func.now(),
             },
@@ -718,3 +724,72 @@ def latest_outlook_report(session: Session, as_of: date | None = None) -> Outloo
         stmt = stmt.where(OutlookReport.as_of == as_of)
     stmt = stmt.order_by(OutlookReport.as_of.desc())
     return session.execute(stmt).scalars().first()
+
+
+def replace_membership(session: Session, universe_id: int, instrument_ids: Sequence[int]) -> int:
+    wanted = set(instrument_ids)
+    existing = list(
+        session.execute(
+            select(UniverseMember).where(UniverseMember.universe_id == universe_id)
+        ).scalars()
+    )
+    removed = 0
+    for row in existing:
+        if row.instrument_id not in wanted:
+            session.delete(row)
+            removed += 1
+    for instrument_id in wanted:
+        ensure_membership(session, universe_id, instrument_id)
+    return len(wanted)
+
+
+def upsert_metric_ttm(session: Session, instrument_id: int, item: TtmSnapshot) -> None:
+    stmt = insert(MetricTtm).values(
+        instrument_id=instrument_id,
+        as_of=item.as_of,
+        revenue=item.revenue,
+        ebitda=item.ebitda,
+        fcf=item.fcf,
+        net_debt=item.net_debt,
+        shares=item.shares,
+        source="sec",
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["instrument_id", "as_of"],
+        set_={
+            "revenue": stmt.excluded.revenue,
+            "ebitda": stmt.excluded.ebitda,
+            "fcf": stmt.excluded.fcf,
+            "net_debt": stmt.excluded.net_debt,
+            "shares": stmt.excluded.shares,
+            "source": stmt.excluded.source,
+        },
+    )
+    session.execute(stmt)
+
+
+def latest_metric_ttm(
+    session: Session, universe: str = "valuation"
+) -> list[tuple[Instrument, MetricTtm]]:
+    ranked = (
+        select(
+            MetricTtm.instrument_id,
+            func.max(MetricTtm.as_of).label("as_of"),
+        )
+        .group_by(MetricTtm.instrument_id)
+        .subquery()
+    )
+    stmt = (
+        select(Instrument, MetricTtm)
+        .join(UniverseMember, UniverseMember.instrument_id == Instrument.id)
+        .join(Universe, Universe.id == UniverseMember.universe_id)
+        .join(MetricTtm, MetricTtm.instrument_id == Instrument.id)
+        .join(
+            ranked,
+            (MetricTtm.instrument_id == ranked.c.instrument_id)
+            & (MetricTtm.as_of == ranked.c.as_of),
+        )
+        .where(Universe.name == universe, Instrument.is_active.is_(True))
+        .order_by(MetricTtm.revenue.desc(), Instrument.ticker)
+    )
+    return list(session.execute(stmt).all())

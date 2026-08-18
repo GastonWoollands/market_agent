@@ -18,9 +18,9 @@ from store.repos import (
 
 log = logging.getLogger("jobs.ingest_yahoo")
 JOB_NAME = "ingest_yahoo"
-UNIVERSE = "tape"
+DEFAULT_UNIVERSE = "tape"
 CHART_RANGE = "5y"
-REQUIRED_TICKERS = ("SPY", "XLK")
+REQUIRED = {"tape": ("SPY", "XLK")}
 
 
 @dataclass(frozen=True)
@@ -30,30 +30,32 @@ class TapeInstrument:
     yahoo_symbol: str
 
 
-def ingest(*, tickers: set[str] | None = None) -> dict[str, int | list[str]]:
+def ingest(
+    *, tickers: set[str] | None = None, universe: str = DEFAULT_UNIVERSE
+) -> dict[str, int | list[str]]:
     with session_scope() as session:
         instruments = [
             TapeInstrument(item.id, item.ticker, item.yahoo_symbol)
-            for item in instruments_in_universe(session, UNIVERSE)
+            for item in instruments_in_universe(session, universe)
         ]
     if tickers:
         wanted = {ticker.upper() for ticker in tickers}
         instruments = [item for item in instruments if item.ticker.upper() in wanted]
     if not instruments:
-        raise RuntimeError("tape universe is empty — run python -m jobs.seed_tape first")
+        raise RuntimeError(f"{universe} universe is empty — run the seed/SEC job first")
 
     by_yahoo = {item.yahoo_symbol: item for item in instruments}
     failures: list[str] = []
     bar_rows = 0
     quote_rows = 0
-    required = {ticker.upper() for ticker in REQUIRED_TICKERS}
+    required = {ticker.upper() for ticker in REQUIRED.get(universe, ())}
     if tickers:
         required &= {ticker.upper() for ticker in tickers}
     ordered = sorted(instruments, key=lambda item: item.ticker.upper() not in required)
     rate_limited = False
 
     with YahooClient() as client:
-        for instrument in ordered:
+        for index, instrument in enumerate(ordered, start=1):
             try:
                 bars = client.fetch_chart(instrument.yahoo_symbol, range_=CHART_RANGE)
             except YahooHttpError as exc:
@@ -69,8 +71,10 @@ def ingest(*, tickers: set[str] | None = None) -> dict[str, int | list[str]]:
                 continue
             with session_scope() as session:
                 bar_rows += upsert_daily_bars(session, instrument.id, bars)
+            if index % 50 == 0:
+                log.info("yahoo %s %s/%s", universe, index, len(ordered))
 
-        if not rate_limited:
+        if not rate_limited and universe == "tape":
             try:
                 snapshots = client.fetch_quotes(list(by_yahoo))
                 mapped_quotes = [
@@ -99,10 +103,16 @@ def ingest(*, tickers: set[str] | None = None) -> dict[str, int | list[str]]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Ingest Yahoo daily bars and quotes for the tape.")
+    parser = argparse.ArgumentParser(description="Ingest Yahoo daily bars and quotes.")
     parser.add_argument(
         "--tickers",
-        help="Optional comma-separated tape tickers (default: full tape).",
+        help="Optional comma-separated tickers (default: full universe).",
+    )
+    parser.add_argument(
+        "--universe",
+        default=DEFAULT_UNIVERSE,
+        choices=("tape", "valuation"),
+        help="Which universe to pull bars for.",
     )
     args = parser.parse_args()
     selected = (
@@ -114,7 +124,7 @@ def main() -> None:
     logging.getLogger("yfinance").setLevel(logging.WARNING)
     result: dict[str, int | list[str]] = {"bar_rows": 0, "quote_rows": 0, "failures": []}
     try:
-        result = ingest(tickers=selected)
+        result = ingest(tickers=selected, universe=args.universe)
     except Exception as exc:
         record_job(
             JOB_NAME,
@@ -135,7 +145,7 @@ def main() -> None:
             "bar_rows": result["bar_rows"],
             "quote_rows": result["quote_rows"],
             "failures": failures,
-            "range": CHART_RANGE,
+            "universe": args.universe,
             "source": "yahoo",
         },
     )

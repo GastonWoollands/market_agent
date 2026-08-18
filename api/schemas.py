@@ -28,6 +28,8 @@ class HealthResponse(BaseModel):
     event_items: int = 0
     evidence_packs: int = 0
     outlook_reports: int = 0
+    valuation_instruments: int = 0
+    metric_ttm: int = 0
     jobs: list[JobStatus] = []
 
 
@@ -216,3 +218,23 @@ class OutlookResponse(BaseModel):
     news: list[OutlookNews] = Field(default_factory=list)
     events: list[OutlookEvent] = Field(default_factory=list)
     sources: list[OutlookSource] = Field(default_factory=list)
+
+
+class ValuationMember(BaseModel):
+    ticker: str
+    name: str
+    exchange: str | None = None
+    cik: str | None = None
+    as_of: date | None = None
+    revenue: float | None = None
+    ebitda: float | None = None
+    fcf: float | None = None
+    net_debt: float | None = None
+
+
+class ValuationResponse(BaseModel):
+    as_of: date | None = None
+    stale: bool = True
+    min_revenue: float = 1_000_000_000
+    count: int = 0
+    members: list[ValuationMember] = Field(default_factory=list)

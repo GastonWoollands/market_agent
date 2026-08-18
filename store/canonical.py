@@ -70,3 +70,23 @@ class CalendarEvent(BaseModel):
     ticker: str | None = None
     extra: dict | None = None
 
+
+class SecTicker(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    cik: str
+    ticker: str
+    name: str
+    exchange: str
+
+
+class MetricTtm(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    cik: str
+    as_of: date
+    revenue: Decimal
+    ebitda: Decimal | None = None
+    fcf: Decimal | None = None
+    net_debt: Decimal | None = None
+    shares: Decimal | None = None

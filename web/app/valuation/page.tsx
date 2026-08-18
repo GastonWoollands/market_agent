@@ -1,10 +1,9 @@
-import { PageHeader } from "@/components/PageHeader";
+import { ValuationView } from "@/components/ValuationView";
+import { fetchValuation } from "@/lib/api";
 
-export default function ValuationPage() {
-  return (
-    <PageHeader title="Valuation">
-      Current EV/EBITDA versus each name’s own five-year range, plus earnings growth
-      versus multiple re-rating. Universe is US names with TTM revenue of $1B+ (Day 11–15).
-    </PageHeader>
-  );
+export const dynamic = "force-dynamic";
+
+export default async function ValuationPage() {
+  const tape = await fetchValuation();
+  return <ValuationView tape={tape} />;
 }

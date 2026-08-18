@@ -15,6 +15,7 @@ class CatalogInstrument(BaseModel):
     sector: str | None = None
     industry: str | None = None
     exchange: str | None = None
+    cik: str | None = None
 
 
 class UniverseCatalog(BaseModel):
@@ -32,12 +33,20 @@ class LiveTapeConfig(BaseModel):
     mover_roles: list[str] = Field(default_factory=lambda: ["sector", "group"])
 
 
+class ValuationConfig(BaseModel):
+    description: str | None = None
+    min_revenue_usd: int = 1_000_000_000
+    exchanges: list[str] = Field(default_factory=lambda: ["NYSE", "Nasdaq", "NYSE American"])
+    rebuild: str = "monthly"
+
+
 class UniversesFile(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     tape: UniverseCatalog
     watchlist: UniverseCatalog
     live: LiveTapeConfig = Field(default_factory=LiveTapeConfig)
+    valuation: ValuationConfig = Field(default_factory=ValuationConfig)
 
 
 def load_universes() -> UniversesFile:

@@ -12,6 +12,7 @@ from store.models import (  # noqa: F401
     JobRun,
     MacroObservation,
     MacroSeries,
+    MetricTtm,
     NewsItem,
     OddsSnapshot,
     OutlookReport,

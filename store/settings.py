@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     google_api_key: str = ""
     agent_provider: str = ""
     agent_model: str = ""
+    sec_user_agent: str = "MarketAgent you@email.com"
 
     @property
     def resolved_gemini_key(self) -> str:

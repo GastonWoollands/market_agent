@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,7 +13,15 @@ from api.dynamics import HISTORY_DAYS as DYNAMICS_LOOKBACK
 from api.dynamics import build_dynamics, stored_from_rows
 from api.live import HISTORY_DAYS, build_live, resolve_lever, risk_on_from_store
 from api.outlook import outlook_from_store
-from api.schemas import DynamicsResponse, HealthResponse, JobStatus, LiveResponse, OutlookResponse
+from api.schemas import (
+    DynamicsResponse,
+    HealthResponse,
+    JobStatus,
+    LiveResponse,
+    OutlookResponse,
+    ValuationResponse,
+)
+from api.valuation import STALE_AFTER_DAYS, build_valuation
 from store.catalog import load_fred_series, load_polymarket, load_universes, tape_with_roles
 from store.engine import get_db
 from store.models import (
@@ -21,6 +29,7 @@ from store.models import (
     EventItem,
     EvidencePack,
     MacroObservation,
+    MetricTtm,
     NewsItem,
     OddsSnapshot,
     OutlookReport,
@@ -31,6 +40,7 @@ from store.models import (
 from store.repos import (
     closes_for_tickers,
     latest_jobs,
+    latest_metric_ttm,
     latest_odds,
     latest_return_stats,
     latest_rrg_points,
@@ -84,6 +94,8 @@ def health(db: Session = Depends(get_db)) -> HealthResponse | JSONResponse:
             event_items=table_count(db, EventItem),
             evidence_packs=table_count(db, EvidencePack),
             outlook_reports=table_count(db, OutlookReport),
+            valuation_instruments=universe_size(db, "valuation"),
+            metric_ttm=table_count(db, MetricTtm),
             jobs=jobs,
         )
     except Exception as exc:
@@ -172,4 +184,29 @@ def outlook(
         return outlook_from_store(db, as_of=as_of)
     except Exception:
         payload = OutlookResponse(stale=True)
+        return JSONResponse(status_code=503, content=payload.model_dump(mode="json"))
+
+
+@app.get("/valuation", response_model=ValuationResponse)
+def valuation(db: Session = Depends(get_db)) -> ValuationResponse | JSONResponse:
+    try:
+        catalog = load_universes()
+        rows = latest_metric_ttm(db)
+        as_of = max((metric.as_of for _, metric in rows), default=None)
+        stale = not rows
+        sec = next((job for job in latest_jobs(db) if job.job_name == "ingest_sec"), None)
+        if sec is None or sec.status != "ok":
+            stale = True
+        elif sec.finished_at is not None:
+            clock = datetime.now(sec.finished_at.tzinfo)
+            if (clock - sec.finished_at).days > STALE_AFTER_DAYS:
+                stale = True
+        return build_valuation(
+            rows,
+            min_revenue=float(catalog.valuation.min_revenue_usd),
+            as_of=as_of,
+            stale=stale,
+        )
+    except Exception:
+        payload = ValuationResponse(stale=True)
         return JSONResponse(status_code=503, content=payload.model_dump(mode="json"))

@@ -30,3 +30,9 @@ def test_polymarket_yaml_has_live_fed_inflation_recession() -> None:
     assert categories >= {"rates", "inflation", "growth"}
     assert any("recession" in item.slug for item in live)
     assert catalog.search_hints["rates"]
+
+
+def test_valuation_yaml_has_billion_floor() -> None:
+    catalog = load_universes()
+    assert catalog.valuation.min_revenue_usd == 1_000_000_000
+    assert {"NYSE", "Nasdaq"} <= set(catalog.valuation.exchanges)
