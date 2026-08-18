@@ -19,8 +19,8 @@ export function OutlookView({ tape }: { tape: OutlookTape | null }) {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Outlook</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-mute">
-            Weekday brief is Day 10 (Claude, pack-grounded). News, calendar, and the sources table are
-            from Postgres only.
+            Weekday brief is pack-grounded (Anthropic or Gemini). News, calendar, and the
+            sources table are from Postgres only.
           </p>
         </div>
         <p className="text-[13px] text-mute">
@@ -35,13 +35,29 @@ export function OutlookView({ tape }: { tape: OutlookTape | null }) {
       </div>
 
       {tape.brief ? (
-        <section className="rounded border border-line bg-panel px-3 py-3 text-sm leading-6">
-          {tape.brief}
+        <section className="rounded border border-line bg-panel px-3 py-3">
+          <p className="text-[11px] uppercase tracking-wide text-mute">
+            Brief
+            {tape.brief_status ? (
+              <>
+                <span className="mx-1.5 text-line">·</span>
+                {tape.brief_status}
+              </>
+            ) : null}
+            {tape.brief_model ? (
+              <>
+                <span className="mx-1.5 text-line">·</span>
+                {tape.brief_model}
+              </>
+            ) : null}
+          </p>
+          <p className="mt-2 whitespace-pre-wrap text-sm leading-6">{tape.brief}</p>
         </section>
       ) : (
         <p className="text-sm text-mute">
-          No generated brief yet. Run <code className="text-white">python -m jobs.build_pack</code> so
-          Day 10 has evidence. Sources below are live counts.
+          No generated brief yet. Run{" "}
+          <code className="text-white">python -m jobs.generate_outlook --template</code> after{" "}
+          <code className="text-white">python -m jobs.build_pack</code>.
         </p>
       )}
 

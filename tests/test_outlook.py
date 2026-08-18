@@ -3,7 +3,7 @@ from datetime import UTC, date, datetime
 from agent.pack import assemble_pack, pack_hash, source_dicts, sources_from_counts
 from api.outlook import build_outlook
 from api.schemas import OutlookSource
-from store.models import EventItem, NewsItem
+from store.models import EventItem, NewsItem, OutlookReport
 
 
 class _Job:
@@ -88,3 +88,27 @@ def test_build_outlook_sources_and_stale_without_pack() -> None:
     assert payload.events[0].kind == "fomc"
     assert payload.sources[0].vendor == "yahoo"
     assert payload.sources[0].rows == 10
+
+
+def test_build_outlook_attaches_stored_brief() -> None:
+    report = OutlookReport(
+        as_of=date(2026, 8, 18),
+        model="gemini/gemini-2.5-flash",
+        prompt_version="outlook-v1",
+        body_md="Tape. DGS10 4.68%.",
+        body_json={"headline": "Tape", "body_md": "DGS10 4.68%."},
+        pack_id=1,
+        status="ok",
+    )
+    payload = build_outlook(
+        as_of=date(2026, 8, 18),
+        now=datetime(2026, 8, 18, 12, 0, tzinfo=UTC),
+        news=[],
+        events=[],
+        sources=[],
+        pack=None,
+        report=report,
+    )
+    assert payload.brief == "Tape. DGS10 4.68%."
+    assert payload.brief_status == "ok"
+    assert payload.brief_model == "gemini/gemini-2.5-flash"

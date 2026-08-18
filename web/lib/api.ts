@@ -24,6 +24,7 @@ export type Health = {
   news_items?: number;
   event_items?: number;
   evidence_packs?: number;
+  outlook_reports?: number;
   jobs: JobStatus[];
 };
 
@@ -256,6 +257,8 @@ export type OutlookTape = {
   pack_id: number | null;
   pack_hash: string | null;
   brief: string | null;
+  brief_status: string | null;
+  brief_model: string | null;
   news: OutlookNews[];
   events: OutlookEvent[];
   sources: OutlookSource[];

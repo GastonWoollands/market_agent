@@ -1,4 +1,4 @@
-"""Evidence pack from Postgres rows. Claude (Day 10) only narrates this JSON."""
+"""Evidence pack from Postgres rows. The Outlook agent only narrates this JSON."""
 
 from __future__ import annotations
 

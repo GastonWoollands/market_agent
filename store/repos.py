@@ -27,6 +27,7 @@ from store.models import (
     MacroSeries,
     NewsItem,
     OddsSnapshot,
+    OutlookReport,
     QuoteLatest,
     ReturnStats,
     RrgPoint,
@@ -668,4 +669,52 @@ def latest_evidence_pack(session: Session, as_of: date | None = None) -> Evidenc
     if as_of is not None:
         stmt = stmt.where(EvidencePack.as_of == as_of)
     stmt = stmt.order_by(EvidencePack.as_of.desc())
+    return session.execute(stmt).scalars().first()
+
+
+def upsert_outlook_report(
+    session: Session,
+    *,
+    as_of: date,
+    model: str,
+    prompt_version: str,
+    body_md: str,
+    body_json: dict[str, Any],
+    pack_id: int | None,
+    status: str,
+) -> OutlookReport:
+    stmt = (
+        insert(OutlookReport)
+        .values(
+            as_of=as_of,
+            model=model,
+            prompt_version=prompt_version,
+            body_md=body_md,
+            body_json=body_json,
+            pack_id=pack_id,
+            status=status,
+            created_at=func.now(),
+        )
+        .on_conflict_do_update(
+            index_elements=["as_of"],
+            set_={
+                "model": model,
+                "prompt_version": prompt_version,
+                "body_md": body_md,
+                "body_json": body_json,
+                "pack_id": pack_id,
+                "status": status,
+                "created_at": func.now(),
+            },
+        )
+        .returning(OutlookReport)
+    )
+    return session.scalars(stmt).one()
+
+
+def latest_outlook_report(session: Session, as_of: date | None = None) -> OutlookReport | None:
+    stmt = select(OutlookReport)
+    if as_of is not None:
+        stmt = stmt.where(OutlookReport.as_of == as_of)
+    stmt = stmt.order_by(OutlookReport.as_of.desc())
     return session.execute(stmt).scalars().first()

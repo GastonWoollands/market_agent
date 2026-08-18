@@ -14,6 +14,7 @@ from store.models import (  # noqa: F401
     MacroSeries,
     NewsItem,
     OddsSnapshot,
+    OutlookReport,
     QuoteLatest,
     ReturnStats,
     RrgPoint,

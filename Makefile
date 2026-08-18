@@ -1,4 +1,4 @@
-.PHONY: db migrate seed yahoo fred poly dynamics news calendar pack api web test
+.PHONY: db migrate seed yahoo fred poly dynamics news calendar pack outlook api web test
 
 db:
 	docker compose up -d db
@@ -29,6 +29,9 @@ calendar:
 
 pack:
 	.venv/bin/python -m jobs.build_pack
+
+outlook:
+	.venv/bin/python -m jobs.generate_outlook
 
 api:
 	.venv/bin/uvicorn api.main:app --reload --port 8000

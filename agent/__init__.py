@@ -1,1 +1,1 @@
-"""Evidence pack assembly. Claude (Day 10) only narrates stored JSON."""
+"""Evidence pack assembly. The Outlook agent only narrates stored JSON."""

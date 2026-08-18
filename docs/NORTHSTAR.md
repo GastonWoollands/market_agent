@@ -59,7 +59,7 @@ Every number on screen comes from Postgres. Vendors are never called from the UI
 ingest adapters  →  jobs (cron)  →  PostgreSQL  →  FastAPI  →  Next.js
                          │
                          ├→ analytics tables (same DB)
-                         └→ evidence_pack JSONB → Claude (Outlook + top-N memos)
+                         └→ evidence_pack JSONB → agent (Outlook + top-N memos)
 ```
 
 | Layer | Choice | Why |
@@ -72,7 +72,7 @@ ingest adapters  →  jobs (cron)  →  PostgreSQL  →  FastAPI  →  Next.js
 | HTTP | `httpx` + token bucket; Yahoo via `yfinance` | FRED/SEC use httpx; Yahoo ≤2 req/s (`curl_cffi` TLS) |
 | UI | Next.js + Tailwind + shadcn | Dense dark terminal |
 | Charts | TradingView embed; Recharts/SVG for sparklines, RRG, heatmap | Don’t rebuild a charting platform |
-| LLM | Claude API; Ollama fallback | Writer only, pack-grounded |
+| LLM | Official Anthropic or Gemini SDK; template fallback | Writer only, pack-grounded |
 
 **Postgres is the system of record.** No SQLite. Optional Parquet export can come later for notebooks; do not dual-write in v1. `yfinance` may keep a small local timezone cache; that is not market data.
 
@@ -220,13 +220,13 @@ Value trap = cheap + falling revenue/margins or distressed Altman-like score.
 
 **Correlation / lead-lag:** 63-day corr on sector ETFs; cross-corr lags −5…+5. Default finding is usually same-day — still show it so the brief cannot invent leadership.
 
-**All of this is Python → Postgres.** Claude never computes a multiple.
+**All of this is Python → Postgres.** The agent never computes a multiple.
 
 ---
 
 ## 10. AI layer (Outlook + Opportunities)
 
-**Cursor cron is not the production path.** Unattended local = `cron`/`launchd` → Python job → Anthropic API. Ollama is fallback when offline.
+**Cursor cron is not the production path.** Unattended local = `cron`/`launchd` → Python job → Anthropic or Gemini (official SDKs). Template fallback when the API is down. Ollama can wait.
 
 **Evidence pack** (built in Python, stored JSONB) includes index/sector returns, macro snapshot, Risk-On, RRG, Polymarket odds, stored headlines, upcoming events, watchlist outliers, top opportunity rows, and a `sources[]` freshness table.
 
@@ -238,7 +238,7 @@ Value trap = cheap + falling revenue/margins or distressed Altman-like score.
 - Prompt version stored on the row
 - Opportunities: one memo schema `{why_scored, what_10q_changed, invalidation, caveats}` per top name
 
-**Do not** give the model tools to fetch live prices in v1.
+**Do not** give the model tools to fetch live prices in v1. Do not wrap LangChain. Call `anthropic` / `google-genai`, not raw HTTP.
 
 ---
 
@@ -287,7 +287,9 @@ Adapters return Pydantic canonical models. Repos upsert. Jobs orchestrate. API n
 |-----|----------------|
 | `FRED_API_KEY` | macro |
 | `FINNHUB_API_KEY` | earnings calendar |
-| `ANTHROPIC_API_KEY` | Outlook + memos |
+| `ANTHROPIC_API_KEY` | Outlook + memos (Anthropic provider) |
+| `GEMINI_API_KEY` | Outlook + memos (Gemini provider; `GOOGLE_API_KEY` alias) |
+| `AGENT_PROVIDER` | `anthropic` or `gemini` (empty = auto) |
 | `SEC_USER_AGENT` | `MarketAgent you@email.com` |
 | `ALPACA_*` | optional quotes |
 | `DATABASE_URL` | local compose default |
@@ -360,9 +362,9 @@ Google News RSS, Finnhub earnings, catalysts yaml, evidence pack, sources table.
 
 **Done:** sources table is true (vendor, as_of, counts).
 
-### Day 10 — Claude Outlook
+### Day 10 — Agent Outlook
 
-Weekday job 07:45 ET: pack → structured Claude → `outlook_report`. Citation check. Fallback: template if API fails.
+Weekday job 07:45 ET: pack → structured Anthropic or Gemini → `outlook_report`. Citation check. Fallback: template if API fails.
 
 **Done:** one generated brief uses only pack numbers.
 
@@ -402,7 +404,7 @@ Same compose on device; restore dump; run jobs + API; browse UI from the Mac.
 
 **Done:** Outlook job runs without the Mac.
 
-If a day slips, **do not skip ahead to Claude or SEC bulk**.
+If a day slips, **do not skip ahead to the agent job or SEC bulk**.
 
 ---
 

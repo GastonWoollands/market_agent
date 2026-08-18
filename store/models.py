@@ -250,3 +250,22 @@ class EvidencePack(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+
+class OutlookReport(Base):
+    __tablename__ = "outlook_report"
+
+    as_of: Mapped[date] = mapped_column(Date, primary_key=True)
+    model: Mapped[str] = mapped_column(String(128), nullable=False)
+    prompt_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    body_md: Mapped[str] = mapped_column(Text, nullable=False)
+    body_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    pack_id: Mapped[int | None] = mapped_column(ForeignKey("evidence_pack.id"))
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        CheckConstraint("status IN ('ok', 'fallback')", name="ck_outlook_report_status"),
+    )

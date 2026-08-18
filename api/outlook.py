@@ -3,8 +3,14 @@ from zoneinfo import ZoneInfo
 
 from agent.pack import EVENTS_AHEAD_DAYS, sources_from_counts, store_counts
 from api.schemas import OutlookEvent, OutlookNews, OutlookResponse, OutlookSource
-from store.models import EventItem, EvidencePack, NewsItem
-from store.repos import latest_evidence_pack, latest_jobs, latest_news, upcoming_events
+from store.models import EventItem, EvidencePack, NewsItem, OutlookReport
+from store.repos import (
+    latest_evidence_pack,
+    latest_jobs,
+    latest_news,
+    latest_outlook_report,
+    upcoming_events,
+)
 
 ET = ZoneInfo("America/New_York")
 STALE_AFTER = timedelta(days=2)
@@ -20,6 +26,7 @@ def build_outlook(
     events: list[EventItem],
     sources: list[OutlookSource],
     pack: EvidencePack | None,
+    report: OutlookReport | None = None,
 ) -> OutlookResponse:
     pack_day = pack.as_of if pack else None
     stale = pack is None or (as_of - pack.as_of) > STALE_AFTER
@@ -28,7 +35,9 @@ def build_outlook(
         stale=stale,
         pack_id=pack.id if pack else None,
         pack_hash=pack.hash if pack else None,
-        brief=None,
+        brief=report.body_md if report else None,
+        brief_status=report.status if report else None,
+        brief_model=report.model if report else None,
         news=[
             OutlookNews(
                 title=item.title,
@@ -61,6 +70,8 @@ def outlook_from_store(
     pack = latest_evidence_pack(session, as_of)
     if pack is None and as_of is None:
         pack = latest_evidence_pack(session)
+    report_day = pack.as_of if pack is not None else day
+    report = latest_outlook_report(session, report_day)
     sources = [
         OutlookSource(
             vendor=row.vendor,
@@ -79,4 +90,5 @@ def outlook_from_store(
         events=upcoming_events(session, start=day, end=day + timedelta(days=EVENTS_AHEAD_DAYS)),
         sources=sources,
         pack=pack,
+        report=report,
     )

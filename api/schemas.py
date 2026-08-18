@@ -27,6 +27,7 @@ class HealthResponse(BaseModel):
     news_items: int = 0
     event_items: int = 0
     evidence_packs: int = 0
+    outlook_reports: int = 0
     jobs: list[JobStatus] = []
 
 
@@ -210,6 +211,8 @@ class OutlookResponse(BaseModel):
     pack_id: int | None = None
     pack_hash: str | None = None
     brief: str | None = None
+    brief_status: str | None = None
+    brief_model: str | None = None
     news: list[OutlookNews] = Field(default_factory=list)
     events: list[OutlookEvent] = Field(default_factory=list)
     sources: list[OutlookSource] = Field(default_factory=list)

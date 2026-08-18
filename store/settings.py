@@ -23,6 +23,15 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000"
     fred_api_key: str = ""
     finnhub_api_key: str = ""
+    anthropic_api_key: str = ""
+    gemini_api_key: str = ""
+    google_api_key: str = ""
+    agent_provider: str = ""
+    agent_model: str = ""
+
+    @property
+    def resolved_gemini_key(self) -> str:
+        return self.gemini_api_key.strip() or self.google_api_key.strip()
 
     @classmethod
     def settings_customise_sources(

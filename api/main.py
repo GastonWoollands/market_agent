@@ -23,6 +23,7 @@ from store.models import (
     MacroObservation,
     NewsItem,
     OddsSnapshot,
+    OutlookReport,
     QuoteLatest,
     ReturnStats,
     RrgPoint,
@@ -82,6 +83,7 @@ def health(db: Session = Depends(get_db)) -> HealthResponse | JSONResponse:
             news_items=table_count(db, NewsItem),
             event_items=table_count(db, EventItem),
             evidence_packs=table_count(db, EvidencePack),
+            outlook_reports=table_count(db, OutlookReport),
             jobs=jobs,
         )
     except Exception as exc:
