@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { TradingViewChart } from "@/components/TradingViewChart";
-import { API_URL, type WatchlistMember, type WatchlistTape } from "@/lib/api";
+import { BROWSER_API, type WatchlistMember, type WatchlistTape } from "@/lib/api";
 import { cn } from "@/lib/cn";
 
 export function WatchlistView({
@@ -37,7 +37,7 @@ export function WatchlistView({
     setPending(true);
     setError(null);
     try {
-      const response = await fetch(`${API_URL}/watchlist`, {
+      const response = await fetch(`${BROWSER_API}/watchlist`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ticker }),
@@ -60,7 +60,7 @@ export function WatchlistView({
     setPending(true);
     setError(null);
     try {
-      const response = await fetch(`${API_URL}/watchlist/${encodeURIComponent(ticker)}`, {
+      const response = await fetch(`${BROWSER_API}/watchlist/${encodeURIComponent(ticker)}`, {
         method: "DELETE",
       });
       if (!response.ok && response.status !== 204) {

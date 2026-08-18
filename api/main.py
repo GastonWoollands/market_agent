@@ -77,10 +77,13 @@ app = FastAPI(title="Market Agent", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origin_list,
+    # Reflect any Origin. A host allow-list 400s Firefox on IPv6 (`http://[::1]:3000`)
+    # even when CORS_ORIGINS lists localhost and 127.0.0.1. Local terminal only.
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_private_network=True,
 )
 
 

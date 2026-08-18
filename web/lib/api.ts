@@ -1,5 +1,8 @@
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+/** Same-origin prefix (Next rewrite → uvicorn). Use in client components only. */
+export const BROWSER_API = "/backend";
+
 export type JobStatus = {
   job_name: string;
   status: string;
