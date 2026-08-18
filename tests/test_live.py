@@ -2,16 +2,20 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from api.live import build_live
+from api.schemas import LiveRiskOn
 from store.catalog import (
     CatalogInstrument,
     FredSeriesFile,
     FredSeriesItem,
     LiveHeaderItem,
     LiveTapeConfig,
+    PolymarketEvent,
+    PolymarketFile,
     UniverseCatalog,
     UniversesFile,
 )
 from store.display import resolve_change_pct, resolve_level_change, resolve_price
+from store.models import OddsSnapshot
 from store.repos import LiveMacroRow, LiveTapeRow
 
 
@@ -189,3 +193,47 @@ def test_build_live_drilldown_uses_yaml_insight_and_level_deltas() -> None:
     assert tape.drilldown.watch[0].ticker == "XLK"
     assert tape.drilldown.watch[0].change_pct == 1.2
     assert tape.drilldown.points[-1].value == 4.25
+
+
+def test_build_live_odds_do_not_affect_risk_on() -> None:
+    risk = LiveRiskOn(score=0.42, stale=False, factors={"curve": 0.1})
+    catalog = PolymarketFile(
+        events=[
+            PolymarketEvent(
+                slug="us-recession-by-end-of-2026",
+                label="Recession by year-end",
+                category="growth",
+            ),
+            PolymarketEvent(
+                slug="hidden",
+                label="Hidden",
+                category="rates",
+                show_on_live=False,
+            ),
+        ]
+    )
+    row = OddsSnapshot(
+        slug="us-recession-by-end-of-2026",
+        as_of=datetime(2026, 8, 18, 8, 0, tzinfo=UTC),
+        question="US recession by end of 2026?",
+        implied_yes=Decimal("0.075"),
+        liquidity=Decimal("40000"),
+        raw={
+            "closed": False,
+            "markets": [{"question": "US recession by end of 2026?", "yes": "0.075"}],
+        },
+    )
+    tape = build_live(
+        [],
+        _catalog(),
+        now=datetime(2026, 8, 18, tzinfo=UTC),
+        risk_on=risk,
+        odds_rows=[row],
+        polymarket=catalog,
+    )
+    assert tape.risk_on is not None
+    assert tape.risk_on.score == 0.42
+    assert tape.risk_on.factors == {"curve": 0.1}
+    assert [item.slug for item in tape.odds] == ["us-recession-by-end-of-2026"]
+    assert tape.odds[0].implied_yes == 0.075
+    assert tape.odds[0].thin is False

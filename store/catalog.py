@@ -64,3 +64,23 @@ def load_fred_series() -> FredSeriesFile:
     with path.open(encoding="utf-8") as handle:
         raw = safe_load(handle)
     return FredSeriesFile.model_validate(raw)
+
+
+class PolymarketEvent(BaseModel):
+    slug: str
+    label: str
+    category: str
+    show_on_live: bool = True
+    notes: str | None = None
+
+
+class PolymarketFile(BaseModel):
+    events: list[PolymarketEvent] = Field(default_factory=list)
+    search_hints: dict[str, list[str]] = Field(default_factory=dict)
+
+
+def load_polymarket() -> PolymarketFile:
+    path = CONFIG_DIR / "polymarket_slugs.yaml"
+    with path.open(encoding="utf-8") as handle:
+        raw = safe_load(handle)
+    return PolymarketFile.model_validate(raw)

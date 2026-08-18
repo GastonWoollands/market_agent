@@ -4,9 +4,11 @@ Personal US market research terminal. Delayed data, no trading.
 
 **Northstar:** [docs/NORTHSTAR.md](docs/NORTHSTAR.md) — product, schema, sources, and day-by-day plan. Read that before adding features.
 
-## Day 5 (current)
+## Day 6 (current)
 
-Click a FRED lever on Live (default **DGS10**) for a 1Y chart, Δ 1D/1W/1M/1Y, yaml insight, and watch tickers. Risk-On v1 is a z-score blend of stored VIXCLS, HYG/LQD, RSP/SPY, T10Y2Y (not inverted), and cyclicals vs defensives. The browser still does not call FRED or Yahoo.
+Live shows **market-implied** Polymarket odds (Fed / inflation / recession) from `odds_snapshot`. Odds are **not** an input to Risk-On. The browser never calls Gamma.
+
+Slugs in `config/polymarket_slugs.yaml` expire; if ingest 404s it logs Gamma search candidates — paste a replacement slug, do not scrape the site.
 
 Postgres is published on **host port 5433**.
 
@@ -21,16 +23,14 @@ alembic upgrade head
 python -m jobs.seed_tape
 python -m jobs.ingest_yahoo
 python -m jobs.ingest_fred
+python -m jobs.ingest_polymarket
 
 uvicorn api.main:app --reload --port 8000
 # other terminal
-npm --prefix web install
 npm --prefix web run dev
 ```
 
-Or `make db migrate seed yahoo fred api` and `make web`.
-
-`GET /live?lever=DGS10` includes `drilldown` and `risk_on`. Yield deltas are last minus a prior print, not an equity percent return.
+Or `make db migrate seed yahoo fred poly api` and `make web`.
 
 ## Config
 
@@ -44,4 +44,4 @@ Or `make db migrate seed yahoo fred api` and `make web`.
 
 ## Next
 
-Day 6: Polymarket Gamma adapter and Fed / inflation / recession odds on Live (not mixed into Risk-On).
+Day 7: Dynamics core (returns, RRG, indexed-to-100). No new vendors.

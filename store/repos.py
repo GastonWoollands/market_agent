@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from store.canonical import DailyBar, MacroPoint, QuoteSnapshot
+from store.canonical import DailyBar, MacroPoint, OddsPoint, QuoteSnapshot
 from store.catalog import CatalogInstrument, FredSeriesItem
 from store.models import (
     BarDaily,
@@ -15,6 +15,7 @@ from store.models import (
     JobRun,
     MacroObservation,
     MacroSeries,
+    OddsSnapshot,
     QuoteLatest,
     Universe,
     UniverseMember,
@@ -405,3 +406,33 @@ def closes_for_tickers(
     for ticker, day, close in session.execute(stmt):
         out.setdefault(ticker, []).append((day, close))
     return out
+
+
+def upsert_odds(session: Session, point: OddsPoint) -> None:
+    stmt = (
+        insert(OddsSnapshot)
+        .values(
+            slug=point.slug,
+            as_of=point.as_of,
+            question=point.question,
+            implied_yes=point.implied_yes,
+            liquidity=point.liquidity,
+            raw=point.raw,
+        )
+        .on_conflict_do_update(
+            index_elements=[OddsSnapshot.slug],
+            set_={
+                "as_of": point.as_of,
+                "question": point.question,
+                "implied_yes": point.implied_yes,
+                "liquidity": point.liquidity,
+                "raw": point.raw,
+            },
+        )
+    )
+    session.execute(stmt)
+
+
+def latest_odds(session: Session) -> list[OddsSnapshot]:
+    stmt = select(OddsSnapshot).order_by(OddsSnapshot.slug)
+    return list(session.execute(stmt).scalars())

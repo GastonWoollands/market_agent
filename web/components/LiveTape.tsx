@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { MacroChart } from "@/components/MacroChart";
 import { cn } from "@/lib/cn";
-import type { LiveDrilldown, LiveMacro, LiveQuote, LiveTape, LiveWatch } from "@/lib/api";
+import type { LiveDrilldown, LiveMacro, LiveOdds, LiveQuote, LiveTape, LiveWatch } from "@/lib/api";
 
 const SESSION_LABEL: Record<string, string> = {
   REGULAR: "Regular",
@@ -73,7 +73,10 @@ export function LiveTapeView({ tape }: { tape: LiveTape | null }) {
           </div>
         </section>
       </div>
-      <MacroSidebar items={tape.macro ?? []} selected={tape.drilldown?.series_id ?? "DGS10"} />
+      <aside className="space-y-6">
+        <MacroSidebar items={tape.macro ?? []} selected={tape.drilldown?.series_id ?? "DGS10"} />
+        <OddsPanel items={tape.odds ?? []} />
+      </aside>
     </div>
   );
 }
@@ -112,7 +115,7 @@ function MacroSidebar({ items, selected }: { items: LiveMacro[]; selected: strin
   const tenYear = items.find((item) => item.series_id === "DGS10");
   const hasValues = items.some((item) => item.value != null);
   return (
-    <aside>
+    <div>
       <div className="mb-2 flex items-baseline justify-between gap-2">
         <h2 className="text-[11px] uppercase tracking-wide text-mute">Macro</h2>
         <span className="text-[11px] text-mute">
@@ -135,7 +138,7 @@ function MacroSidebar({ items, selected }: { items: LiveMacro[]; selected: strin
           <code className="text-white">python -m jobs.ingest_fred</code>.
         </p>
       ) : null}
-    </aside>
+    </div>
   );
 }
 
@@ -228,6 +231,68 @@ function WatchChip({ item }: { item: LiveWatch }) {
       <span className={changeClass(item.change_pct)}>{formatPct(item.change_pct)}</span>
     </span>
   );
+}
+
+function OddsPanel({ items }: { items: LiveOdds[] }) {
+  return (
+    <div>
+      <div className="mb-2 flex items-baseline justify-between gap-2">
+        <h2 className="text-[11px] uppercase tracking-wide text-mute">Market-implied</h2>
+        <span className="text-[11px] text-mute">not a forecast</span>
+      </div>
+      {items.length === 0 ? (
+        <p className="text-[12px] leading-5 text-mute">
+          No odds yet. Run <code className="text-white">python -m jobs.ingest_polymarket</code>.
+        </p>
+      ) : (
+        <div className="overflow-hidden rounded border border-line">
+          {items.map((item, index) => (
+            <OddsRow key={item.slug} item={item} last={index === items.length - 1} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OddsRow({ item, last }: { item: LiveOdds; last: boolean }) {
+  const extras = item.outcomes.filter((outcome) => outcome.implied_yes !== item.implied_yes).slice(0, 3);
+  return (
+    <div className={cn("bg-panel px-3 py-2.5", last ? "" : "border-b border-line")}>
+      <div className="flex items-baseline justify-between gap-2">
+        <div className="min-w-0 truncate text-[13px]">{item.label}</div>
+        <div className="shrink-0 text-right text-[13px] tabular-nums">
+          {formatImplied(item.implied_yes)}
+        </div>
+      </div>
+      <div className="mt-0.5 truncate text-[11px] text-mute" title={item.question}>
+        {item.thin ? "thin book · " : null}
+        {shortQuestion(item.question)}
+      </div>
+      {extras.length > 0 ? (
+        <div className="mt-1 space-y-0.5">
+          {extras.map((outcome) => (
+            <div key={outcome.label} className="flex justify-between gap-2 text-[11px] text-mute">
+              <span className="min-w-0 truncate">{shortQuestion(outcome.label)}</span>
+              <span className="tabular-nums">{formatImplied(outcome.implied_yes)}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function formatImplied(value: number | null): string {
+  if (value == null || Number.isNaN(value)) {
+    return "—";
+  }
+  return `${(value * 100).toFixed(1)}%`;
+}
+
+function shortQuestion(value: string): string {
+  const trimmed = value.replace(/^Will (the |there be )?/i, "").replace(/\?$/, "");
+  return trimmed.length > 48 ? `${trimmed.slice(0, 45)}…` : trimmed;
 }
 
 function EmptyState({ message }: { message: string }) {

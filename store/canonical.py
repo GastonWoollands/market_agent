@@ -35,3 +35,14 @@ class MacroPoint(BaseModel):
     date: date
     value: Decimal
 
+
+class OddsPoint(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    slug: str
+    question: str
+    implied_yes: Decimal
+    liquidity: Decimal | None = None
+    as_of: datetime
+    raw: dict | None = None
+

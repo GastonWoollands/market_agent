@@ -1,42 +1,42 @@
 # Curated Polymarket events for Live + Outlook.
-# Gamma API is unauthenticated: https://gamma-api.polymarket.com
-# Slugs rotate when a contract expires — refresh this file when a fetch 404s.
+# Gamma API (unauthenticated): GET https://gamma-api.polymarket.com/events/slug/{slug}
+# Slugs rotate when a contract expires — refresh this file when ingest logs a 404.
 # Ingest stores implied probability; UI must label these as market-implied, not forecasts.
 
 events:
-  - slug: fed-decision-in-september
+  - slug: fed-decision-in-september-762
     label: Fed path (next meeting)
     category: rates
-    notes: Thin books noisy. Prefer the event that matches the next FOMC date.
+    show_on_live: true
+    notes: Nested Yes/No markets (cut/hold/hike). Live shows the most likely path.
 
-  - slug: fed-decision-in-october
+  - slug: fed-decision-in-october-20260617190323537
     label: Fed path (following meeting)
     category: rates
+    show_on_live: false
     notes: Optional second meeting. Skip in UI if inactive.
 
-  - slug: will-the-fed-cut-rates-in-2026
+  - slug: how-many-fed-rate-cuts-in-2026
     label: Fed cuts in 2026
     category: rates
-    notes: Confirm slug still exists; search Gamma if 404.
+    show_on_live: false
+    notes: Bucket market. Stored for Outlook; not on the Live strip.
 
-  - slug: us-inflation-above-3-in-2026
-    label: Inflation odds
+  - slug: core-cpi-yoy-august-2026-1786474662954
+    label: Core CPI YoY (next print)
     category: inflation
-    notes: Use the active CPI / year-end inflation market if this slug is retired.
+    show_on_live: true
+    notes: Replace with the next month's Core CPI YoY slug after the print.
 
-  - slug: us-recession-in-2026
-    label: Recession odds
-    category: growth
-    notes: Definition is market-specific (NBER vs two-quarter). Show question text in UI.
-
-  - slug: will-there-be-a-us-recession-by-end-of-2026
+  - slug: us-recession-by-end-of-2026
     label: Recession by year-end
     category: growth
-    notes: Alternate recession market. Keep one active series in the Live sidebar.
+    show_on_live: true
+    notes: Definition is market-specific (NBER vs two-quarter). Show question text in UI.
 
-# Discovery fallback when a slug 404s (Day 6 ingest).
+# Logged on 404 so you can paste a replacement slug. Not auto-bound.
 search_hints:
-  rates: ["fed", "fomc", "interest rate"]
-  inflation: ["cpi", "inflation", "pce"]
-  growth: ["recession"]
+  rates: ["fed decision", "fomc", "fed rate cuts"]
+  inflation: ["core cpi", "us inflation"]
+  growth: ["us recession"]
   geo: ["iran", "taiwan", "ukraine", "tariff"]

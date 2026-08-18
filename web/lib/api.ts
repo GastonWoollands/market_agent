@@ -18,6 +18,7 @@ export type Health = {
   daily_bars?: number;
   quotes?: number;
   macro_observations?: number;
+  odds_snapshots?: number;
   jobs: JobStatus[];
 };
 
@@ -79,6 +80,23 @@ export type LiveRiskOn = {
   factors: Record<string, number | null>;
 };
 
+export type LiveOddsOutcome = {
+  label: string;
+  implied_yes: number;
+};
+
+export type LiveOdds = {
+  slug: string;
+  label: string;
+  category: string;
+  question: string;
+  implied_yes: number | null;
+  liquidity: number | null;
+  thin: boolean;
+  as_of: string | null;
+  outcomes: LiveOddsOutcome[];
+};
+
 export type LiveTape = {
   as_of: string | null;
   market_state: string | null;
@@ -88,6 +106,7 @@ export type LiveTape = {
   macro: LiveMacro[];
   drilldown: LiveDrilldown | null;
   risk_on: LiveRiskOn | null;
+  odds: LiveOdds[];
 };
 
 export async function fetchHealth(): Promise<Health | null> {

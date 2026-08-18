@@ -7,18 +7,22 @@ from api.schemas import (
     LiveDeltas,
     LiveDrilldown,
     LiveMacro,
+    LiveOdds,
+    LiveOddsOutcome,
     LivePoint,
     LiveQuote,
     LiveResponse,
     LiveRiskOn,
     LiveWatch,
 )
-from store.catalog import FredSeriesFile, UniversesFile
+from store.catalog import FredSeriesFile, PolymarketFile, UniversesFile
 from store.display import resolve_change_pct, resolve_level_change, resolve_price
+from store.models import OddsSnapshot
 from store.repos import LiveMacroRow, LiveTapeRow
 
 DEFAULT_LEVER = "DGS10"
 HISTORY_DAYS = 400
+THIN_LIQUIDITY = Decimal("10000")
 _QUOTE_STALE_AFTER = timedelta(days=3)
 _STATE_RANK = {
     "REGULAR": 0,
@@ -91,6 +95,8 @@ def build_live(
     lever: str = DEFAULT_LEVER,
     history: list[tuple[date, Decimal]] | None = None,
     risk_on: LiveRiskOn | None = None,
+    odds_rows: list[OddsSnapshot] | None = None,
+    polymarket: PolymarketFile | None = None,
 ) -> LiveResponse:
     clock = now or datetime.now(UTC)
     by_ticker = {row.ticker: row for row in rows}
@@ -130,6 +136,7 @@ def build_live(
         macro=_macro_items(macro_rows or [], fred),
         drilldown=_drilldown(lever, history or [], fred, rows) if fred is not None else None,
         risk_on=risk_on,
+        odds=_odds_items(odds_rows or [], polymarket),
     )
 
 
@@ -243,3 +250,47 @@ def risk_on_from_store(
             for name, value in result.factors.items()
         },
     )
+
+
+def _odds_items(rows: list[OddsSnapshot], catalog: PolymarketFile | None) -> list[LiveOdds]:
+    if catalog is None:
+        return []
+    by_slug = {row.slug: row for row in rows}
+    items: list[LiveOdds] = []
+    for event in catalog.events:
+        if not event.show_on_live:
+            continue
+        row = by_slug.get(event.slug)
+        if row is None:
+            continue
+        raw = row.raw or {}
+        if raw.get("closed"):
+            continue
+        outcomes: list[LiveOddsOutcome] = []
+        for market in raw.get("markets") or []:
+            if not isinstance(market, dict) or market.get("yes") is None:
+                continue
+            yes = _to_float(Decimal(str(market["yes"])))
+            if yes is None:
+                continue
+            outcomes.append(
+                LiveOddsOutcome(
+                    label=str(market.get("question") or event.label),
+                    implied_yes=yes,
+                )
+            )
+        outcomes.sort(key=lambda item: item.implied_yes, reverse=True)
+        items.append(
+            LiveOdds(
+                slug=event.slug,
+                label=event.label,
+                category=event.category,
+                question=row.question,
+                implied_yes=_to_float(row.implied_yes),
+                liquidity=_to_float(row.liquidity),
+                thin=row.liquidity is not None and row.liquidity < THIN_LIQUIDITY,
+                as_of=row.as_of,
+                outcomes=outcomes,
+            )
+        )
+    return items

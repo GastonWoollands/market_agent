@@ -21,6 +21,7 @@ class HealthResponse(BaseModel):
     daily_bars: int = 0
     quotes: int = 0
     macro_observations: int = 0
+    odds_snapshots: int = 0
     jobs: list[JobStatus] = []
 
 
@@ -82,6 +83,23 @@ class LiveRiskOn(BaseModel):
     factors: dict[str, float | None] = Field(default_factory=dict)
 
 
+class LiveOddsOutcome(BaseModel):
+    label: str
+    implied_yes: float
+
+
+class LiveOdds(BaseModel):
+    slug: str
+    label: str
+    category: str
+    question: str
+    implied_yes: float | None = None
+    liquidity: float | None = None
+    thin: bool = False
+    as_of: datetime | None = None
+    outcomes: list[LiveOddsOutcome] = Field(default_factory=list)
+
+
 class LiveResponse(BaseModel):
     as_of: datetime | None = None
     market_state: str | None = None
@@ -91,3 +109,4 @@ class LiveResponse(BaseModel):
     macro: list[LiveMacro] = []
     drilldown: LiveDrilldown | None = None
     risk_on: LiveRiskOn | None = None
+    odds: list[LiveOdds] = Field(default_factory=list)

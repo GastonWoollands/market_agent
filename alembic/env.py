@@ -10,6 +10,7 @@ from store.models import (  # noqa: F401
     JobRun,
     MacroObservation,
     MacroSeries,
+    OddsSnapshot,
     QuoteLatest,
     Universe,
     UniverseMember,

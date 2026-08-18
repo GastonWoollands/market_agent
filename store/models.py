@@ -157,3 +157,14 @@ class MacroObservation(Base):
     value: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
 
     series: Mapped[MacroSeries] = relationship(back_populates="observations")
+
+
+class OddsSnapshot(Base):
+    __tablename__ = "odds_snapshot"
+
+    slug: Mapped[str] = mapped_column(String(128), primary_key=True)
+    as_of: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    question: Mapped[str] = mapped_column(Text, nullable=False)
+    implied_yes: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    liquidity: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    raw: Mapped[dict[str, Any] | None] = mapped_column(JSONB)

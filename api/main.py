@@ -9,12 +9,13 @@ from sqlalchemy.orm import Session
 from analytics.risk_on import CURVE_SERIES, RISK_ON_TICKERS, VIX_SERIES
 from api.live import HISTORY_DAYS, build_live, resolve_lever, risk_on_from_store
 from api.schemas import HealthResponse, JobStatus, LiveResponse
-from store.catalog import load_fred_series, load_universes
+from store.catalog import load_fred_series, load_polymarket, load_universes
 from store.engine import get_db
-from store.models import BarDaily, MacroObservation, QuoteLatest
+from store.models import BarDaily, MacroObservation, OddsSnapshot, QuoteLatest
 from store.repos import (
     closes_for_tickers,
     latest_jobs,
+    latest_odds,
     live_macro_rows,
     live_tape_rows,
     macro_observations,
@@ -57,6 +58,7 @@ def health(db: Session = Depends(get_db)) -> HealthResponse | JSONResponse:
             daily_bars=table_count(db, BarDaily),
             quotes=table_count(db, QuoteLatest),
             macro_observations=table_count(db, MacroObservation),
+            odds_snapshots=table_count(db, OddsSnapshot),
             jobs=jobs,
         )
     except Exception as exc:
@@ -84,6 +86,8 @@ def live(lever: str = "DGS10", db: Session = Depends(get_db)) -> LiveResponse | 
                 macro_observations(db, CURVE_SERIES, start=start),
                 now=date.today(),
             ),
+            odds_rows=latest_odds(db),
+            polymarket=load_polymarket(),
         )
     except Exception:
         payload = LiveResponse(stale=True)

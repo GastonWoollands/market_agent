@@ -31,6 +31,7 @@ dev = [
 market-seed = "jobs.seed_tape:main"
 market-yahoo = "jobs.ingest_yahoo:main"
 market-fred = "jobs.ingest_fred:main"
+market-poly = "jobs.ingest_polymarket:main"
 
 [tool.setuptools.packages.find]
 include = ["api*", "store*", "jobs*", "ingest*", "analytics*"]
