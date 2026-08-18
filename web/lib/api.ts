@@ -165,12 +165,54 @@ export type DynamicsTape = {
   stale: boolean;
   benchmark: string;
   members: DynamicsMember[];
+  overlay: DynamicsOverlay[];
+  corr: DynamicsCorr | null;
+  lead_lag: DynamicsLeadLag | null;
 };
 
-export async function fetchDynamics(asOf?: string): Promise<DynamicsTape | null> {
+export type DynamicsOverlay = {
+  ticker: string;
+  name: string;
+  points: DynamicsPoint[];
+};
+
+export type DynamicsCorr = {
+  window: number;
+  tickers: string[];
+  matrix: (number | null)[][];
+};
+
+export type DynamicsLagBar = {
+  lag: number;
+  corr: number | null;
+};
+
+export type DynamicsLeadLag = {
+  left: string;
+  right: string;
+  peak_lag: number | null;
+  note: string;
+  bars: DynamicsLagBar[];
+};
+
+export async function fetchDynamics(opts?: {
+  asOf?: string;
+  lead?: string;
+  lag?: string;
+}): Promise<DynamicsTape | null> {
   try {
-    const query = asOf ? `?${new URLSearchParams({ as_of: asOf }).toString()}` : "";
-    const response = await fetch(`${API_URL}/dynamics${query}`, { cache: "no-store" });
+    const query = new URLSearchParams();
+    if (opts?.asOf) {
+      query.set("as_of", opts.asOf);
+    }
+    if (opts?.lead) {
+      query.set("lead", opts.lead);
+    }
+    if (opts?.lag) {
+      query.set("lag", opts.lag);
+    }
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    const response = await fetch(`${API_URL}/dynamics${suffix}`, { cache: "no-store" });
     if (!response.ok) {
       return null;
     }

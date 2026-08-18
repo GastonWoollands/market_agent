@@ -141,8 +141,36 @@ class DynamicsMember(BaseModel):
     indexed: list[DynamicsPoint] = Field(default_factory=list)
 
 
+class DynamicsOverlay(BaseModel):
+    ticker: str
+    name: str
+    points: list[DynamicsPoint] = Field(default_factory=list)
+
+
+class DynamicsCorr(BaseModel):
+    window: int
+    tickers: list[str]
+    matrix: list[list[float | None]]
+
+
+class DynamicsLagBar(BaseModel):
+    lag: int
+    corr: float | None = None
+
+
+class DynamicsLeadLag(BaseModel):
+    left: str
+    right: str
+    peak_lag: int | None = None
+    note: str
+    bars: list[DynamicsLagBar] = Field(default_factory=list)
+
+
 class DynamicsResponse(BaseModel):
     as_of: date | None = None
     stale: bool = True
     benchmark: str = "SPY"
     members: list[DynamicsMember] = Field(default_factory=list)
+    overlay: list[DynamicsOverlay] = Field(default_factory=list)
+    corr: DynamicsCorr | None = None
+    lead_lag: DynamicsLeadLag | None = None

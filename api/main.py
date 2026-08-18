@@ -6,12 +6,14 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from analytics.corr import DEFAULT_LAG, DEFAULT_LEAD
 from analytics.risk_on import CURVE_SERIES, RISK_ON_TICKERS, VIX_SERIES
-from analytics.rrg import TRAIL_WEEKS
+from analytics.rrg import BENCHMARK, TRAIL_WEEKS
+from api.dynamics import HISTORY_DAYS as DYNAMICS_LOOKBACK
 from api.dynamics import build_dynamics, stored_from_rows
 from api.live import HISTORY_DAYS, build_live, resolve_lever, risk_on_from_store
 from api.schemas import DynamicsResponse, HealthResponse, JobStatus, LiveResponse
-from store.catalog import load_fred_series, load_polymarket, load_universes
+from store.catalog import load_fred_series, load_polymarket, load_universes, tape_with_roles
 from store.engine import get_db
 from store.models import (
     BarDaily,
@@ -111,20 +113,42 @@ def live(lever: str = "DGS10", db: Session = Depends(get_db)) -> LiveResponse | 
 @app.get("/dynamics", response_model=DynamicsResponse)
 def dynamics(
     as_of: date | None = None,
+    lead: str = DEFAULT_LEAD,
+    lag: str = DEFAULT_LAG,
     db: Session = Depends(get_db),
 ) -> DynamicsResponse | JSONResponse:
     try:
+        catalog = load_universes()
         pairs = latest_rrg_points(db, as_of)
-        if not pairs:
-            return DynamicsResponse(stale=True)
-        ids = [instrument.id for instrument, _ in pairs]
-        cutoff = as_of or max(point.as_of for _, point in pairs)
-        stored = stored_from_rows(
-            pairs,
-            rrg_trails(db, ids, as_of=cutoff, limit=TRAIL_WEEKS + 1),
-            latest_return_stats(db, cutoff),
+        stored = []
+        if pairs:
+            ids = [instrument.id for instrument, _ in pairs]
+            cutoff = as_of or max(point.as_of for _, point in pairs)
+            stored = stored_from_rows(
+                pairs,
+                rrg_trails(db, ids, as_of=cutoff, limit=TRAIL_WEEKS + 1),
+                latest_return_stats(db, cutoff),
+            )
+        names = [
+            BENCHMARK,
+            *[item.ticker for item in tape_with_roles(catalog, catalog.live.mover_roles)],
+        ]
+        start = (as_of or date.today()) - timedelta(days=DYNAMICS_LOOKBACK)
+        raw = closes_for_tickers(db, names, start=start)
+        closes: dict[str, list[tuple[date, float]]] = {}
+        for ticker, rows in raw.items():
+            points = [(day, float(value)) for day, value in rows]
+            if as_of is not None:
+                points = [item for item in points if item[0] <= as_of]
+            closes[ticker] = points
+        return build_dynamics(
+            stored,
+            catalog,
+            now=date.today(),
+            closes=closes,
+            lead=lead,
+            lag=lag,
         )
-        return build_dynamics(stored, load_universes(), now=date.today())
     except Exception:
         payload = DynamicsResponse(stale=True)
         return JSONResponse(status_code=503, content=payload.model_dump(mode="json"))

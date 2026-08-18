@@ -4,9 +4,9 @@ Personal US market research terminal. Delayed data, no trading.
 
 **Northstar:** [docs/NORTHSTAR.md](docs/NORTHSTAR.md) — product, schema, sources, and day-by-day plan. Read that before adding features.
 
-## Day 7 (current)
+## Day 8 (current)
 
-Dynamics shows **JdK RS-Ratio / RS-Momentum vs SPY** for tape sector/group ETFs, plus 1W/1M/3M/1Y returns and a 63-session indexed-to-100 sparkline. Computed from stored `bar_daily` by `jobs.compute_dynamics` into `rrg_point` / `return_stats`. The browser never calls Yahoo. Credit, vol, FX, and Polymarket are not on this plot.
+Dynamics extras on the same stored `bar_daily` rows: relative overlay vs SPY (63 sessions, 100 at start), US sectors table, 63-session Pearson heatmap, lead-lag lags −5…+5. Stdlib correlation — no pandas, no new vendors. Peak lag 0 (same-day) is the usual finding.
 
 Postgres is published on **host port 5433**.
 
@@ -43,4 +43,4 @@ Or `make db migrate seed yahoo fred poly dynamics api` and `make web`.
 
 ## Next
 
-Day 8: Dynamics extras (relative overlay, sector table, 63d corr, lead-lag). No new vendors.
+Day 9: Outlook without LLM (RSS, Finnhub, catalysts, evidence pack, sources table).

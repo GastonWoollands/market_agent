@@ -1,10 +1,25 @@
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 
+from analytics.corr import (
+    CORR_WINDOW,
+    DEFAULT_LAG,
+    DEFAULT_LEAD,
+    corr_matrix,
+    lead_lag,
+    lead_lag_note,
+    peak_lag,
+)
+from analytics.returns import INDEX_WINDOW, relative_to_benchmark
 from analytics.rrg import BENCHMARK, QUADRANT_ORDER
 from api.schemas import (
+    DynamicsCorr,
+    DynamicsLagBar,
+    DynamicsLeadLag,
     DynamicsMember,
+    DynamicsOverlay,
     DynamicsPoint,
     DynamicsResponse,
     DynamicsTrailPoint,
@@ -13,6 +28,8 @@ from store.catalog import UniversesFile, tape_with_roles
 from store.models import Instrument, ReturnStats, RrgPoint
 
 STALE_AFTER = timedelta(days=5)
+HISTORY_DAYS = 150
+SECTOR_ROLE = "sector"
 
 
 @dataclass(frozen=True)
@@ -91,9 +108,13 @@ def build_dynamics(
     *,
     now: date,
     benchmark: str = BENCHMARK,
+    closes: Mapping[str, Sequence[tuple[date, float]]] | None = None,
+    lead: str = DEFAULT_LEAD,
+    lag: str = DEFAULT_LAG,
 ) -> DynamicsResponse:
     by_ticker = {item.ticker: item for item in catalog.tape.instruments}
     allowed = {item.ticker for item in tape_with_roles(catalog, catalog.live.mover_roles)}
+    series = closes or {}
     members: list[DynamicsMember] = []
     as_of: date | None = None
     for row in stored:
@@ -130,10 +151,97 @@ def build_dynamics(
         )
     rank = {name: index for index, name in enumerate(QUADRANT_ORDER)}
     members.sort(key=lambda item: (rank.get(item.quadrant, 9), item.ticker))
+    if as_of is None:
+        as_of = _last_close_date(series)
     stale = as_of is None or (now - as_of) > STALE_AFTER
+    left, right = _resolve_pair(allowed, lead, lag)
     return DynamicsResponse(
         as_of=as_of,
         stale=stale,
         benchmark=benchmark,
         members=members,
+        overlay=_overlay(catalog, series, benchmark),
+        corr=_corr(catalog, series),
+        lead_lag=_lead_lag(series, left, right),
+    )
+
+
+def _last_close_date(series: Mapping[str, Sequence[tuple[date, float]]]) -> date | None:
+    latest: date | None = None
+    for rows in series.values():
+        if not rows:
+            continue
+        day = rows[-1][0]
+        if latest is None or day > latest:
+            latest = day
+    return latest
+
+
+def _points(rows: Sequence[tuple[date, float]]) -> list[DynamicsPoint]:
+    return [DynamicsPoint(date=day, value=round(value, 4)) for day, value in rows]
+
+
+def _resolve_pair(allowed: set[str], lead: str, lag: str) -> tuple[str, str]:
+    left = lead.upper()
+    right = lag.upper()
+    if left not in allowed:
+        left = DEFAULT_LEAD
+    if right not in allowed:
+        right = DEFAULT_LAG
+    return left, right
+
+
+def _overlay(
+    catalog: UniversesFile,
+    series: Mapping[str, Sequence[tuple[date, float]]],
+    benchmark: str,
+) -> list[DynamicsOverlay]:
+    bench = series.get(benchmark, [])
+    if not bench:
+        return []
+    out: list[DynamicsOverlay] = []
+    for item in tape_with_roles(catalog, [SECTOR_ROLE]):
+        points = relative_to_benchmark(series.get(item.ticker, []), bench, window=INDEX_WINDOW)
+        if len(points) < 2:
+            continue
+        out.append(DynamicsOverlay(ticker=item.ticker, name=item.name, points=_points(points)))
+    return out
+
+
+def _corr(
+    catalog: UniversesFile,
+    series: Mapping[str, Sequence[tuple[date, float]]],
+) -> DynamicsCorr | None:
+    tickers = [item.ticker for item in tape_with_roles(catalog, [SECTOR_ROLE])]
+    if not tickers or not series:
+        return None
+    matrix = corr_matrix(series, tickers)
+    if all(cell is None for row in matrix for cell in row):
+        return None
+    rounded = [
+        [None if cell is None else round(cell, 4) for cell in row] for row in matrix
+    ]
+    return DynamicsCorr(window=CORR_WINDOW, tickers=tickers, matrix=rounded)
+
+
+def _lead_lag(
+    series: Mapping[str, Sequence[tuple[date, float]]],
+    left: str,
+    right: str,
+) -> DynamicsLeadLag | None:
+    left_rows = series.get(left, [])
+    right_rows = series.get(right, [])
+    if not left_rows or not right_rows:
+        return None
+    bars = lead_lag(series.get(left, []), series.get(right, []))
+    chosen = peak_lag(bars)
+    return DynamicsLeadLag(
+        left=left,
+        right=right,
+        peak_lag=chosen,
+        note=lead_lag_note(left, right, chosen),
+        bars=[
+            DynamicsLagBar(lag=lag, corr=None if corr is None else round(corr, 4))
+            for lag, corr in bars
+        ],
     )
