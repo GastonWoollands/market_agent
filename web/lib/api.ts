@@ -28,6 +28,9 @@ export type Health = {
   valuation_instruments?: number;
   metric_ttm?: number;
   valuation_daily?: number;
+  opportunity_scores?: number;
+  opportunity_memos?: number;
+  intraday_bars?: number;
   jobs: JobStatus[];
 };
 
@@ -340,6 +343,108 @@ export async function fetchValuation(query?: {
       return null;
     }
     return (await response.json()) as ValuationTape;
+  } catch {
+    return null;
+  }
+}
+
+export type OpportunityMemo = {
+  why_scored: string;
+  what_10q_changed: string;
+  invalidation: string;
+  caveats: string;
+  model: string;
+  status: string;
+};
+
+export type OpportunityMember = {
+  ticker: string;
+  name: string;
+  rank: number;
+  total: number;
+  cheap: number;
+  quality: number;
+  change: number;
+  setup: number;
+  insider: number;
+  risk: number;
+  trap: boolean;
+  pctile_5y: number | null;
+  ev_ebitda: number | null;
+  ebitda_growth_1y: number | null;
+  fcf_margin: number | null;
+  ret_3m: number | null;
+  memo: OpportunityMemo | null;
+};
+
+export type OpportunityTape = {
+  as_of: string | null;
+  stale: boolean;
+  count: number;
+  sort: string;
+  members: OpportunityMember[];
+};
+
+export async function fetchOpportunities(query?: {
+  sort?: string;
+  asOf?: string;
+}): Promise<OpportunityTape | null> {
+  try {
+    const params = new URLSearchParams();
+    if (query?.sort) {
+      params.set("sort", query.sort);
+    }
+    if (query?.asOf) {
+      params.set("as_of", query.asOf);
+    }
+    const suffix = params.toString() ? `?${params.toString()}` : "";
+    const response = await fetch(`${API_URL}/opportunities${suffix}`, { cache: "no-store" });
+    if (!response.ok) {
+      return null;
+    }
+    return (await response.json()) as OpportunityTape;
+  } catch {
+    return null;
+  }
+}
+
+export type WatchlistSparkPoint = {
+  date: string;
+  value: number;
+};
+
+export type WatchlistPoint = {
+  ts: string;
+  value: number;
+};
+
+export type WatchlistMember = {
+  ticker: string;
+  name: string;
+  price: number | null;
+  change_pct: number | null;
+  market_state: string | null;
+  as_of: string | null;
+  tv_symbol: string;
+  sparkline: WatchlistSparkPoint[];
+  intraday: WatchlistPoint[];
+};
+
+export type WatchlistTape = {
+  as_of: string | null;
+  stale: boolean;
+  selected: string | null;
+  members: WatchlistMember[];
+};
+
+export async function fetchWatchlist(ticker?: string): Promise<WatchlistTape | null> {
+  try {
+    const query = ticker ? `?${new URLSearchParams({ ticker }).toString()}` : "";
+    const response = await fetch(`${API_URL}/watchlist${query}`, { cache: "no-store" });
+    if (!response.ok) {
+      return null;
+    }
+    return (await response.json()) as WatchlistTape;
   } catch {
     return null;
   }

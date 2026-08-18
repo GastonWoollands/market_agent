@@ -46,3 +46,49 @@ def test_fetch_chart_maps_rate_limit() -> None:
         else:
             raise AssertionError("expected YahooHttpError")
         client.close()
+
+
+def test_fetch_intraday_passes_prepost_and_5m() -> None:
+    ticker = MagicMock()
+    ticker.history.return_value = pd.DataFrame(
+        {
+            "Open": [1.0, 1.1],
+            "High": [1.0, 1.2],
+            "Low": [1.0, 1.0],
+            "Close": [1.0, 1.15],
+            "Volume": [1, 2],
+        },
+        index=pd.DatetimeIndex(["2024-08-14 08:00", "2024-08-14 09:35"]),
+    )
+    with patch("ingest.yahoo.client.yf.Ticker", return_value=ticker):
+        client = YahooClient(session=object(), rate=100.0)
+        bars = client.fetch_intraday("SPY")
+    assert ticker.history.call_args.kwargs["prepost"] is True
+    assert ticker.history.call_args.kwargs["interval"] == "5m"
+    assert ticker.history.call_args.kwargs["auto_adjust"] is False
+    assert len(bars) == 2
+    client.close()
+
+
+def test_fetch_quotes_refreshes_1d_when_only_chart_previous_close() -> None:
+    ticker = MagicMock()
+
+    def history(**_kwargs: object) -> pd.DataFrame:
+        ticker.history_metadata = {
+            "regularMarketPrice": 641.25,
+            "previousClose": 642.56,
+            "regularMarketTime": 1_723_665_600,
+        }
+        return _frame()
+
+    ticker.history.side_effect = history
+    ticker.history_metadata = {"regularMarketPrice": 641.25, "chartPreviousClose": 400.0}
+    with patch("ingest.yahoo.client.yf.Ticker", return_value=ticker):
+        client = YahooClient(session=object(), rate=100.0)
+        snaps = client.fetch_quotes(["SPY"])
+    assert ticker.history.call_args.kwargs["period"] == "1d"
+    assert ticker.history.call_args.kwargs["interval"] == "1d"
+    assert len(snaps) == 1
+    assert snaps[0].change_pct is not None
+    assert abs(float(snaps[0].change_pct)) < 1
+    client.close()

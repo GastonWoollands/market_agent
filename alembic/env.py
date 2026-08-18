@@ -6,6 +6,7 @@ from alembic import context
 from store.base import Base
 from store.models import (  # noqa: F401
     BarDaily,
+    BarIntraday,
     EventItem,
     EvidencePack,
     Instrument,
@@ -15,6 +16,8 @@ from store.models import (  # noqa: F401
     MetricTtm,
     NewsItem,
     OddsSnapshot,
+    OpportunityMemoRow,
+    OpportunityScore,
     OutlookReport,
     QuoteLatest,
     ReturnStats,

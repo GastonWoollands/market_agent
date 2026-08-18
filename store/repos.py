@@ -4,13 +4,14 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from store.canonical import (
     CalendarEvent,
     DailyBar,
+    IntradayBar,
     MacroPoint,
     NewsHeadline,
     OddsPoint,
@@ -22,6 +23,7 @@ from store.canonical import (
 from store.catalog import CatalogInstrument, FredSeriesItem
 from store.models import (
     BarDaily,
+    BarIntraday,
     EventItem,
     EvidencePack,
     Instrument,
@@ -31,6 +33,8 @@ from store.models import (
     MetricTtm,
     NewsItem,
     OddsSnapshot,
+    OpportunityMemoRow,
+    OpportunityScore,
     OutlookReport,
     QuoteLatest,
     ReturnStats,
@@ -94,6 +98,63 @@ def ensure_membership(session: Session, universe_id: int, instrument_id: int) ->
         .on_conflict_do_nothing(index_elements=["universe_id", "instrument_id"])
     )
     session.execute(stmt)
+
+
+def drop_membership(session: Session, universe_id: int, instrument_id: int) -> bool:
+    result = session.execute(
+        delete(UniverseMember).where(
+            UniverseMember.universe_id == universe_id,
+            UniverseMember.instrument_id == instrument_id,
+        )
+    )
+    return bool(result.rowcount)
+
+
+def universe_by_name(session: Session, name: str) -> Universe | None:
+    return session.execute(select(Universe).where(Universe.name == name)).scalar_one_or_none()
+
+
+def instrument_by_ticker(session: Session, ticker: str) -> Instrument | None:
+    return session.execute(
+        select(Instrument).where(Instrument.ticker == ticker)
+    ).scalar_one_or_none()
+
+
+def search_instruments(session: Session, query: str, *, limit: int = 20) -> list[Instrument]:
+    trimmed = query.strip()
+    if not trimmed:
+        return []
+    pattern = f"%{trimmed}%"
+    stmt = (
+        select(Instrument)
+        .where(
+            Instrument.is_active.is_(True),
+            or_(Instrument.ticker.ilike(pattern), Instrument.name.ilike(pattern)),
+        )
+        .order_by(Instrument.ticker)
+        .limit(limit)
+    )
+    return list(session.execute(stmt).scalars())
+
+
+def instruments_in_universes(session: Session, names: Sequence[str]) -> list[Instrument]:
+    if not names:
+        return []
+    stmt = (
+        select(Instrument)
+        .join(UniverseMember, UniverseMember.instrument_id == Instrument.id)
+        .join(Universe, Universe.id == UniverseMember.universe_id)
+        .where(Universe.name.in_(list(names)), Instrument.is_active.is_(True))
+        .order_by(Instrument.ticker)
+    )
+    seen: set[int] = set()
+    out: list[Instrument] = []
+    for item in session.execute(stmt).scalars():
+        if item.id in seen:
+            continue
+        seen.add(item.id)
+        out.append(item)
+    return out
 
 
 def universe_size(session: Session, name: str) -> int:
@@ -176,6 +237,86 @@ def upsert_daily_bars(
     )
     session.execute(stmt)
     return len(rows)
+
+
+def upsert_intraday_bars(
+    session: Session,
+    instrument_id: int,
+    bars: list[IntradayBar],
+) -> int:
+    if not bars:
+        return 0
+    rows = [
+        {
+            "instrument_id": instrument_id,
+            "ts": bar.ts,
+            "interval": bar.interval,
+            "o": bar.open,
+            "h": bar.high,
+            "l": bar.low,
+            "c": bar.close,
+            "volume": bar.volume,
+        }
+        for bar in bars
+    ]
+    stmt = insert(BarIntraday).values(rows)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["instrument_id", "ts", "interval"],
+        set_={
+            "o": stmt.excluded.o,
+            "h": stmt.excluded.h,
+            "l": stmt.excluded.l,
+            "c": stmt.excluded.c,
+            "volume": stmt.excluded.volume,
+        },
+    )
+    session.execute(stmt)
+    return len(rows)
+
+
+def intraday_closes(
+    session: Session,
+    instrument_ids: Sequence[int],
+    *,
+    interval: str = "5m",
+    since: datetime | None = None,
+) -> dict[int, list[tuple[datetime, Decimal]]]:
+    if not instrument_ids:
+        return {}
+    stmt = select(BarIntraday.instrument_id, BarIntraday.ts, BarIntraday.close).where(
+        BarIntraday.instrument_id.in_(list(instrument_ids)),
+        BarIntraday.interval == interval,
+    )
+    if since is not None:
+        stmt = stmt.where(BarIntraday.ts >= since)
+    stmt = stmt.order_by(BarIntraday.instrument_id, BarIntraday.ts)
+    out: dict[int, list[tuple[datetime, Decimal]]] = {int(item): [] for item in instrument_ids}
+    for instrument_id, ts, close in session.execute(stmt):
+        out.setdefault(instrument_id, []).append((ts, close))
+    return out
+
+
+def intraday_closes_for_tickers(
+    session: Session,
+    tickers: Sequence[str],
+    *,
+    interval: str = "5m",
+    since: datetime | None = None,
+) -> dict[str, list[tuple[datetime, Decimal]]]:
+    if not tickers:
+        return {}
+    stmt = (
+        select(Instrument.ticker, BarIntraday.ts, BarIntraday.close)
+        .join(BarIntraday, BarIntraday.instrument_id == Instrument.id)
+        .where(Instrument.ticker.in_(list(tickers)), BarIntraday.interval == interval)
+    )
+    if since is not None:
+        stmt = stmt.where(BarIntraday.ts >= since)
+    stmt = stmt.order_by(Instrument.ticker, BarIntraday.ts)
+    out: dict[str, list[tuple[datetime, Decimal]]] = {ticker: [] for ticker in tickers}
+    for ticker, ts, close in session.execute(stmt):
+        out.setdefault(ticker, []).append((ts, close))
+    return out
 
 
 def upsert_quotes(
@@ -918,3 +1059,102 @@ def comparable_valuation_counts(
         .where(Universe.name == universe, ValuationDaily.comparable.is_(True))
     )
     return int(session.execute(comparable).scalar_one() or 0), universe_size(session, universe)
+
+
+def upsert_opportunity_scores(session: Session, rows: Sequence[dict[str, object]]) -> int:
+    if not rows:
+        return 0
+    stmt = insert(OpportunityScore).values(list(rows))
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["instrument_id", "as_of"],
+        set_={
+            "rank": stmt.excluded.rank,
+            "total": stmt.excluded.total,
+            "cheap": stmt.excluded.cheap,
+            "quality": stmt.excluded.quality,
+            "change": stmt.excluded.change,
+            "setup": stmt.excluded.setup,
+            "insider": stmt.excluded.insider,
+            "risk": stmt.excluded.risk,
+            "trap": stmt.excluded.trap,
+            "fcf_margin": stmt.excluded.fcf_margin,
+            "ret_3m": stmt.excluded.ret_3m,
+        },
+    )
+    session.execute(stmt)
+    return len(rows)
+
+
+def upsert_opportunity_memo(session: Session, row: dict[str, object]) -> None:
+    stmt = insert(OpportunityMemoRow).values(row)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["instrument_id", "as_of"],
+        set_={
+            "rank": stmt.excluded.rank,
+            "model": stmt.excluded.model,
+            "prompt_version": stmt.excluded.prompt_version,
+            "why_scored": stmt.excluded.why_scored,
+            "what_10q_changed": stmt.excluded.what_10q_changed,
+            "invalidation": stmt.excluded.invalidation,
+            "caveats": stmt.excluded.caveats,
+            "pack": stmt.excluded.pack,
+            "status": stmt.excluded.status,
+        },
+    )
+    session.execute(stmt)
+
+
+def latest_opportunity_rows(
+    session: Session, *, as_of: date | None = None
+) -> list[tuple[Instrument, OpportunityScore, ValuationDaily, OpportunityMemoRow | None]]:
+    score_as_of = (
+        select(
+            OpportunityScore.instrument_id,
+            func.max(OpportunityScore.as_of).label("as_of"),
+        )
+        .group_by(OpportunityScore.instrument_id)
+        .subquery()
+    )
+    value_as_of = (
+        select(
+            ValuationDaily.instrument_id,
+            func.max(ValuationDaily.as_of).label("as_of"),
+        )
+        .group_by(ValuationDaily.instrument_id)
+        .subquery()
+    )
+    stmt = (
+        select(Instrument, OpportunityScore, ValuationDaily, OpportunityMemoRow)
+        .join(OpportunityScore, OpportunityScore.instrument_id == Instrument.id)
+        .join(
+            score_as_of,
+            (OpportunityScore.instrument_id == score_as_of.c.instrument_id)
+            & (OpportunityScore.as_of == score_as_of.c.as_of),
+        )
+        .join(ValuationDaily, ValuationDaily.instrument_id == Instrument.id)
+        .join(
+            value_as_of,
+            (ValuationDaily.instrument_id == value_as_of.c.instrument_id)
+            & (ValuationDaily.as_of == value_as_of.c.as_of),
+        )
+        .outerjoin(
+            OpportunityMemoRow,
+            (OpportunityMemoRow.instrument_id == Instrument.id)
+            & (OpportunityMemoRow.as_of == OpportunityScore.as_of),
+        )
+        .where(Instrument.is_active.is_(True))
+        .order_by(OpportunityScore.rank, Instrument.ticker)
+    )
+    if as_of is not None:
+        stmt = stmt.where(OpportunityScore.as_of == as_of)
+    return list(session.execute(stmt).all())
+
+
+def events_for_ticker(session: Session, ticker: str, *, limit: int = 3) -> list[EventItem]:
+    stmt = (
+        select(EventItem)
+        .where(EventItem.ticker == ticker)
+        .order_by(EventItem.date.desc())
+        .limit(limit)
+    )
+    return list(session.execute(stmt).scalars())

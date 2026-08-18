@@ -17,6 +17,21 @@ class DailyBar(BaseModel):
     volume: int = 0
 
 
+class IntradayBar(BaseModel):
+    """5m (and similar) bars. Do not reuse DailyBar — that type collapses to a session date."""
+
+    model_config = ConfigDict(frozen=True)
+
+    yahoo_symbol: str
+    ts: datetime
+    interval: str
+    open: Decimal
+    high: Decimal
+    low: Decimal
+    close: Decimal
+    volume: int = 0
+
+
 class QuoteSnapshot(BaseModel):
     model_config = ConfigDict(frozen=True)
 

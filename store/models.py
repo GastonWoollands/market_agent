@@ -133,6 +133,23 @@ class QuoteLatest(Base):
     instrument: Mapped[Instrument] = relationship()
 
 
+class BarIntraday(Base):
+    __tablename__ = "bar_intraday"
+
+    instrument_id: Mapped[int] = mapped_column(
+        ForeignKey("instrument.id", ondelete="CASCADE"), primary_key=True
+    )
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
+    interval: Mapped[str] = mapped_column(String(8), primary_key=True)
+    open: Mapped[Decimal] = mapped_column("o", Numeric(18, 6), nullable=False)
+    high: Mapped[Decimal] = mapped_column("h", Numeric(18, 6), nullable=False)
+    low: Mapped[Decimal] = mapped_column("l", Numeric(18, 6), nullable=False)
+    close: Mapped[Decimal] = mapped_column("c", Numeric(18, 6), nullable=False)
+    volume: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+
+    instrument: Mapped[Instrument] = relationship()
+
+
 class MacroSeries(Base):
     __tablename__ = "macro_series"
 
@@ -305,3 +322,49 @@ class ValuationDaily(Base):
     sample_size: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     instrument: Mapped[Instrument] = relationship()
+
+
+class OpportunityScore(Base):
+    __tablename__ = "opportunity_score"
+
+    instrument_id: Mapped[int] = mapped_column(
+        ForeignKey("instrument.id", ondelete="CASCADE"), primary_key=True
+    )
+    as_of: Mapped[date] = mapped_column(Date, primary_key=True)
+    rank: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    total: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    cheap: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    quality: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    change: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    setup: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    insider: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    risk: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    trap: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    fcf_margin: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    ret_3m: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+
+    instrument: Mapped[Instrument] = relationship()
+
+
+class OpportunityMemoRow(Base):
+    __tablename__ = "opportunity_memo"
+
+    instrument_id: Mapped[int] = mapped_column(
+        ForeignKey("instrument.id", ondelete="CASCADE"), primary_key=True
+    )
+    as_of: Mapped[date] = mapped_column(Date, primary_key=True)
+    rank: Mapped[int] = mapped_column(Integer, nullable=False)
+    model: Mapped[str] = mapped_column(String(128), nullable=False)
+    prompt_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    why_scored: Mapped[str] = mapped_column(Text, nullable=False)
+    what_10q_changed: Mapped[str] = mapped_column(Text, nullable=False)
+    invalidation: Mapped[str] = mapped_column(Text, nullable=False)
+    caveats: Mapped[str] = mapped_column(Text, nullable=False)
+    pack: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+
+    instrument: Mapped[Instrument] = relationship()
+
+    __table_args__ = (
+        CheckConstraint("status IN ('ok', 'fallback')", name="ck_opportunity_memo_status"),
+    )

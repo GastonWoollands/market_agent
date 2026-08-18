@@ -4,7 +4,7 @@ import json
 import re
 from typing import Any
 
-TICKER_RE = re.compile(r"\^?[A-Z]{2,5}\b")
+TICKER_RE = re.compile(r"(?<![A-Z])\^?[A-Z]{2,5}\b")
 PERCENT_RE = re.compile(r"(?<![A-Za-z0-9])([+-]?\d+(?:\.\d+)?)%")
 STOP = frozenset(
     {
@@ -18,6 +18,9 @@ STOP = frozenset(
         "ETF",
         "ETFS",
         "ET",
+        "EV",
+        "EBIT",
+        "FCF",
         "FOMC",
         "FOR",
         "FROM",
@@ -36,6 +39,7 @@ STOP = frozenset(
         "THAT",
         "THE",
         "THIS",
+        "TTM",
         "US",
         "USA",
         "USD",

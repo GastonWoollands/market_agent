@@ -31,6 +31,9 @@ class HealthResponse(BaseModel):
     valuation_instruments: int = 0
     metric_ttm: int = 0
     valuation_daily: int = 0
+    opportunity_scores: int = 0
+    opportunity_memos: int = 0
+    intraday_bars: int = 0
     jobs: list[JobStatus] = []
 
 
@@ -253,3 +256,85 @@ class ValuationResponse(BaseModel):
     min_rev: float | None = None
     industries: list[str] = Field(default_factory=list)
     members: list[ValuationMember] = Field(default_factory=list)
+
+
+class OpportunityMemo(BaseModel):
+    why_scored: str
+    what_10q_changed: str
+    invalidation: str
+    caveats: str
+    model: str
+    status: str
+
+
+class OpportunityMember(BaseModel):
+    ticker: str
+    name: str
+    rank: int
+    total: float
+    cheap: float
+    quality: float
+    change: float
+    setup: float
+    insider: float
+    risk: float
+    trap: bool
+    pctile_5y: float | None = None
+    ev_ebitda: float | None = None
+    ebitda_growth_1y: float | None = None
+    fcf_margin: float | None = None
+    ret_3m: float | None = None
+    memo: OpportunityMemo | None = None
+
+
+class OpportunityResponse(BaseModel):
+    as_of: date | None = None
+    stale: bool = True
+    count: int = 0
+    sort: str = "rank"
+    members: list[OpportunityMember] = Field(default_factory=list)
+
+
+class WatchlistSparkPoint(BaseModel):
+    date: date
+    value: float
+
+
+class WatchlistPoint(BaseModel):
+    ts: datetime
+    value: float
+
+
+class WatchlistMember(BaseModel):
+    ticker: str
+    name: str
+    price: float | None = None
+    change_pct: float | None = None
+    market_state: str | None = None
+    as_of: datetime | None = None
+    tv_symbol: str
+    sparkline: list[WatchlistSparkPoint] = Field(default_factory=list)
+    intraday: list[WatchlistPoint] = Field(default_factory=list)
+
+
+class WatchlistAdd(BaseModel):
+    ticker: str
+
+
+class WatchlistResponse(BaseModel):
+    as_of: datetime | None = None
+    stale: bool = True
+    selected: str | None = None
+    members: list[WatchlistMember] = Field(default_factory=list)
+
+
+class SearchHit(BaseModel):
+    ticker: str
+    name: str
+    exchange: str | None = None
+    asset_class: str
+
+
+class SearchResponse(BaseModel):
+    q: str
+    hits: list[SearchHit] = Field(default_factory=list)

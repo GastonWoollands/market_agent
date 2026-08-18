@@ -74,7 +74,7 @@ def ingest(
             if index % 50 == 0:
                 log.info("yahoo %s %s/%s", universe, index, len(ordered))
 
-        if not rate_limited and universe == "tape":
+        if not rate_limited and universe != "valuation":
             try:
                 snapshots = client.fetch_quotes(list(by_yahoo))
                 mapped_quotes = [
@@ -111,7 +111,7 @@ def main() -> None:
     parser.add_argument(
         "--universe",
         default=DEFAULT_UNIVERSE,
-        choices=("tape", "valuation"),
+        choices=("tape", "valuation", "watchlist"),
         help="Which universe to pull bars for.",
     )
     args = parser.parse_args()

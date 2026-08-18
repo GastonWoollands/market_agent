@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Any
 
 from ingest.yahoo.errors import YahooParseError
-from store.canonical import DailyBar, QuoteSnapshot
+from store.canonical import DailyBar, IntradayBar, QuoteSnapshot
 
 
 def _dec(value: Any) -> Decimal | None:
@@ -87,12 +87,57 @@ def bars_from_history(frame: Any, symbol: str) -> list[DailyBar]:
     return bars
 
 
+def bars_from_intraday(frame: Any, symbol: str, interval: str) -> list[IntradayBar]:
+    if frame is None or getattr(frame, "empty", True):
+        raise YahooParseError(f"{symbol}: intraday is empty")
+
+    bars: list[IntradayBar] = []
+    seen: set[datetime] = set()
+    for index_value, row in frame.iterrows():
+        close = _dec(_row_get(row, "Close", "close"))
+        if close is None:
+            continue
+        ts = _as_of(index_value)
+        if ts in seen:
+            continue
+        seen.add(ts)
+        volume_raw = _row_get(row, "Volume", "volume")
+        volume = int(volume_raw) if volume_raw is not None and volume_raw == volume_raw else 0
+        bars.append(
+            IntradayBar(
+                yahoo_symbol=symbol,
+                ts=ts,
+                interval=interval,
+                open=_dec(_row_get(row, "Open", "open")) or close,
+                high=_dec(_row_get(row, "High", "high")) or close,
+                low=_dec(_row_get(row, "Low", "low")) or close,
+                close=close,
+                volume=volume,
+            )
+        )
+    if not bars:
+        raise YahooParseError(f"{symbol}: no usable intraday bars")
+    return bars
+
+
+def listing_from_chart_meta(symbol: str, meta: dict[str, Any] | None) -> tuple[str, str | None]:
+    payload = meta or {}
+    name = str(payload.get("shortName") or payload.get("longName") or symbol).strip()
+    exchange = payload.get("exchangeName")
+    exchange_s = str(exchange).strip() if exchange else None
+    return name or symbol, exchange_s or None
+
+
 def snapshot_from_chart_meta(symbol: str, meta: dict[str, Any] | None) -> QuoteSnapshot | None:
     payload = meta or {}
     price = _dec(payload.get("regularMarketPrice"))
     if price is None:
         return None
-    prev = _dec(payload.get("chartPreviousClose")) or _dec(payload.get("previousClose"))
+    prev = (
+        _dec(payload.get("previousClose"))
+        or _dec(payload.get("regularMarketPreviousClose"))
+        or _dec(payload.get("chartPreviousClose"))
+    )
     change_pct = None
     if prev is not None and prev != 0:
         change_pct = (price / prev - 1) * Decimal("100")

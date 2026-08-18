@@ -7,9 +7,9 @@ import yfinance as yf
 from yfinance.exceptions import YFPricesMissingError, YFRateLimitError
 
 from ingest.yahoo.errors import YahooError, YahooHttpError, YahooParseError
-from ingest.yahoo.parse import bars_from_history, snapshot_from_chart_meta
+from ingest.yahoo.parse import bars_from_history, bars_from_intraday, snapshot_from_chart_meta
 from ingest.yahoo.rate_limit import TokenBucket
-from store.canonical import DailyBar, QuoteSnapshot
+from store.canonical import DailyBar, IntradayBar, QuoteSnapshot
 
 
 def _chrome_session() -> Any:
@@ -66,12 +66,46 @@ class YahooClient:
             raise YahooParseError(f"{symbol}: no prices") from exc
         return bars_from_history(frame, symbol)
 
+    def fetch_intraday(
+        self,
+        symbol: str,
+        *,
+        range_: str = "5d",
+        interval: str = "5m",
+        prepost: bool = True,
+    ) -> list[IntradayBar]:
+        ticker = self._ticker(symbol)
+        self._bucket.acquire()
+        try:
+            frame = ticker.history(
+                period=range_,
+                interval=interval,
+                auto_adjust=False,
+                actions=False,
+                prepost=prepost,
+                raise_errors=True,
+                timeout=self._timeout,
+            )
+        except YFRateLimitError as exc:
+            raise YahooHttpError("Yahoo rate limited", status_code=429) from exc
+        except YFPricesMissingError as exc:
+            raise YahooParseError(f"{symbol}: no prices") from exc
+        return bars_from_intraday(frame, symbol, interval)
+
+    def chart_meta(self, symbol: str) -> dict[str, Any]:
+        ticker = self._ticker(symbol)
+        meta = getattr(ticker, "history_metadata", None) or {}
+        return dict(meta)
+
     def fetch_quotes(self, symbols: Sequence[str]) -> list[QuoteSnapshot]:
         snapshots: list[QuoteSnapshot] = []
         for symbol in symbols:
             ticker = self._ticker(symbol)
             meta = getattr(ticker, "history_metadata", None) or {}
-            if not meta.get("regularMarketPrice"):
+            has_session_prev = bool(
+                meta.get("previousClose") or meta.get("regularMarketPreviousClose")
+            )
+            if not meta.get("regularMarketPrice") or not has_session_prev:
                 self._bucket.acquire()
                 try:
                     ticker.history(

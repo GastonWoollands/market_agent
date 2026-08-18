@@ -41,6 +41,9 @@ market-pack = "jobs.build_pack:main"
 market-outlook = "jobs.generate_outlook:main"
 market-sec = "jobs.ingest_sec:main"
 market-valuation = "jobs.compute_valuation:main"
+market-scores = "jobs.compute_scores:main"
+market-memos = "jobs.generate_memos:main"
+market-intraday = "jobs.ingest_intraday:main"
 
 [tool.setuptools.packages.find]
 include = ["api*", "store*", "jobs*", "ingest*", "analytics*", "agent*"]

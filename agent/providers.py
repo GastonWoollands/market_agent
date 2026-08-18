@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Protocol, TypeVar
+
+from pydantic import BaseModel
 
 from agent.brief import OutlookBrief
 from agent.errors import AgentError, AgentHttpError
@@ -11,13 +13,16 @@ DEFAULT_MODELS = {
     "gemini": "gemini-2.5-flash",
 }
 PROVIDERS = frozenset(DEFAULT_MODELS)
+T = TypeVar("T", bound=BaseModel)
 
 
 class AgentClient(Protocol):
     provider: str
     model: str
 
-    def complete(self, *, system: str, user: str) -> OutlookBrief: ...
+    def complete(
+        self, *, system: str, user: str, schema: type[BaseModel] = OutlookBrief
+    ) -> BaseModel: ...
 
 
 def make_client(
@@ -59,7 +64,10 @@ class AnthropicAgent:
         self.model = model
         self._client = Anthropic(api_key=key)
 
-    def complete(self, *, system: str, user: str) -> OutlookBrief:
+    def complete(
+        self, *, system: str, user: str, schema: type[T] = OutlookBrief
+    ) -> T:
+        output = schema
         try:
             parse = getattr(self._client.messages, "parse", None)
             if parse is not None:
@@ -69,11 +77,11 @@ class AnthropicAgent:
                     temperature=0.2,
                     system=system,
                     messages=[{"role": "user", "content": user}],
-                    output_format=OutlookBrief,
+                    output_format=output,
                 )
                 parsed = getattr(result, "parsed_output", None) or getattr(result, "parsed", None)
                 if parsed is not None:
-                    return OutlookBrief.model_validate(parsed)
+                    return output.model_validate(parsed)
             response = self._client.messages.create(
                 model=self.model,
                 max_tokens=2048,
@@ -89,7 +97,7 @@ class AnthropicAgent:
         text = "".join(
             block.text for block in response.content if getattr(block, "type", "") == "text"
         )
-        return brief_from_text(text)
+        return parse_model(text, output)
 
 
 class GeminiAgent:
@@ -108,7 +116,10 @@ class GeminiAgent:
         self.model = model
         self._client = genai.Client(api_key=key)
 
-    def complete(self, *, system: str, user: str) -> OutlookBrief:
+    def complete(
+        self, *, system: str, user: str, schema: type[T] = OutlookBrief
+    ) -> T:
+        output = schema
         try:
             payload = self._client.models.generate_content(
                 model=self.model,
@@ -117,7 +128,7 @@ class GeminiAgent:
                     "system_instruction": system,
                     "temperature": 0.2,
                     "response_mime_type": "application/json",
-                    "response_json_schema": OutlookBrief.model_json_schema(),
+                    "response_json_schema": output.model_json_schema(),
                     "automatic_function_calling": {"disable": True},
                 },
             )
@@ -127,18 +138,22 @@ class GeminiAgent:
             raise AgentHttpError(f"gemini: {exc}") from exc
         parsed = getattr(payload, "parsed", None)
         if parsed is not None:
-            return OutlookBrief.model_validate(parsed)
+            return output.model_validate(parsed)
         text = getattr(payload, "text", None) or ""
-        return brief_from_text(text)
+        return parse_model(text, output)
 
 
 def brief_from_text(text: str) -> OutlookBrief:
+    return parse_model(text, OutlookBrief)
+
+
+def parse_model[U: BaseModel](text: str, schema: type[U]) -> U:
     blob = text.strip()
     if blob.startswith("```"):
         blob = blob.split("\n", 1)[-1]
         if blob.endswith("```"):
             blob = blob[: blob.rfind("```")].strip()
     try:
-        return OutlookBrief.model_validate_json(blob)
+        return schema.model_validate_json(blob)
     except Exception as exc:
-        raise AgentError("agent response is not a valid OutlookBrief JSON") from exc
+        raise AgentError(f"agent response is not valid {schema.__name__} JSON") from exc
