@@ -30,9 +30,11 @@ const PALETTE = [
 export function RelativeOverlay({
   series,
   benchmark,
+  colors,
 }: {
   series: DynamicsOverlay[];
   benchmark: string;
+  colors?: Record<string, string>;
 }) {
   if (series.length === 0) {
     return (
@@ -56,7 +58,7 @@ export function RelativeOverlay({
   });
 
   return (
-    <div className="h-72 w-full">
+    <div className="h-72 w-full" aria-label={`Relative performance versus ${benchmark}`}>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
           <XAxis
@@ -93,7 +95,7 @@ export function RelativeOverlay({
               dataKey={item.ticker}
               name={item.ticker}
               dot={false}
-              stroke={PALETTE[index % PALETTE.length]}
+              stroke={colors?.[item.ticker] ?? PALETTE[index % PALETTE.length]}
               strokeWidth={item.ticker === benchmark ? 1.8 : 1.25}
               connectNulls
               isAnimationActive={false}
