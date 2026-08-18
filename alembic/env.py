@@ -1,15 +1,18 @@
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+from alembic import context
 from store.base import Base
 from store.models import (  # noqa: F401
     BarDaily,
+    EventItem,
+    EvidencePack,
     Instrument,
     JobRun,
     MacroObservation,
     MacroSeries,
+    NewsItem,
     OddsSnapshot,
     QuoteLatest,
     ReturnStats,

@@ -1,3 +1,5 @@
+from datetime import date
+
 from pydantic import BaseModel, ConfigDict, Field
 from yaml import safe_load
 
@@ -89,3 +91,42 @@ def load_polymarket() -> PolymarketFile:
     with path.open(encoding="utf-8") as handle:
         raw = safe_load(handle)
     return PolymarketFile.model_validate(raw)
+
+
+class NewsBucket(BaseModel):
+    category: str
+    queries: list[str] = Field(default_factory=list)
+
+
+class NewsQueriesFile(BaseModel):
+    buckets: list[NewsBucket] = Field(default_factory=list)
+
+
+def load_news_queries() -> NewsQueriesFile:
+    path = CONFIG_DIR / "news_queries.yaml"
+    with path.open(encoding="utf-8") as handle:
+        raw = safe_load(handle)
+    return NewsQueriesFile.model_validate(raw)
+
+
+class CatalystItem(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    date: date
+    title: str
+    sep: bool = False
+    type: str | None = None
+
+
+class CatalystsFile(BaseModel):
+    timezone: str = "America/New_York"
+    fomc: list[CatalystItem] = Field(default_factory=list)
+    cpi: list[CatalystItem] = Field(default_factory=list)
+    other: list[CatalystItem] = Field(default_factory=list)
+
+
+def load_catalysts() -> CatalystsFile:
+    path = CONFIG_DIR / "catalysts.yaml"
+    with path.open(encoding="utf-8") as handle:
+        raw = safe_load(handle)
+    return CatalystsFile.model_validate(raw)

@@ -4,14 +4,14 @@ Personal US market research terminal. Delayed data, no trading.
 
 **Northstar:** [docs/NORTHSTAR.md](docs/NORTHSTAR.md) — product, schema, sources, and day-by-day plan. Read that before adding features.
 
-## Day 8 (current)
+## Day 9 (current)
 
-Dynamics extras on the same stored `bar_daily` rows: relative overlay vs SPY (63 sessions, 100 at start), US sectors table, 63-session Pearson heatmap, lead-lag lags −5…+5. Stdlib correlation — no pandas, no new vendors. Peak lag 0 (same-day) is the usual finding.
+Outlook shows a **sources table** (vendor, job as_of, row counts from Postgres), Google News RSS tape, and a calendar (yaml FOMC/CPI plus Finnhub watchlist earnings). Evidence pack is built in Python and stored for Day 10. The browser never calls Google or Finnhub. Claude is not in this day.
 
 Postgres is published on **host port 5433**.
 
 ```bash
-cp .env.example .env   # set FRED_API_KEY
+cp .env.example .env   # set FRED_API_KEY and FINNHUB_API_KEY
 python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
@@ -23,13 +23,16 @@ python -m jobs.ingest_yahoo
 python -m jobs.ingest_fred
 python -m jobs.ingest_polymarket
 python -m jobs.compute_dynamics
+python -m jobs.ingest_news
+python -m jobs.ingest_calendar
+python -m jobs.build_pack
 
 uvicorn api.main:app --reload --port 8000
 # other terminal
 npm --prefix web run dev
 ```
 
-Or `make db migrate seed yahoo fred poly dynamics api` and `make web`.
+Or `make db migrate seed yahoo fred poly dynamics news calendar pack api` and `make web`.
 
 ## Config
 
@@ -43,4 +46,4 @@ Or `make db migrate seed yahoo fred poly dynamics api` and `make web`.
 
 ## Next
 
-Day 9: Outlook without LLM (RSS, Finnhub, catalysts, evidence pack, sources table).
+Day 10: Claude Outlook (pack → structured brief, citation check). No new vendors.

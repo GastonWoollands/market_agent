@@ -46,3 +46,27 @@ class OddsPoint(BaseModel):
     as_of: datetime
     raw: dict | None = None
 
+
+class NewsHeadline(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    guid: str
+    title: str
+    url: str
+    publisher: str
+    published_at: datetime
+    category: str
+    query: str
+
+
+class CalendarEvent(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    slug: str
+    date: date
+    title: str
+    kind: str
+    source: str
+    ticker: str | None = None
+    extra: dict | None = None
+

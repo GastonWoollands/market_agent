@@ -12,12 +12,16 @@ from analytics.rrg import BENCHMARK, TRAIL_WEEKS
 from api.dynamics import HISTORY_DAYS as DYNAMICS_LOOKBACK
 from api.dynamics import build_dynamics, stored_from_rows
 from api.live import HISTORY_DAYS, build_live, resolve_lever, risk_on_from_store
-from api.schemas import DynamicsResponse, HealthResponse, JobStatus, LiveResponse
+from api.outlook import outlook_from_store
+from api.schemas import DynamicsResponse, HealthResponse, JobStatus, LiveResponse, OutlookResponse
 from store.catalog import load_fred_series, load_polymarket, load_universes, tape_with_roles
 from store.engine import get_db
 from store.models import (
     BarDaily,
+    EventItem,
+    EvidencePack,
     MacroObservation,
+    NewsItem,
     OddsSnapshot,
     QuoteLatest,
     ReturnStats,
@@ -75,6 +79,9 @@ def health(db: Session = Depends(get_db)) -> HealthResponse | JSONResponse:
             odds_snapshots=table_count(db, OddsSnapshot),
             rrg_points=table_count(db, RrgPoint),
             return_stats=table_count(db, ReturnStats),
+            news_items=table_count(db, NewsItem),
+            event_items=table_count(db, EventItem),
+            evidence_packs=table_count(db, EvidencePack),
             jobs=jobs,
         )
     except Exception as exc:
@@ -151,4 +158,16 @@ def dynamics(
         )
     except Exception:
         payload = DynamicsResponse(stale=True)
+        return JSONResponse(status_code=503, content=payload.model_dump(mode="json"))
+
+
+@app.get("/outlook", response_model=OutlookResponse)
+def outlook(
+    as_of: date | None = None,
+    db: Session = Depends(get_db),
+) -> OutlookResponse | JSONResponse:
+    try:
+        return outlook_from_store(db, as_of=as_of)
+    except Exception:
+        payload = OutlookResponse(stale=True)
         return JSONResponse(status_code=503, content=payload.model_dump(mode="json"))

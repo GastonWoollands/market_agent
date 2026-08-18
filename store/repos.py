@@ -2,19 +2,30 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from store.canonical import DailyBar, MacroPoint, OddsPoint, QuoteSnapshot
+from store.canonical import (
+    CalendarEvent,
+    DailyBar,
+    MacroPoint,
+    NewsHeadline,
+    OddsPoint,
+    QuoteSnapshot,
+)
 from store.catalog import CatalogInstrument, FredSeriesItem
 from store.models import (
     BarDaily,
+    EventItem,
+    EvidencePack,
     Instrument,
     JobRun,
     MacroObservation,
     MacroSeries,
+    NewsItem,
     OddsSnapshot,
     QuoteLatest,
     ReturnStats,
@@ -537,3 +548,124 @@ def latest_return_stats(session: Session, before: date | None = None) -> dict[in
         if current is None or row.as_of > current.as_of:
             best[row.instrument_id] = row
     return best
+
+
+def upsert_news(session: Session, headlines: Sequence[NewsHeadline]) -> int:
+    if not headlines:
+        return 0
+    rows = [
+        {
+            "guid": item.guid,
+            "title": item.title,
+            "url": item.url,
+            "publisher": item.publisher,
+            "published_at": item.published_at,
+            "category": item.category,
+            "query": item.query,
+        }
+        for item in headlines
+    ]
+    stmt = insert(NewsItem).values(rows)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["guid"],
+        set_={
+            "title": stmt.excluded.title,
+            "url": stmt.excluded.url,
+            "publisher": stmt.excluded.publisher,
+            "published_at": stmt.excluded.published_at,
+            "category": stmt.excluded.category,
+            "query": stmt.excluded.query,
+        },
+    )
+    session.execute(stmt)
+    return len(rows)
+
+
+def latest_news(
+    session: Session,
+    *,
+    since: datetime | None = None,
+    limit: int = 40,
+) -> list[NewsItem]:
+    stmt = select(NewsItem)
+    if since is not None:
+        stmt = stmt.where(NewsItem.published_at >= since)
+    stmt = stmt.order_by(NewsItem.published_at.desc()).limit(limit)
+    return list(session.execute(stmt).scalars())
+
+
+def upsert_events(session: Session, events: Sequence[CalendarEvent]) -> int:
+    if not events:
+        return 0
+    rows = [
+        {
+            "slug": item.slug,
+            "date": item.date,
+            "title": item.title,
+            "kind": item.kind,
+            "source": item.source,
+            "ticker": item.ticker,
+            "extra": item.extra,
+        }
+        for item in events
+    ]
+    stmt = insert(EventItem).values(rows)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["slug"],
+        set_={
+            "date": stmt.excluded.date,
+            "title": stmt.excluded.title,
+            "kind": stmt.excluded.kind,
+            "source": stmt.excluded.source,
+            "ticker": stmt.excluded.ticker,
+            "extra": stmt.excluded.extra,
+        },
+    )
+    session.execute(stmt)
+    return len(rows)
+
+
+def upcoming_events(
+    session: Session,
+    *,
+    start: date,
+    end: date,
+) -> list[EventItem]:
+    stmt = (
+        select(EventItem)
+        .where(EventItem.date >= start, EventItem.date <= end)
+        .order_by(EventItem.date, EventItem.slug)
+    )
+    return list(session.execute(stmt).scalars())
+
+
+def event_count_for_source(session: Session, source: str) -> int:
+    stmt = select(func.count()).select_from(EventItem).where(EventItem.source == source)
+    return int(session.execute(stmt).scalar_one())
+
+
+def upsert_evidence_pack(
+    session: Session,
+    *,
+    as_of: date,
+    pack: dict[str, Any],
+    digest: str,
+) -> EvidencePack:
+    stmt = (
+        insert(EvidencePack)
+        .values(as_of=as_of, pack=pack, hash=digest, created_at=func.now())
+        .on_conflict_do_update(
+            index_elements=["as_of"],
+            set_={"pack": pack, "hash": digest, "created_at": func.now()},
+        )
+        .returning(EvidencePack)
+    )
+    return session.scalars(stmt).one()
+
+
+def latest_evidence_pack(session: Session, as_of: date | None = None) -> EvidencePack | None:
+    stmt = select(EvidencePack)
+    if as_of is not None:
+        stmt = stmt.where(EvidencePack.as_of == as_of)
+    stmt = stmt.order_by(EvidencePack.as_of.desc())
+    return session.execute(stmt).scalars().first()

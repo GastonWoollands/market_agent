@@ -205,3 +205,48 @@ class RrgPoint(Base):
             name="ck_rrg_point_quadrant",
         ),
     )
+
+
+class NewsItem(Base):
+    __tablename__ = "news_item"
+
+    guid: Mapped[str] = mapped_column(String(512), primary_key=True)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    publisher: Mapped[str] = mapped_column(String(255), nullable=False)
+    published_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
+    category: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    query: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class EventItem(Base):
+    __tablename__ = "event_item"
+
+    slug: Mapped[str] = mapped_column(String(128), primary_key=True)
+    date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    source: Mapped[str] = mapped_column(String(16), nullable=False)
+    ticker: Mapped[str | None] = mapped_column(String(32))
+    extra: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('fomc', 'cpi', 'earnings', 'election', 'other')",
+            name="ck_event_item_kind",
+        ),
+    )
+
+
+class EvidencePack(Base):
+    __tablename__ = "evidence_pack"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    as_of: Mapped[date] = mapped_column(Date, unique=True, nullable=False)
+    pack: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )

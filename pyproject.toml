@@ -33,9 +33,12 @@ market-yahoo = "jobs.ingest_yahoo:main"
 market-fred = "jobs.ingest_fred:main"
 market-poly = "jobs.ingest_polymarket:main"
 market-dynamics = "jobs.compute_dynamics:main"
+market-news = "jobs.ingest_news:main"
+market-calendar = "jobs.ingest_calendar:main"
+market-pack = "jobs.build_pack:main"
 
 [tool.setuptools.packages.find]
-include = ["api*", "store*", "jobs*", "ingest*", "analytics*"]
+include = ["api*", "store*", "jobs*", "ingest*", "analytics*", "agent*"]
 
 [tool.ruff]
 line-length = 100

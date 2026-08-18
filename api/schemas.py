@@ -24,6 +24,9 @@ class HealthResponse(BaseModel):
     odds_snapshots: int = 0
     rrg_points: int = 0
     return_stats: int = 0
+    news_items: int = 0
+    event_items: int = 0
+    evidence_packs: int = 0
     jobs: list[JobStatus] = []
 
 
@@ -174,3 +177,39 @@ class DynamicsResponse(BaseModel):
     overlay: list[DynamicsOverlay] = Field(default_factory=list)
     corr: DynamicsCorr | None = None
     lead_lag: DynamicsLeadLag | None = None
+
+
+class OutlookSource(BaseModel):
+    vendor: str
+    job_name: str
+    as_of: datetime | None = None
+    status: str | None = None
+    rows: int = 0
+    error: str | None = None
+
+
+class OutlookNews(BaseModel):
+    title: str
+    publisher: str
+    published_at: datetime
+    category: str
+    url: str
+
+
+class OutlookEvent(BaseModel):
+    date: date
+    title: str
+    kind: str
+    ticker: str | None = None
+    source: str
+
+
+class OutlookResponse(BaseModel):
+    as_of: date | None = None
+    stale: bool = True
+    pack_id: int | None = None
+    pack_hash: str | None = None
+    brief: str | None = None
+    news: list[OutlookNews] = Field(default_factory=list)
+    events: list[OutlookEvent] = Field(default_factory=list)
+    sources: list[OutlookSource] = Field(default_factory=list)

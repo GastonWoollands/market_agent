@@ -1,4 +1,4 @@
-.PHONY: db migrate seed yahoo fred poly dynamics api web test
+.PHONY: db migrate seed yahoo fred poly dynamics news calendar pack api web test
 
 db:
 	docker compose up -d db
@@ -20,6 +20,15 @@ poly:
 
 dynamics:
 	.venv/bin/python -m jobs.compute_dynamics
+
+news:
+	.venv/bin/python -m jobs.ingest_news
+
+calendar:
+	.venv/bin/python -m jobs.ingest_calendar
+
+pack:
+	.venv/bin/python -m jobs.build_pack
 
 api:
 	.venv/bin/uvicorn api.main:app --reload --port 8000

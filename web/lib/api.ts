@@ -21,6 +21,9 @@ export type Health = {
   odds_snapshots?: number;
   rrg_points?: number;
   return_stats?: number;
+  news_items?: number;
+  event_items?: number;
+  evidence_packs?: number;
   jobs: JobStatus[];
 };
 
@@ -217,6 +220,55 @@ export async function fetchDynamics(opts?: {
       return null;
     }
     return (await response.json()) as DynamicsTape;
+  } catch {
+    return null;
+  }
+}
+
+export type OutlookSource = {
+  vendor: string;
+  job_name: string;
+  as_of: string | null;
+  status: string | null;
+  rows: number;
+  error: string | null;
+};
+
+export type OutlookNews = {
+  title: string;
+  publisher: string;
+  published_at: string;
+  category: string;
+  url: string;
+};
+
+export type OutlookEvent = {
+  date: string;
+  title: string;
+  kind: string;
+  ticker: string | null;
+  source: string;
+};
+
+export type OutlookTape = {
+  as_of: string | null;
+  stale: boolean;
+  pack_id: number | null;
+  pack_hash: string | null;
+  brief: string | null;
+  news: OutlookNews[];
+  events: OutlookEvent[];
+  sources: OutlookSource[];
+};
+
+export async function fetchOutlook(asOf?: string): Promise<OutlookTape | null> {
+  try {
+    const query = asOf ? `?${new URLSearchParams({ as_of: asOf }).toString()}` : "";
+    const response = await fetch(`${API_URL}/outlook${query}`, { cache: "no-store" });
+    if (!response.ok) {
+      return null;
+    }
+    return (await response.json()) as OutlookTape;
   } catch {
     return null;
   }
