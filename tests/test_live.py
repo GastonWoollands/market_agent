@@ -4,13 +4,15 @@ from decimal import Decimal
 from api.live import build_live
 from store.catalog import (
     CatalogInstrument,
+    FredSeriesFile,
+    FredSeriesItem,
     LiveHeaderItem,
     LiveTapeConfig,
     UniverseCatalog,
     UniversesFile,
 )
-from store.display import resolve_change_pct, resolve_price
-from store.repos import LiveTapeRow
+from store.display import resolve_change_pct, resolve_level_change, resolve_price
+from store.repos import LiveMacroRow, LiveTapeRow
 
 
 def _catalog() -> UniversesFile:
@@ -104,3 +106,37 @@ def test_build_live_quote_wins_and_session_state() -> None:
     assert tape.market_state == "CLOSED"
     assert tape.stale is False
     assert tape.as_of == as_of
+    assert tape.macro == []
+
+
+def test_build_live_macro_uses_level_change_not_percent_return() -> None:
+    fred = FredSeriesFile(
+        series=[
+            FredSeriesItem(
+                id="DGS10",
+                name="10Y Treasury yield",
+                unit="percent",
+                category="rates",
+            )
+        ]
+    )
+    rows = [
+        LiveMacroRow(
+            series_id="DGS10",
+            last=Decimal("4.25"),
+            prev=Decimal("4.20"),
+            last_date=date(2026, 8, 14),
+        )
+    ]
+    tape = build_live(
+        [],
+        _catalog(),
+        now=datetime(2026, 8, 14, tzinfo=UTC),
+        macro_rows=rows,
+        fred=fred,
+    )
+    assert tape.macro[0].series_id == "DGS10"
+    assert tape.macro[0].value == 4.25
+    assert tape.macro[0].change == 0.05
+    assert tape.macro[0].as_of == date(2026, 8, 14)
+    assert resolve_level_change(Decimal("4.25"), Decimal("4.20")) == Decimal("0.05")

@@ -43,3 +43,24 @@ def load_universes() -> UniversesFile:
     with path.open(encoding="utf-8") as handle:
         raw = safe_load(handle)
     return UniversesFile.model_validate(raw)
+
+
+class FredSeriesItem(BaseModel):
+    id: str
+    name: str
+    unit: str
+    category: str | None = None
+    insight: str | None = None
+    watch: list[str] = Field(default_factory=list)
+    frequency: str = "daily"
+
+
+class FredSeriesFile(BaseModel):
+    series: list[FredSeriesItem] = Field(default_factory=list)
+
+
+def load_fred_series() -> FredSeriesFile:
+    path = CONFIG_DIR / "fred_series.yaml"
+    with path.open(encoding="utf-8") as handle:
+        raw = safe_load(handle)
+    return FredSeriesFile.model_validate(raw)

@@ -1,10 +1,10 @@
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
-from api.schemas import LiveQuote, LiveResponse
-from store.catalog import UniversesFile
-from store.display import resolve_change_pct, resolve_price
-from store.repos import LiveTapeRow
+from api.schemas import LiveMacro, LiveQuote, LiveResponse
+from store.catalog import FredSeriesFile, UniversesFile
+from store.display import resolve_change_pct, resolve_level_change, resolve_price
+from store.repos import LiveMacroRow, LiveTapeRow
 
 _QUOTE_STALE_AFTER = timedelta(days=3)
 _STATE_RANK = {
@@ -73,6 +73,8 @@ def build_live(
     catalog: UniversesFile,
     *,
     now: datetime | None = None,
+    macro_rows: list[LiveMacroRow] | None = None,
+    fred: FredSeriesFile | None = None,
 ) -> LiveResponse:
     clock = now or datetime.now(UTC)
     by_ticker = {row.ticker: row for row in rows}
@@ -109,4 +111,29 @@ def build_live(
         stale=_is_stale(as_of, clock),
         header=header,
         movers=movers,
+        macro=_macro_items(macro_rows or [], fred),
     )
+
+
+def _macro_items(rows: list[LiveMacroRow], fred: FredSeriesFile | None) -> list[LiveMacro]:
+    if fred is None:
+        return []
+    by_id = {row.series_id: row for row in rows}
+    items: list[LiveMacro] = []
+    for item in fred.series:
+        row = by_id.get(item.id)
+        last = row.last if row else None
+        prev = row.prev if row else None
+        items.append(
+            LiveMacro(
+                series_id=item.id,
+                name=item.name,
+                unit=item.unit,
+                category=item.category,
+                frequency=item.frequency,
+                value=_to_float(last),
+                change=_to_float(resolve_level_change(last, prev)),
+                as_of=row.last_date if row else None,
+            )
+        )
+    return items

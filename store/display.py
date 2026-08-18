@@ -17,3 +17,9 @@ def resolve_change_pct(
     if last_close is None or prev_close is None or prev_close == 0:
         return None
     return (last_close / prev_close - 1) * Decimal("100")
+
+
+def resolve_level_change(last: Decimal | None, prev: Decimal | None) -> Decimal | None:
+    if last is None or prev is None:
+        return None
+    return last - prev

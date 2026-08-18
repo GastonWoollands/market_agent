@@ -8,6 +8,8 @@ from store.models import (  # noqa: F401
     BarDaily,
     Instrument,
     JobRun,
+    MacroObservation,
+    MacroSeries,
     QuoteLatest,
     Universe,
     UniverseMember,

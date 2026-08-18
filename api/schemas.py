@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel
 
@@ -20,6 +20,7 @@ class HealthResponse(BaseModel):
     watchlist_instruments: int = 0
     daily_bars: int = 0
     quotes: int = 0
+    macro_observations: int = 0
     jobs: list[JobStatus] = []
 
 
@@ -33,9 +34,21 @@ class LiveQuote(BaseModel):
     as_of: datetime | None = None
 
 
+class LiveMacro(BaseModel):
+    series_id: str
+    name: str
+    unit: str
+    category: str | None = None
+    frequency: str = "daily"
+    value: float | None = None
+    change: float | None = None
+    as_of: date | None = None
+
+
 class LiveResponse(BaseModel):
     as_of: datetime | None = None
     market_state: str | None = None
     stale: bool = True
     header: list[LiveQuote] = []
     movers: list[LiveQuote] = []
+    macro: list[LiveMacro] = []

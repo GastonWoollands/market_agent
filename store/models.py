@@ -131,3 +131,29 @@ class QuoteLatest(Base):
     )
 
     instrument: Mapped[Instrument] = relationship()
+
+
+class MacroSeries(Base):
+    __tablename__ = "macro_series"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    unit: Mapped[str] = mapped_column(String(32), nullable=False)
+    source: Mapped[str] = mapped_column(String(16), nullable=False)
+    fred_id: Mapped[str | None] = mapped_column(String(32))
+
+    observations: Mapped[list["MacroObservation"]] = relationship(
+        back_populates="series", cascade="all, delete-orphan"
+    )
+
+
+class MacroObservation(Base):
+    __tablename__ = "macro_observation"
+
+    series_id: Mapped[str] = mapped_column(
+        ForeignKey("macro_series.id", ondelete="CASCADE"), primary_key=True
+    )
+    date: Mapped[date] = mapped_column(Date, primary_key=True)
+    value: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+
+    series: Mapped[MacroSeries] = relationship(back_populates="observations")

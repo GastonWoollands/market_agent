@@ -17,6 +17,7 @@ export type Health = {
   watchlist_instruments: number;
   daily_bars?: number;
   quotes?: number;
+  macro_observations?: number;
   jobs: JobStatus[];
 };
 
@@ -30,12 +31,24 @@ export type LiveQuote = {
   as_of: string | null;
 };
 
+export type LiveMacro = {
+  series_id: string;
+  name: string;
+  unit: string;
+  category: string | null;
+  frequency: string;
+  value: number | null;
+  change: number | null;
+  as_of: string | null;
+};
+
 export type LiveTape = {
   as_of: string | null;
   market_state: string | null;
   stale: boolean;
   header: LiveQuote[];
   movers: LiveQuote[];
+  macro: LiveMacro[];
 };
 
 export async function fetchHealth(): Promise<Health | null> {

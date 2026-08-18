@@ -30,6 +30,7 @@ dev = [
 [project.scripts]
 market-seed = "jobs.seed_tape:main"
 market-yahoo = "jobs.ingest_yahoo:main"
+market-fred = "jobs.ingest_fred:main"
 
 [tool.setuptools.packages.find]
 include = ["api*", "store*", "jobs*", "ingest*"]

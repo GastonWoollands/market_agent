@@ -21,6 +21,7 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql://market:market@localhost:5433/market_agent"
     cors_origins: str = "http://localhost:3000"
+    fred_api_key: str = ""
 
     @classmethod
     def settings_customise_sources(

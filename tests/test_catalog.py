@@ -1,4 +1,4 @@
-from store.catalog import load_universes
+from store.catalog import load_fred_series, load_universes
 
 
 def test_universes_yaml_loads() -> None:
@@ -12,3 +12,12 @@ def test_universes_yaml_loads() -> None:
     assert header == ["^GSPC", "QQQ", "^RUT", "^DJI", "USO", "GLD"]
     assert "SPY" not in header
     assert catalog.live.header[0].label == "S&P 500"
+
+
+def test_fred_series_yaml_has_ten_year() -> None:
+    catalog = load_fred_series()
+    ids = [item.id for item in catalog.series]
+    assert len(ids) == 13
+    assert ids[0] == "DGS10"
+    assert catalog.series[0].unit == "percent"
+    assert {item.id for item in catalog.series} >= {"DGS10", "DGS2", "VIXCLS", "UNRATE"}

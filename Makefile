@@ -1,4 +1,4 @@
-.PHONY: db migrate seed yahoo api web test
+.PHONY: db migrate seed yahoo fred api web test
 
 db:
 	docker compose up -d db
@@ -11,6 +11,9 @@ seed:
 
 yahoo:
 	.venv/bin/python -m jobs.ingest_yahoo
+
+fred:
+	.venv/bin/python -m jobs.ingest_fred
 
 api:
 	.venv/bin/uvicorn api.main:app --reload --port 8000

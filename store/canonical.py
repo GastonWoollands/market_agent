@@ -26,3 +26,12 @@ class QuoteSnapshot(BaseModel):
     volume: int | None = None
     market_state: str | None = None
     as_of: datetime
+
+
+class MacroPoint(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    series_id: str
+    date: date
+    value: Decimal
+

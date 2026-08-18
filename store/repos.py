@@ -6,9 +6,18 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from store.canonical import DailyBar, QuoteSnapshot
-from store.catalog import CatalogInstrument
-from store.models import BarDaily, Instrument, JobRun, QuoteLatest, Universe, UniverseMember
+from store.canonical import DailyBar, MacroPoint, QuoteSnapshot
+from store.catalog import CatalogInstrument, FredSeriesItem
+from store.models import (
+    BarDaily,
+    Instrument,
+    JobRun,
+    MacroObservation,
+    MacroSeries,
+    QuoteLatest,
+    Universe,
+    UniverseMember,
+)
 
 
 def upsert_instrument(session: Session, item: CatalogInstrument) -> Instrument:
@@ -267,4 +276,94 @@ def live_tape_rows(session: Session, universe: str = "tape") -> list[LiveTapeRow
             prev_close,
             last_date,
         ) in session.execute(stmt)
+    ]
+
+
+def upsert_macro_series(session: Session, item: FredSeriesItem, *, source: str = "fred") -> None:
+    stmt = (
+        insert(MacroSeries)
+        .values(
+            id=item.id,
+            name=item.name,
+            unit=item.unit,
+            source=source,
+            fred_id=item.id,
+        )
+        .on_conflict_do_update(
+            index_elements=[MacroSeries.id],
+            set_={
+                "name": item.name,
+                "unit": item.unit,
+                "source": source,
+                "fred_id": item.id,
+            },
+        )
+    )
+    session.execute(stmt)
+
+
+def upsert_macro_observations(session: Session, points: list[MacroPoint]) -> int:
+    if not points:
+        return 0
+    rows = [
+        {"series_id": point.series_id, "date": point.date, "value": point.value} for point in points
+    ]
+    stmt = insert(MacroObservation).values(rows)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["series_id", "date"],
+        set_={"value": stmt.excluded.value},
+    )
+    session.execute(stmt)
+    return len(rows)
+
+
+def observation_count_for_series(session: Session, series_id: str) -> int:
+    stmt = (
+        select(func.count())
+        .select_from(MacroObservation)
+        .where(MacroObservation.series_id == series_id)
+    )
+    return int(session.execute(stmt).scalar_one())
+
+
+@dataclass(frozen=True)
+class LiveMacroRow:
+    series_id: str
+    last: Decimal | None
+    prev: Decimal | None
+    last_date: date | None
+
+
+def live_macro_rows(session: Session) -> list[LiveMacroRow]:
+    ranked = (
+        select(
+            MacroObservation.series_id,
+            MacroObservation.value,
+            MacroObservation.date,
+            func.row_number()
+            .over(
+                partition_by=MacroObservation.series_id,
+                order_by=MacroObservation.date.desc(),
+            )
+            .label("rn"),
+        )
+    ).subquery()
+    last_obs = select(ranked).where(ranked.c.rn == 1).subquery()
+    prev_obs = select(ranked).where(ranked.c.rn == 2).subquery()
+    stmt = (
+        select(
+            last_obs.c.series_id,
+            last_obs.c.value,
+            prev_obs.c.value,
+            last_obs.c.date,
+        ).outerjoin(prev_obs, prev_obs.c.series_id == last_obs.c.series_id)
+    )
+    return [
+        LiveMacroRow(
+            series_id=series_id,
+            last=last,
+            prev=prev,
+            last_date=last_date,
+        )
+        for series_id, last, prev, last_date in session.execute(stmt)
     ]
