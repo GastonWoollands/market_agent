@@ -1,5 +1,8 @@
+import Link from "next/link";
+
+import { MacroChart } from "@/components/MacroChart";
 import { cn } from "@/lib/cn";
-import type { LiveMacro, LiveQuote, LiveTape } from "@/lib/api";
+import type { LiveDrilldown, LiveMacro, LiveQuote, LiveTape, LiveWatch } from "@/lib/api";
 
 const SESSION_LABEL: Record<string, string> = {
   REGULAR: "Regular",
@@ -59,6 +62,8 @@ export function LiveTapeView({ tape }: { tape: LiveTape | null }) {
           </p>
         ) : null}
 
+        {tape.drilldown ? <Drilldown panel={tape.drilldown} /> : null}
+
         <section>
           <h2 className="mb-2 text-[11px] uppercase tracking-wide text-mute">Sector movers</h2>
           <div className="overflow-hidden rounded border border-line">
@@ -68,7 +73,7 @@ export function LiveTapeView({ tape }: { tape: LiveTape | null }) {
           </div>
         </section>
       </div>
-      <MacroSidebar items={tape.macro ?? []} />
+      <MacroSidebar items={tape.macro ?? []} selected={tape.drilldown?.series_id ?? "DGS10"} />
     </div>
   );
 }
@@ -103,7 +108,7 @@ function MoverRow({ item, last }: { item: LiveQuote; last: boolean }) {
   );
 }
 
-function MacroSidebar({ items }: { items: LiveMacro[] }) {
+function MacroSidebar({ items, selected }: { items: LiveMacro[]; selected: string }) {
   const tenYear = items.find((item) => item.series_id === "DGS10");
   const hasValues = items.some((item) => item.value != null);
   return (
@@ -116,7 +121,12 @@ function MacroSidebar({ items }: { items: LiveMacro[] }) {
       </div>
       <div className="overflow-hidden rounded border border-line">
         {items.map((item, index) => (
-          <MacroRow key={item.series_id} item={item} last={index === items.length - 1} />
+          <MacroRow
+            key={item.series_id}
+            item={item}
+            selected={item.series_id === selected}
+            last={index === items.length - 1}
+          />
         ))}
       </div>
       {!hasValues ? (
@@ -129,13 +139,23 @@ function MacroSidebar({ items }: { items: LiveMacro[] }) {
   );
 }
 
-function MacroRow({ item, last }: { item: LiveMacro; last: boolean }) {
+function MacroRow({
+  item,
+  selected,
+  last,
+}: {
+  item: LiveMacro;
+  selected: boolean;
+  last: boolean;
+}) {
   const period = item.frequency === "monthly" ? "1M" : "1D";
   return (
-    <div
+    <Link
+      href={`/?lever=${encodeURIComponent(item.series_id)}`}
       className={cn(
-        "flex items-baseline gap-2 bg-panel px-3 py-2",
+        "flex items-baseline gap-2 bg-panel px-3 py-2 hover:bg-white/5",
         last ? "" : "border-b border-line",
+        selected ? "bg-white/5" : "",
       )}
     >
       <div className="min-w-0 flex-1 truncate text-[13px]">{item.name}</div>
@@ -148,7 +168,65 @@ function MacroRow({ item, last }: { item: LiveMacro; last: boolean }) {
       >
         {formatMacroChange(item.change)}
       </div>
+    </Link>
+  );
+}
+
+function Drilldown({ panel }: { panel: LiveDrilldown }) {
+  const y1 = panel.deltas.y1;
+  const positive = (y1 ?? panel.deltas.d1 ?? 0) >= 0;
+  return (
+    <section className="overflow-hidden rounded border border-line bg-panel">
+      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-line px-4 py-3">
+        <div>
+          <div className="text-[11px] uppercase tracking-wide text-mute">{panel.series_id}</div>
+          <h2 className="text-lg font-semibold tracking-tight">{panel.name}</h2>
+        </div>
+        <div className="text-right">
+          <div className="text-xl tabular-nums">{formatMacroValue(panel.unit, panel.value)}</div>
+          <div className="text-[12px] text-mute">
+            {panel.as_of ? `as of ${formatDateOnly(panel.as_of)}` : "no print"}
+          </div>
+        </div>
+      </div>
+      <div className="grid grid-cols-4 gap-px border-b border-line bg-line">
+        <DeltaCell label="1D" unit={panel.unit} value={panel.deltas.d1} />
+        <DeltaCell label="1W" unit={panel.unit} value={panel.deltas.w1} />
+        <DeltaCell label="1M" unit={panel.unit} value={panel.deltas.m1} />
+        <DeltaCell label="1Y" unit={panel.unit} value={panel.deltas.y1} />
+      </div>
+      <MacroChart points={panel.points} unit={panel.unit} positive={positive} />
+      {panel.insight ? (
+        <p className="border-t border-line px-4 py-3 text-[13px] leading-6 text-mute">{panel.insight}</p>
+      ) : null}
+      {panel.watch.length > 0 ? (
+        <div className="flex flex-wrap gap-2 border-t border-line px-4 py-3">
+          {panel.watch.map((item) => (
+            <WatchChip key={item.ticker} item={item} />
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function DeltaCell({ label, unit, value }: { label: string; unit: string; value: number | null }) {
+  return (
+    <div className="bg-panel px-3 py-2">
+      <div className="text-[11px] uppercase tracking-wide text-mute">{label}</div>
+      <div className={cn("mt-0.5 text-sm tabular-nums", changeClass(value))} title={unit}>
+        {formatMacroChange(value)}
+      </div>
     </div>
+  );
+}
+
+function WatchChip({ item }: { item: LiveWatch }) {
+  return (
+    <span className="rounded border border-line px-2 py-1 text-[12px] tabular-nums">
+      {item.ticker}{" "}
+      <span className={changeClass(item.change_pct)}>{formatPct(item.change_pct)}</span>
+    </span>
   );
 }
 

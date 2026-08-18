@@ -42,6 +42,43 @@ export type LiveMacro = {
   as_of: string | null;
 };
 
+export type LiveDeltas = {
+  d1: number | null;
+  w1: number | null;
+  m1: number | null;
+  y1: number | null;
+};
+
+export type LivePoint = {
+  date: string;
+  value: number;
+};
+
+export type LiveWatch = {
+  ticker: string;
+  name: string;
+  change_pct: number | null;
+};
+
+export type LiveDrilldown = {
+  series_id: string;
+  name: string;
+  unit: string;
+  insight: string | null;
+  as_of: string | null;
+  value: number | null;
+  deltas: LiveDeltas;
+  points: LivePoint[];
+  watch: LiveWatch[];
+};
+
+export type LiveRiskOn = {
+  score: number | null;
+  as_of: string | null;
+  stale: boolean;
+  factors: Record<string, number | null>;
+};
+
 export type LiveTape = {
   as_of: string | null;
   market_state: string | null;
@@ -49,6 +86,8 @@ export type LiveTape = {
   header: LiveQuote[];
   movers: LiveQuote[];
   macro: LiveMacro[];
+  drilldown: LiveDrilldown | null;
+  risk_on: LiveRiskOn | null;
 };
 
 export async function fetchHealth(): Promise<Health | null> {
@@ -60,9 +99,10 @@ export async function fetchHealth(): Promise<Health | null> {
   }
 }
 
-export async function fetchLive(): Promise<LiveTape | null> {
+export async function fetchLive(lever = "DGS10"): Promise<LiveTape | null> {
   try {
-    const response = await fetch(`${API_URL}/live`, { cache: "no-store" });
+    const query = new URLSearchParams({ lever });
+    const response = await fetch(`${API_URL}/live?${query.toString()}`, { cache: "no-store" });
     if (!response.ok) {
       return null;
     }

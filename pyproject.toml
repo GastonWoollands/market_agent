@@ -33,7 +33,7 @@ market-yahoo = "jobs.ingest_yahoo:main"
 market-fred = "jobs.ingest_fred:main"
 
 [tool.setuptools.packages.find]
-include = ["api*", "store*", "jobs*", "ingest*"]
+include = ["api*", "store*", "jobs*", "ingest*", "analytics*"]
 
 [tool.ruff]
 line-length = 100

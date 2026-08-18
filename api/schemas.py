@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class JobStatus(BaseModel):
@@ -45,6 +45,43 @@ class LiveMacro(BaseModel):
     as_of: date | None = None
 
 
+class LiveDeltas(BaseModel):
+    d1: float | None = None
+    w1: float | None = None
+    m1: float | None = None
+    y1: float | None = None
+
+
+class LivePoint(BaseModel):
+    date: date
+    value: float
+
+
+class LiveWatch(BaseModel):
+    ticker: str
+    name: str
+    change_pct: float | None = None
+
+
+class LiveDrilldown(BaseModel):
+    series_id: str
+    name: str
+    unit: str
+    insight: str | None = None
+    as_of: date | None = None
+    value: float | None = None
+    deltas: LiveDeltas = Field(default_factory=LiveDeltas)
+    points: list[LivePoint] = Field(default_factory=list)
+    watch: list[LiveWatch] = Field(default_factory=list)
+
+
+class LiveRiskOn(BaseModel):
+    score: float | None = None
+    as_of: date | None = None
+    stale: bool = True
+    factors: dict[str, float | None] = Field(default_factory=dict)
+
+
 class LiveResponse(BaseModel):
     as_of: datetime | None = None
     market_state: str | None = None
@@ -52,3 +89,5 @@ class LiveResponse(BaseModel):
     header: list[LiveQuote] = []
     movers: list[LiveQuote] = []
     macro: list[LiveMacro] = []
+    drilldown: LiveDrilldown | None = None
+    risk_on: LiveRiskOn | None = None

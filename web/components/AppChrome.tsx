@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/cn";
-import { fetchHealth, type Health } from "@/lib/api";
+import { fetchHealth, fetchLive, type Health, type LiveRiskOn } from "@/lib/api";
 
 const TABS = [
   { href: "/", label: "Live", live: true },
@@ -19,9 +19,11 @@ const TABS = [
 export function AppChrome() {
   const pathname = usePathname();
   const [health, setHealth] = useState<Health | null>(null);
+  const [riskOn, setRiskOn] = useState<LiveRiskOn | null>(null);
 
   useEffect(() => {
     void fetchHealth().then(setHealth);
+    void fetchLive().then((tape) => setRiskOn(tape?.risk_on ?? null));
   }, []);
 
   const dbOk = health?.ok === true;
@@ -67,15 +69,7 @@ export function AppChrome() {
           />
         </label>
         <div className="flex items-center gap-2">
-          <span
-            className={cn(
-              "rounded-full border px-2.5 py-1 text-[12px] tabular-nums",
-              "border-line text-mute",
-            )}
-            title="Risk-On is computed from stored prices on Day 5"
-          >
-            Risk-On —
-          </span>
+          <RiskOnPill riskOn={riskOn} />
           <span
             className={cn(
               "h-2 w-2 rounded-full",
@@ -86,6 +80,27 @@ export function AppChrome() {
         </div>
       </div>
     </header>
+  );
+}
+
+function RiskOnPill({ riskOn }: { riskOn: LiveRiskOn | null }) {
+  const score = riskOn?.score ?? null;
+  const tone =
+    score == null ? "border-line text-mute" : score > 0.15 ? "border-up/40 text-up" : score < -0.15 ? "border-down/40 text-down" : "border-line text-mute";
+  const label =
+    score == null ? "—" : score > 0 ? `+${score.toFixed(2)}` : score.toFixed(2);
+  const factors = riskOn?.factors
+    ? Object.entries(riskOn.factors)
+        .map(([name, value]) => `${name}=${value == null ? "n/a" : value.toFixed(2)}`)
+        .join(" · ")
+    : "Risk-On v1 from stored VIX, HYG/LQD, RSP/SPY, 2s10s, cyclicals/defensives";
+  return (
+    <span
+      className={cn("rounded-full border px-2.5 py-1 text-[12px] tabular-nums", tone)}
+      title={riskOn?.stale ? `${factors} · stale` : factors}
+    >
+      Risk-On {label}
+    </span>
   );
 }
 

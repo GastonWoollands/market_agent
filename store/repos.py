@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -367,3 +368,40 @@ def live_macro_rows(session: Session) -> list[LiveMacroRow]:
         )
         for series_id, last, prev, last_date in session.execute(stmt)
     ]
+
+
+def macro_observations(
+    session: Session,
+    series_id: str,
+    *,
+    start: date | None = None,
+) -> list[tuple[date, Decimal]]:
+    stmt = select(MacroObservation.date, MacroObservation.value).where(
+        MacroObservation.series_id == series_id
+    )
+    if start is not None:
+        stmt = stmt.where(MacroObservation.date >= start)
+    stmt = stmt.order_by(MacroObservation.date)
+    return [(day, value) for day, value in session.execute(stmt)]
+
+
+def closes_for_tickers(
+    session: Session,
+    tickers: Sequence[str],
+    *,
+    start: date | None = None,
+) -> dict[str, list[tuple[date, Decimal]]]:
+    if not tickers:
+        return {}
+    stmt = (
+        select(Instrument.ticker, BarDaily.date, BarDaily.close)
+        .join(BarDaily, BarDaily.instrument_id == Instrument.id)
+        .where(Instrument.ticker.in_(list(tickers)))
+    )
+    if start is not None:
+        stmt = stmt.where(BarDaily.date >= start)
+    stmt = stmt.order_by(Instrument.ticker, BarDaily.date)
+    out: dict[str, list[tuple[date, Decimal]]] = {ticker: [] for ticker in tickers}
+    for ticker, day, close in session.execute(stmt):
+        out.setdefault(ticker, []).append((day, close))
+    return out

@@ -140,3 +140,52 @@ def test_build_live_macro_uses_level_change_not_percent_return() -> None:
     assert tape.macro[0].change == 0.05
     assert tape.macro[0].as_of == date(2026, 8, 14)
     assert resolve_level_change(Decimal("4.25"), Decimal("4.20")) == Decimal("0.05")
+
+
+def test_build_live_drilldown_uses_yaml_insight_and_level_deltas() -> None:
+    fred = FredSeriesFile(
+        series=[
+            FredSeriesItem(
+                id="DGS10",
+                name="10Y Treasury yield",
+                unit="percent",
+                insight="The discount rate on everything.",
+                watch=["XLK"],
+            )
+        ]
+    )
+    history = [
+        (date(2025, 8, 14), Decimal("4.00")),
+        (date(2026, 8, 13), Decimal("4.20")),
+        (date(2026, 8, 14), Decimal("4.25")),
+    ]
+    rows = [
+        LiveTapeRow(
+            ticker="XLK",
+            name="Information Technology",
+            quote_price=Decimal("228.1"),
+            quote_change_pct=Decimal("1.2"),
+            market_state="CLOSED",
+            as_of=datetime(2026, 8, 14, tzinfo=UTC),
+            last_close=Decimal("226"),
+            prev_close=Decimal("225"),
+            last_date=date(2026, 8, 14),
+        )
+    ]
+    tape = build_live(
+        rows,
+        _catalog(),
+        now=datetime(2026, 8, 14, tzinfo=UTC),
+        fred=fred,
+        lever="DGS10",
+        history=history,
+    )
+    assert tape.drilldown is not None
+    assert tape.drilldown.series_id == "DGS10"
+    assert tape.drilldown.insight == "The discount rate on everything."
+    assert tape.drilldown.value == 4.25
+    assert tape.drilldown.deltas.d1 == 0.05
+    assert tape.drilldown.deltas.y1 == 0.25
+    assert tape.drilldown.watch[0].ticker == "XLK"
+    assert tape.drilldown.watch[0].change_pct == 1.2
+    assert tape.drilldown.points[-1].value == 4.25

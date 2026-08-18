@@ -1,11 +1,24 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
-from api.schemas import LiveMacro, LiveQuote, LiveResponse
+from analytics.lookback import chart_window, window_deltas
+from analytics.risk_on import CYCLICALS, DEFENSIVES, compute_risk_on
+from api.schemas import (
+    LiveDeltas,
+    LiveDrilldown,
+    LiveMacro,
+    LivePoint,
+    LiveQuote,
+    LiveResponse,
+    LiveRiskOn,
+    LiveWatch,
+)
 from store.catalog import FredSeriesFile, UniversesFile
 from store.display import resolve_change_pct, resolve_level_change, resolve_price
 from store.repos import LiveMacroRow, LiveTapeRow
 
+DEFAULT_LEVER = "DGS10"
+HISTORY_DAYS = 400
 _QUOTE_STALE_AFTER = timedelta(days=3)
 _STATE_RANK = {
     "REGULAR": 0,
@@ -75,6 +88,9 @@ def build_live(
     now: datetime | None = None,
     macro_rows: list[LiveMacroRow] | None = None,
     fred: FredSeriesFile | None = None,
+    lever: str = DEFAULT_LEVER,
+    history: list[tuple[date, Decimal]] | None = None,
+    risk_on: LiveRiskOn | None = None,
 ) -> LiveResponse:
     clock = now or datetime.now(UTC)
     by_ticker = {row.ticker: row for row in rows}
@@ -112,6 +128,8 @@ def build_live(
         header=header,
         movers=movers,
         macro=_macro_items(macro_rows or [], fred),
+        drilldown=_drilldown(lever, history or [], fred, rows) if fred is not None else None,
+        risk_on=risk_on,
     )
 
 
@@ -137,3 +155,91 @@ def _macro_items(rows: list[LiveMacroRow], fred: FredSeriesFile | None) -> list[
             )
         )
     return items
+
+
+def resolve_lever(requested: str | None, fred: FredSeriesFile) -> str:
+    ids = {item.id for item in fred.series}
+    if requested and requested in ids:
+        return requested
+    if DEFAULT_LEVER in ids:
+        return DEFAULT_LEVER
+    return fred.series[0].id if fred.series else DEFAULT_LEVER
+
+
+def _drilldown(
+    lever: str,
+    history: list[tuple[date, Decimal]],
+    fred: FredSeriesFile,
+    tape_rows: list[LiveTapeRow],
+) -> LiveDrilldown | None:
+    meta = next((item for item in fred.series if item.id == lever), None)
+    if meta is None:
+        return None
+    d1, w1, m1, y1 = window_deltas(history)
+    last = history[-1] if history else None
+    by_ticker = {row.ticker: row for row in tape_rows}
+    watch: list[LiveWatch] = []
+    for ticker in meta.watch:
+        row = by_ticker.get(ticker)
+        quote = _quote_from_row(
+            ticker=ticker,
+            name=row.name if row else ticker,
+            role=None,
+            row=row,
+        )
+        watch.append(LiveWatch(ticker=quote.ticker, name=quote.name, change_pct=quote.change_pct))
+    points: list[LivePoint] = []
+    for day, value in chart_window(history):
+        number = _to_float(value)
+        if number is None:
+            continue
+        points.append(LivePoint(date=day, value=number))
+    return LiveDrilldown(
+        series_id=meta.id,
+        name=meta.name,
+        unit=meta.unit,
+        insight=meta.insight,
+        as_of=last[0] if last else None,
+        value=_to_float(last[1]) if last else None,
+        deltas=LiveDeltas(
+            d1=_to_float(d1),
+            w1=_to_float(w1),
+            m1=_to_float(m1),
+            y1=_to_float(y1),
+        ),
+        points=points,
+        watch=watch,
+    )
+
+
+def _as_float_series(points: list[tuple[date, Decimal]]) -> list[tuple[date, float]]:
+    return [(day, float(value)) for day, value in points]
+
+
+def risk_on_from_store(
+    closes: dict[str, list[tuple[date, Decimal]]],
+    vix: list[tuple[date, Decimal]],
+    curve: list[tuple[date, Decimal]],
+    *,
+    now: date | None = None,
+) -> LiveRiskOn:
+    result = compute_risk_on(
+        vix=_as_float_series(vix),
+        hyg=_as_float_series(closes.get("HYG", [])),
+        lqd=_as_float_series(closes.get("LQD", [])),
+        rsp=_as_float_series(closes.get("RSP", [])),
+        spy=_as_float_series(closes.get("SPY", [])),
+        curve=_as_float_series(curve),
+        cyclicals={name: _as_float_series(closes.get(name, [])) for name in CYCLICALS},
+        defensives={name: _as_float_series(closes.get(name, [])) for name in DEFENSIVES},
+        now=now,
+    )
+    return LiveRiskOn(
+        score=None if result.score is None else round(result.score, 4),
+        as_of=result.as_of,
+        stale=result.stale,
+        factors={
+            name: None if value is None else round(value, 4)
+            for name, value in result.factors.items()
+        },
+    )
