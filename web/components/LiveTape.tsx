@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { StaleBadge } from "@/components/StaleBadge";
 import { MacroChart } from "@/components/MacroChart";
 import { cn } from "@/lib/cn";
 import type { LiveDrilldown, LiveMacro, LiveOdds, LiveQuote, LiveTape, LiveWatch } from "@/lib/api";
@@ -43,7 +44,7 @@ export function LiveTapeView({ tape }: { tape: LiveTape | null }) {
             {tape.stale ? (
               <>
                 <span className="mx-2 text-line">·</span>
-                stale
+                <StaleBadge stale />
               </>
             ) : null}
           </p>

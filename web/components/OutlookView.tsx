@@ -1,3 +1,4 @@
+import { StaleBadge } from "@/components/StaleBadge";
 import { cn } from "@/lib/cn";
 import type { OutlookEvent, OutlookNews, OutlookSource, OutlookTape } from "@/lib/api";
 
@@ -28,7 +29,7 @@ export function OutlookView({ tape }: { tape: OutlookTape | null }) {
           {tape.stale ? (
             <>
               <span className="mx-2 text-line">·</span>
-              stale
+              <StaleBadge stale />
             </>
           ) : null}
         </p>

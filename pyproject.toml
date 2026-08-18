@@ -44,6 +44,7 @@ market-valuation = "jobs.compute_valuation:main"
 market-scores = "jobs.compute_scores:main"
 market-memos = "jobs.generate_memos:main"
 market-intraday = "jobs.ingest_intraday:main"
+market-backfill = "jobs.backfill:main"
 
 [tool.setuptools.packages.find]
 include = ["api*", "store*", "jobs*", "ingest*", "analytics*", "agent*"]

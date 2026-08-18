@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from ingest.yahoo import YahooClient
 from ingest.yahoo.errors import YahooError, YahooHttpError
-from jobs.runtime import record_job
+from jobs.runtime import tracked_job
 from store.engine import session_scope
 from store.repos import (
     bar_count_for_ticker,
@@ -31,7 +31,10 @@ class TapeInstrument:
 
 
 def ingest(
-    *, tickers: set[str] | None = None, universe: str = DEFAULT_UNIVERSE
+    *,
+    tickers: set[str] | None = None,
+    universe: str = DEFAULT_UNIVERSE,
+    resume: bool = False,
 ) -> dict[str, int | list[str]]:
     with session_scope() as session:
         instruments = [
@@ -41,7 +44,18 @@ def ingest(
     if tickers:
         wanted = {ticker.upper() for ticker in tickers}
         instruments = [item for item in instruments if item.ticker.upper() in wanted]
+    if resume:
+        with session_scope() as session:
+            instruments = [
+                item for item in instruments if bar_count_for_ticker(session, item.ticker) == 0
+            ]
+        log.info(
+            "resume skipped names that already have daily bars; remaining=%s",
+            len(instruments),
+        )
     if not instruments:
+        if resume:
+            return {"bar_rows": 0, "quote_rows": 0, "failures": []}
         raise RuntimeError(f"{universe} universe is empty — run the seed/SEC job first")
 
     by_yahoo = {item.yahoo_symbol: item for item in instruments}
@@ -114,6 +128,11 @@ def main() -> None:
         choices=("tape", "valuation", "watchlist"),
         help="Which universe to pull bars for.",
     )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Skip tickers that already have daily bars (kill mid-job, then continue).",
+    )
     args = parser.parse_args()
     selected = (
         {part.strip().upper() for part in args.tickers.split(",") if part.strip()}
@@ -124,37 +143,27 @@ def main() -> None:
     logging.getLogger("yfinance").setLevel(logging.WARNING)
     result: dict[str, int | list[str]] = {"bar_rows": 0, "quote_rows": 0, "failures": []}
     try:
-        result = ingest(tickers=selected, universe=args.universe)
-    except Exception as exc:
-        record_job(
-            JOB_NAME,
-            status="error",
-            rows_written=int(result.get("bar_rows") or 0),
-            error=str(exc),
-            extra={"failures": result.get("failures", [])},
-        )
+        with tracked_job(JOB_NAME) as run:
+            result = ingest(tickers=selected, universe=args.universe, resume=args.resume)
+            failures = result["failures"]
+            run.rows = int(result["bar_rows"]) + int(result["quote_rows"])
+            run.extra = {
+                "bar_rows": result["bar_rows"],
+                "quote_rows": result["quote_rows"],
+                "failures": failures,
+                "universe": args.universe,
+                "resume": args.resume,
+                "source": "yahoo",
+            }
+            log.info(
+                "ingest_yahoo bars=%s quotes=%s failures=%s",
+                result["bar_rows"],
+                result["quote_rows"],
+                len(failures) if isinstance(failures, list) else failures,
+            )
+    except Exception:
         log.exception("ingest_yahoo failed")
-        raise SystemExit(1) from exc
-
-    failures = result["failures"]
-    record_job(
-        JOB_NAME,
-        status="ok",
-        rows_written=int(result["bar_rows"]) + int(result["quote_rows"]),
-        extra={
-            "bar_rows": result["bar_rows"],
-            "quote_rows": result["quote_rows"],
-            "failures": failures,
-            "universe": args.universe,
-            "source": "yahoo",
-        },
-    )
-    log.info(
-        "ingest_yahoo bars=%s quotes=%s failures=%s",
-        result["bar_rows"],
-        result["quote_rows"],
-        len(failures) if isinstance(failures, list) else failures,
-    )
+        raise SystemExit(1) from None
 
 
 if __name__ == "__main__":

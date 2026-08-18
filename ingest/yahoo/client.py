@@ -6,6 +6,7 @@ from typing import Any
 import yfinance as yf
 from yfinance.exceptions import YFPricesMissingError, YFRateLimitError
 
+from ingest.retry import retry_call, retryable_status
 from ingest.yahoo.errors import YahooError, YahooHttpError, YahooParseError
 from ingest.yahoo.parse import bars_from_history, bars_from_intraday, snapshot_from_chart_meta
 from ingest.yahoo.rate_limit import TokenBucket
@@ -50,20 +51,15 @@ class YahooClient:
         self, symbol: str, *, range_: str = "5y", interval: str = "1d"
     ) -> list[DailyBar]:
         ticker = self._ticker(symbol)
-        self._bucket.acquire()
-        try:
-            frame = ticker.history(
-                period=range_,
-                interval=interval,
-                auto_adjust=False,
-                actions=False,
-                raise_errors=True,
-                timeout=self._timeout,
-            )
-        except YFRateLimitError as exc:
-            raise YahooHttpError("Yahoo rate limited", status_code=429) from exc
-        except YFPricesMissingError as exc:
-            raise YahooParseError(f"{symbol}: no prices") from exc
+        frame = self._history(
+            ticker,
+            period=range_,
+            interval=interval,
+            auto_adjust=False,
+            actions=False,
+            raise_errors=True,
+            timeout=self._timeout,
+        )
         return bars_from_history(frame, symbol)
 
     def fetch_intraday(
@@ -75,21 +71,16 @@ class YahooClient:
         prepost: bool = True,
     ) -> list[IntradayBar]:
         ticker = self._ticker(symbol)
-        self._bucket.acquire()
-        try:
-            frame = ticker.history(
-                period=range_,
-                interval=interval,
-                auto_adjust=False,
-                actions=False,
-                prepost=prepost,
-                raise_errors=True,
-                timeout=self._timeout,
-            )
-        except YFRateLimitError as exc:
-            raise YahooHttpError("Yahoo rate limited", status_code=429) from exc
-        except YFPricesMissingError as exc:
-            raise YahooParseError(f"{symbol}: no prices") from exc
+        frame = self._history(
+            ticker,
+            period=range_,
+            interval=interval,
+            auto_adjust=False,
+            actions=False,
+            prepost=prepost,
+            raise_errors=True,
+            timeout=self._timeout,
+        )
         return bars_from_intraday(frame, symbol, interval)
 
     def chart_meta(self, symbol: str) -> dict[str, Any]:
@@ -106,9 +97,9 @@ class YahooClient:
                 meta.get("previousClose") or meta.get("regularMarketPreviousClose")
             )
             if not meta.get("regularMarketPrice") or not has_session_prev:
-                self._bucket.acquire()
                 try:
-                    ticker.history(
+                    self._history(
+                        ticker,
                         period="1d",
                         interval="1d",
                         auto_adjust=False,
@@ -116,15 +107,35 @@ class YahooClient:
                         raise_errors=True,
                         timeout=self._timeout,
                     )
-                except YFRateLimitError as exc:
-                    raise YahooHttpError("Yahoo rate limited", status_code=429) from exc
-                except YFPricesMissingError:
+                except YahooParseError:
                     continue
                 meta = getattr(ticker, "history_metadata", None) or {}
             snap = snapshot_from_chart_meta(symbol, meta)
             if snap is not None:
                 snapshots.append(snap)
         return snapshots
+
+    def _history(self, ticker: Any, **kwargs: Any) -> Any:
+        def once() -> Any:
+            self._bucket.acquire()
+            try:
+                return ticker.history(**kwargs)
+            except YFRateLimitError as exc:
+                raise YahooHttpError("Yahoo rate limited", status_code=429) from exc
+            except YFPricesMissingError as exc:
+                raise YahooParseError("no prices") from exc
+            except YahooHttpError:
+                raise
+            except Exception as exc:
+                raise YahooHttpError(
+                    f"request failed ({exc.__class__.__name__})"
+                ) from exc
+
+        return retry_call(
+            once,
+            retryable=lambda exc: isinstance(exc, YahooHttpError)
+            and retryable_status(exc.status_code),
+        )
 
     def _ticker(self, symbol: str) -> yf.Ticker:
         cached = self._tickers.get(symbol)

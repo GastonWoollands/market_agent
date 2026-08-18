@@ -4,6 +4,7 @@ import httpx
 
 from ingest.news_rss.errors import NewsHttpError, NewsParseError
 from ingest.news_rss.parse import headlines_from_rss
+from ingest.retry import http_get
 from ingest.yahoo.rate_limit import TokenBucket
 from store.canonical import NewsHeadline
 
@@ -47,10 +48,9 @@ class NewsClient:
         self.close()
 
     def fetch_query(self, query: str, *, category: str) -> list[NewsHeadline]:
-        self._bucket.acquire()
         params = {"q": query, "hl": "en-US", "gl": "US", "ceid": "US:en"}
         try:
-            response = self._http.get(NEWS_RSS_URL, params=params)
+            response = http_get(self._http, self._bucket, NEWS_RSS_URL, params=params)
         except httpx.HTTPError as exc:
             raise NewsHttpError(f"{category}: request failed ({exc.__class__.__name__})") from exc
         if response.status_code == 429:

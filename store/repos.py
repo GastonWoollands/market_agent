@@ -371,6 +371,16 @@ def bar_count_for_ticker(session: Session, ticker: str) -> int:
     return int(session.execute(stmt).scalar_one())
 
 
+def intraday_count_for_ticker(session: Session, ticker: str, *, interval: str = "5m") -> int:
+    stmt = (
+        select(func.count())
+        .select_from(BarIntraday)
+        .join(Instrument, Instrument.id == BarIntraday.instrument_id)
+        .where(Instrument.ticker == ticker, BarIntraday.interval == interval)
+    )
+    return int(session.execute(stmt).scalar_one())
+
+
 @dataclass(frozen=True)
 class LiveTapeRow:
     ticker: str

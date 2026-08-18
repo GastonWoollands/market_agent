@@ -7,6 +7,7 @@ import httpx
 
 from ingest.fred.errors import FredError, FredHttpError, FredParseError
 from ingest.fred.parse import observations_from_payload
+from ingest.retry import http_get
 from ingest.yahoo.rate_limit import TokenBucket
 from store.canonical import MacroPoint
 
@@ -51,7 +52,6 @@ class FredClient:
         *,
         observation_start: date | None = None,
     ) -> list[MacroPoint]:
-        self._bucket.acquire()
         params: dict[str, Any] = {
             "series_id": series_id,
             "api_key": self._api_key,
@@ -63,7 +63,7 @@ class FredClient:
         if observation_start is not None:
             params["observation_start"] = observation_start.isoformat()
         try:
-            response = self._http.get(FRED_OBSERVATIONS_URL, params=params)
+            response = http_get(self._http, self._bucket, FRED_OBSERVATIONS_URL, params=params)
         except httpx.HTTPError as exc:
             raise FredHttpError(f"{series_id}: request failed ({exc.__class__.__name__})") from exc
         if response.status_code == 429:

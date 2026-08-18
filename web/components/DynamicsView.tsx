@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { StaleBadge } from "@/components/StaleBadge";
 import { RelativeOverlay } from "@/components/RelativeOverlay";
 import { RrgScatter } from "@/components/RrgScatter";
 import { cn } from "@/lib/cn";
@@ -54,7 +55,7 @@ export function DynamicsView({ tape, asOf }: { tape: DynamicsTape | null; asOf?:
           {tape.stale ? (
             <>
               <span className="mx-2 text-line">·</span>
-              stale
+              <StaleBadge stale />
             </>
           ) : null}
         </p>

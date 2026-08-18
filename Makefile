@@ -1,4 +1,4 @@
-.PHONY: db migrate seed yahoo yahoo-watch fred poly dynamics news calendar pack outlook sec yahoo-val valuation scores memos intraday api web test
+.PHONY: db migrate seed yahoo yahoo-watch fred poly dynamics news calendar pack outlook sec yahoo-val valuation scores memos intraday backfill dump restore api web test
 
 db:
 	docker compose up -d db
@@ -53,6 +53,15 @@ yahoo-watch:
 
 intraday:
 	.venv/bin/python -m jobs.ingest_intraday
+
+backfill:
+	.venv/bin/python -m jobs.backfill yahoo --resume
+
+dump:
+	bash scripts/pg_dump.sh
+
+restore:
+	bash scripts/pg_restore.sh $(DUMP)
 
 api:
 	.venv/bin/uvicorn api.main:app --reload --port 8000

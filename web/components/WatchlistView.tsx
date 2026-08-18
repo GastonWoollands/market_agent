@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
+import { StaleBadge } from "@/components/StaleBadge";
 import { TradingViewChart } from "@/components/TradingViewChart";
 import { BROWSER_API, type WatchlistMember, type WatchlistTape } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -96,7 +97,7 @@ export function WatchlistView({
           {tape.stale ? (
             <>
               <span className="mx-2 text-line">·</span>
-              stale
+              <StaleBadge stale />
             </>
           ) : null}
         </p>

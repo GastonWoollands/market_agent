@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/cn";
-import { fetchHealth, fetchLive, type Health, type LiveRiskOn } from "@/lib/api";
+import { fetchHealth, fetchLive, type Health, type JobStatus, type LiveRiskOn } from "@/lib/api";
 
 const TABS = [
   { href: "/", label: "Live", live: true },
@@ -27,6 +27,8 @@ export function AppChrome() {
   }, []);
 
   const dbOk = health?.ok === true;
+  const jobError = health?.jobs.some((job) => job.status === "error") ?? false;
+  const jobRunning = health?.jobs.some((job) => job.status === "running") ?? false;
 
   return (
     <header className="sticky top-0 z-20 border-b border-line bg-ink/95 backdrop-blur">
@@ -73,14 +75,31 @@ export function AppChrome() {
           <span
             className={cn(
               "h-2 w-2 rounded-full",
-              dbOk ? "bg-up" : "bg-down",
+              !dbOk ? "bg-down" : jobError ? "bg-down" : jobRunning ? "bg-[#d4a017]" : "bg-up",
             )}
-            title={dbOk ? "Postgres connected" : "API or database unreachable"}
+            title={healthTitle(health, dbOk)}
           />
         </div>
       </div>
     </header>
   );
+}
+
+function healthTitle(health: Health | null, dbOk: boolean): string {
+  if (!dbOk) {
+    return health?.database_error || "API or database unreachable";
+  }
+  const jobs = health?.jobs ?? [];
+  if (jobs.length === 0) {
+    return "Postgres connected · no job_run rows";
+  }
+  return jobs.map((job) => formatJob(job)).join("\n");
+}
+
+function formatJob(job: JobStatus): string {
+  const when = job.finished_at ?? job.started_at;
+  const err = job.error ? ` · ${job.error}` : "";
+  return `${job.job_name}: ${job.status} (${job.rows_written} rows, ${when})${err}`;
 }
 
 function RiskOnPill({ riskOn }: { riskOn: LiveRiskOn | null }) {

@@ -6,6 +6,7 @@ from zipfile import ZipFile
 
 import httpx
 
+from ingest.retry import http_get
 from ingest.sec.errors import SecError, SecHttpError, SecParseError
 from ingest.sec.parse import pad_cik, tickers_from_payload, ttm_from_facts
 from ingest.yahoo.rate_limit import TokenBucket
@@ -127,9 +128,8 @@ class SecClient:
         return ttm_from_facts(payload, require_quarters=require_quarters)
 
     def _get_json(self, url: str) -> object:
-        self._bucket.acquire()
         try:
-            response = self._http.get(url)
+            response = http_get(self._http, self._bucket, url)
         except httpx.HTTPError as exc:
             raise SecHttpError(f"request failed ({exc.__class__.__name__})") from exc
         self._raise_http(response)

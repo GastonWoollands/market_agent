@@ -4,50 +4,17 @@ Personal US market research terminal. Delayed data, no trading.
 
 **Northstar:** [docs/NORTHSTAR.md](docs/NORTHSTAR.md) — product, schema, sources, and day-by-day plan. Read that before adding features.
 
-## Day 18 (current)
+**Runbook:** [docs/PIPELINES.md](docs/PIPELINES.md) — setup, job order, when to re-run, flags, backup.
 
-Watchlist CRUD writes `universe_member` only. Quotes and 63-session sparklines are served from Postgres (`quote_latest` / `bar_daily`). Charts are the official TradingView advanced-chart widget (client-side, no ingest). Yahoo 5m extended hours (`prepost=True`) are stored in `bar_intraday` for **tape + watchlist only**, using the existing `YahooClient` — not a second vendor client.
+## Day 19 (current)
 
-```bash
-python -m jobs.ingest_yahoo --universe watchlist
-python -m jobs.ingest_intraday
-```
-
-Postgres is published on **host port 5433**.
+Hardening reuses the existing adapters. Yahoo 429 still fails fast. Timeouts and 5xx retry up to 3 times. Kill a Yahoo ingest mid-run and continue with `--resume`; upserts do not duplicate bars. Postgres is on **host port 5433**.
 
 ```bash
-cp .env.example .env   # set FRED_API_KEY, FINNHUB_API_KEY, SEC_USER_AGENT (real email)
-python3.12 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
-
-docker compose up -d db
-alembic upgrade head
-python -m jobs.seed_tape
-python -m jobs.ingest_yahoo
-python -m jobs.ingest_fred
-python -m jobs.ingest_polymarket
-python -m jobs.compute_dynamics
-python -m jobs.ingest_news
-python -m jobs.ingest_calendar
-python -m jobs.build_pack
-python -m jobs.generate_outlook --template
-python -m jobs.ingest_sec
-python -m jobs.ingest_yahoo --universe valuation
-python -m jobs.compute_valuation
-python -m jobs.compute_scores
-python -m jobs.generate_memos --template
-python -m jobs.ingest_yahoo --universe watchlist
-python -m jobs.ingest_intraday
-
-uvicorn api.main:app --reload --port 8000
-# other terminal
-npm --prefix web run dev
+python -m jobs.ingest_yahoo --resume
+python -m jobs.backfill yahoo --universe tape --resume
+bash scripts/pg_dump.sh
 ```
-
-Or `make db migrate seed yahoo fred poly dynamics news calendar pack outlook sec yahoo-val valuation scores memos yahoo-watch intraday api` and `make web`.
-
-Set `SEC_USER_AGENT` to `MarketAgent you@real-email`. The first `ingest_sec` downloads `companyfacts.zip` into `data/sec/` (gitignored).
 
 ## Config
 
@@ -61,4 +28,4 @@ Set `SEC_USER_AGENT` to `MarketAgent you@real-email`. The first `ingest_sec` dow
 
 ## Next
 
-Day 19: Hardening (retries, stale badges, backfill, pg_dump). No new vendors.
+Day 20 (optional): same Compose on a Pi; restore dump; Outlook job without the Mac.

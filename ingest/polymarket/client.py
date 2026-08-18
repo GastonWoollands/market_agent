@@ -6,6 +6,7 @@ import httpx
 
 from ingest.polymarket.errors import PolymarketHttpError, PolymarketParseError
 from ingest.polymarket.parse import snapshot_from_event
+from ingest.retry import http_get
 from ingest.yahoo.rate_limit import TokenBucket
 from store.canonical import OddsPoint
 
@@ -53,9 +54,8 @@ class PolymarketClient:
         return []
 
     def _get(self, path: str, *, params: dict[str, Any] | None = None) -> Any:
-        self._bucket.acquire()
         try:
-            response = self._http.get(f"{GAMMA_BASE}{path}", params=params)
+            response = http_get(self._http, self._bucket, f"{GAMMA_BASE}{path}", params=params)
         except httpx.HTTPError as exc:
             raise PolymarketHttpError(f"{path}: request failed ({exc.__class__.__name__})") from exc
         if response.status_code == 429:

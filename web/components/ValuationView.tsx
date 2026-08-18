@@ -1,3 +1,4 @@
+import { StaleBadge } from "@/components/StaleBadge";
 import { cn } from "@/lib/cn";
 import type { ValuationMember, ValuationTape } from "@/lib/api";
 
@@ -42,7 +43,7 @@ export function ValuationView({
           {tape.stale ? (
             <>
               <span className="mx-2 text-line">·</span>
-              stale
+              <StaleBadge stale />
             </>
           ) : null}
         </p>

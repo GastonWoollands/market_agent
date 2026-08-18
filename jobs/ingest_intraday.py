@@ -7,9 +7,9 @@ from dataclasses import dataclass
 
 from ingest.yahoo import YahooClient
 from ingest.yahoo.errors import YahooError, YahooHttpError
-from jobs.runtime import record_job
+from jobs.runtime import tracked_job
 from store.engine import session_scope
-from store.repos import instruments_in_universes, upsert_intraday_bars
+from store.repos import instruments_in_universes, intraday_count_for_ticker, upsert_intraday_bars
 
 log = logging.getLogger("jobs.ingest_intraday")
 JOB_NAME = "ingest_intraday"
@@ -25,7 +25,7 @@ class TapeInstrument:
     yahoo_symbol: str
 
 
-def ingest(*, tickers: set[str] | None = None) -> dict[str, int | list[str]]:
+def ingest(*, tickers: set[str] | None = None, resume: bool = False) -> dict[str, int | list[str]]:
     with session_scope() as session:
         instruments = [
             TapeInstrument(item.id, item.ticker, item.yahoo_symbol)
@@ -34,7 +34,17 @@ def ingest(*, tickers: set[str] | None = None) -> dict[str, int | list[str]]:
     if tickers:
         wanted = {ticker.upper() for ticker in tickers}
         instruments = [item for item in instruments if item.ticker.upper() in wanted]
+    if resume:
+        with session_scope() as session:
+            instruments = [
+                item
+                for item in instruments
+                if intraday_count_for_ticker(session, item.ticker, interval=INTERVAL) == 0
+            ]
+        log.info("resume skipped names that already have 5m bars; remaining=%s", len(instruments))
     if not instruments:
+        if resume:
+            return {"bar_rows": 0, "failures": [], "rate_limited": 0}
         raise RuntimeError("tape/watchlist universes are empty — run seed_tape first")
 
     failures: list[str] = []
@@ -78,6 +88,11 @@ def main() -> None:
         "--tickers",
         help="Optional comma-separated tickers (default: tape ∪ watchlist).",
     )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Skip tickers that already have 5m bars (kill mid-job, then continue).",
+    )
     args = parser.parse_args()
     selected = (
         {part.strip().upper() for part in args.tickers.split(",") if part.strip()}
@@ -88,35 +103,25 @@ def main() -> None:
     logging.getLogger("yfinance").setLevel(logging.WARNING)
     result: dict[str, int | list[str]] = {"bar_rows": 0, "failures": []}
     try:
-        result = ingest(tickers=selected)
-    except Exception as exc:
-        record_job(
-            JOB_NAME,
-            status="error",
-            rows_written=int(result.get("bar_rows") or 0),
-            error=str(exc),
-            extra={"failures": result.get("failures", [])},
-        )
+        with tracked_job(JOB_NAME) as run:
+            result = ingest(tickers=selected, resume=args.resume)
+            failures = result["failures"]
+            run.rows = int(result["bar_rows"])
+            run.extra = {
+                "bar_rows": result["bar_rows"],
+                "failures": failures,
+                "interval": INTERVAL,
+                "resume": args.resume,
+                "source": "yahoo",
+            }
+            log.info(
+                "ingest_intraday bars=%s failures=%s",
+                result["bar_rows"],
+                len(failures) if isinstance(failures, list) else failures,
+            )
+    except Exception:
         log.exception("ingest_intraday failed")
-        raise SystemExit(1) from exc
-
-    failures = result["failures"]
-    record_job(
-        JOB_NAME,
-        status="ok",
-        rows_written=int(result["bar_rows"]),
-        extra={
-            "bar_rows": result["bar_rows"],
-            "failures": failures,
-            "interval": INTERVAL,
-            "source": "yahoo",
-        },
-    )
-    log.info(
-        "ingest_intraday bars=%s failures=%s",
-        result["bar_rows"],
-        len(failures) if isinstance(failures, list) else failures,
-    )
+        raise SystemExit(1) from None
 
 
 if __name__ == "__main__":

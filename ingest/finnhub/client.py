@@ -7,6 +7,7 @@ import httpx
 
 from ingest.finnhub.errors import FinnhubError, FinnhubHttpError, FinnhubParseError
 from ingest.finnhub.parse import events_from_earnings
+from ingest.retry import http_get
 from ingest.yahoo.rate_limit import TokenBucket
 from store.canonical import CalendarEvent
 
@@ -56,10 +57,9 @@ class FinnhubClient:
         end: date,
         symbols: set[str] | None = None,
     ) -> list[CalendarEvent]:
-        self._bucket.acquire()
         params: dict[str, Any] = {"from": start.isoformat(), "to": end.isoformat()}
         try:
-            response = self._http.get(FINNHUB_EARNINGS_URL, params=params)
+            response = http_get(self._http, self._bucket, FINNHUB_EARNINGS_URL, params=params)
         except httpx.HTTPError as exc:
             raise FinnhubHttpError(
                 f"earnings: request failed ({exc.__class__.__name__})"

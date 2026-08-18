@@ -9,6 +9,8 @@ Personal US research terminal: delayed data, no trading. Fetch → store in Post
 
 This file is the implementation contract. Day-by-day work must not contradict it. If product intent changes, update this document first.
 
+**Operator runbook:** [PIPELINES.md](PIPELINES.md) — when and how to run each job.
+
 ---
 
 ## 1. Goal
