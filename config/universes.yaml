@@ -1,0 +1,62 @@
+# Instrument catalogs. Jobs seed `universe` / `universe_member` from this file.
+# Yahoo symbols: indices use ^ prefix; ETFs are plain tickers.
+
+tape:
+  description: Live tape, Dynamics, Risk-On proxies. Daily bars + quotes + 5m extended hours.
+  instruments:
+    - { ticker: SPY, yahoo: SPY, name: SPDR S&P 500, asset_class: etf, role: benchmark }
+    - { ticker: QQQ, yahoo: QQQ, name: Invesco QQQ Trust, asset_class: etf, role: index }
+    - { ticker: IWM, yahoo: IWM, name: iShares Russell 2000, asset_class: etf, role: index }
+    - { ticker: DIA, yahoo: DIA, name: SPDR Dow Jones Industrial Average, asset_class: etf, role: index }
+    - { ticker: RSP, yahoo: RSP, name: Invesco S&P 500 Equal Weight, asset_class: etf, role: breadth }
+    - { ticker: "^GSPC", yahoo: "^GSPC", name: S&P 500, asset_class: index, role: index }
+    - { ticker: "^IXIC", yahoo: "^IXIC", name: Nasdaq Composite, asset_class: index, role: index }
+    - { ticker: "^DJI", yahoo: "^DJI", name: Dow Jones Industrial Average, asset_class: index, role: index }
+    - { ticker: "^RUT", yahoo: "^RUT", name: Russell 2000, asset_class: index, role: index }
+    - { ticker: "^VIX", yahoo: "^VIX", name: CBOE Volatility Index, asset_class: index, role: vol }
+    - { ticker: XLK, yahoo: XLK, name: Information Technology, asset_class: etf, sector: Information Technology, role: sector }
+    - { ticker: XLF, yahoo: XLF, name: Financials, asset_class: etf, sector: Financials, role: sector }
+    - { ticker: XLV, yahoo: XLV, name: Health Care, asset_class: etf, sector: Health Care, role: sector }
+    - { ticker: XLY, yahoo: XLY, name: Consumer Discretionary, asset_class: etf, sector: Consumer Discretionary, role: sector }
+    - { ticker: XLP, yahoo: XLP, name: Consumer Staples, asset_class: etf, sector: Consumer Staples, role: sector }
+    - { ticker: XLI, yahoo: XLI, name: Industrials, asset_class: etf, sector: Industrials, role: sector }
+    - { ticker: XLE, yahoo: XLE, name: Energy, asset_class: etf, sector: Energy, role: sector }
+    - { ticker: XLB, yahoo: XLB, name: Materials, asset_class: etf, sector: Materials, role: sector }
+    - { ticker: XLU, yahoo: XLU, name: Utilities, asset_class: etf, sector: Utilities, role: sector }
+    - { ticker: XLRE, yahoo: XLRE, name: Real Estate, asset_class: etf, sector: Real Estate, role: sector }
+    - { ticker: XLC, yahoo: XLC, name: Communication Services, asset_class: etf, sector: Communication Services, role: sector }
+    - { ticker: SMH, yahoo: SMH, name: Semiconductors, asset_class: etf, sector: Semiconductors, role: group }
+    - { ticker: IGV, yahoo: IGV, name: Software, asset_class: etf, sector: Software, role: group }
+    - { ticker: HYG, yahoo: HYG, name: iShares iBoxx High Yield Corporate Bond, asset_class: etf, role: credit }
+    - { ticker: LQD, yahoo: LQD, name: iShares iBoxx Investment Grade Corporate Bond, asset_class: etf, role: credit }
+    - { ticker: TLT, yahoo: TLT, name: iShares 20+ Year Treasury Bond, asset_class: etf, role: rates }
+    - { ticker: GLD, yahoo: GLD, name: SPDR Gold Shares, asset_class: etf, role: commodity }
+    - { ticker: USO, yahoo: USO, name: United States Oil Fund, asset_class: etf, role: commodity }
+    - { ticker: UUP, yahoo: UUP, name: Invesco DB US Dollar Index Bullish, asset_class: etf, role: fx }
+
+# Live header composition (Day 3). Movers are tape names with role sector or group.
+# Labels are display aliases only; ingest still uses ticker/yahoo from tape.
+live:
+  header:
+    - { ticker: "^GSPC", label: S&P 500 }
+    - { ticker: QQQ, label: Nasdaq 100 }
+    - { ticker: "^RUT", label: Russell 2000 }
+    - { ticker: "^DJI", label: Dow }
+    - { ticker: USO, label: WTI }
+    - { ticker: GLD, label: Gold }
+  mover_roles: [sector, group]
+
+valuation:
+  description: Opportunity + Valuation screen. Built from SEC facts (Day 11+), not this static list.
+  min_revenue_usd: 1000000000
+  exchanges: [NYSE, Nasdaq, NYSE American]
+  rebuild: monthly
+
+watchlist:
+  description: User-managed. Seed a few names so Watchlist is not empty on first run.
+  instruments:
+    - { ticker: NVDA, yahoo: NVDA, name: NVIDIA }
+    - { ticker: AAPL, yahoo: AAPL, name: Apple }
+    - { ticker: MSFT, yahoo: MSFT, name: Microsoft }
+    - { ticker: AMZN, yahoo: AMZN, name: Amazon }
+    - { ticker: SPY, yahoo: SPY, name: SPDR S&P 500 }

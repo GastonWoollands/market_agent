@@ -1,0 +1,23 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: market_agent_db
+    environment:
+      POSTGRES_USER: market
+      POSTGRES_PASSWORD: market
+      POSTGRES_DB: market_agent
+    ports:
+      # Host 5433 — 5432 is already used by another local Postgres container.
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U market -d market_agent"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    shm_size: 128mb
+    restart: unless-stopped
+
+volumes:
+  pgdata:

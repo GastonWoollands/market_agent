@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  background: #070707;
+  color: #ececec;
+}
+
+body {
+  font-feature-settings: "tnum" 1;
+}

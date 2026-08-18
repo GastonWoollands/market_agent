@@ -1,0 +1,42 @@
+# Curated Polymarket events for Live + Outlook.
+# Gamma API is unauthenticated: https://gamma-api.polymarket.com
+# Slugs rotate when a contract expires — refresh this file when a fetch 404s.
+# Ingest stores implied probability; UI must label these as market-implied, not forecasts.
+
+events:
+  - slug: fed-decision-in-september
+    label: Fed path (next meeting)
+    category: rates
+    notes: Thin books noisy. Prefer the event that matches the next FOMC date.
+
+  - slug: fed-decision-in-october
+    label: Fed path (following meeting)
+    category: rates
+    notes: Optional second meeting. Skip in UI if inactive.
+
+  - slug: will-the-fed-cut-rates-in-2026
+    label: Fed cuts in 2026
+    category: rates
+    notes: Confirm slug still exists; search Gamma if 404.
+
+  - slug: us-inflation-above-3-in-2026
+    label: Inflation odds
+    category: inflation
+    notes: Use the active CPI / year-end inflation market if this slug is retired.
+
+  - slug: us-recession-in-2026
+    label: Recession odds
+    category: growth
+    notes: Definition is market-specific (NBER vs two-quarter). Show question text in UI.
+
+  - slug: will-there-be-a-us-recession-by-end-of-2026
+    label: Recession by year-end
+    category: growth
+    notes: Alternate recession market. Keep one active series in the Live sidebar.
+
+# Discovery fallback when a slug 404s (Day 6 ingest).
+search_hints:
+  rates: ["fed", "fomc", "interest rate"]
+  inflation: ["cpi", "inflation", "pce"]
+  growth: ["recession"]
+  geo: ["iran", "taiwan", "ukraine", "tariff"]

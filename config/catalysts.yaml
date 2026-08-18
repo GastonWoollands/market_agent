@@ -1,0 +1,26 @@
+# Hand-curated calendar. Refresh yearly. Do not scrape this.
+# Times are America/New_York. Earnings come from Finnhub at runtime, not this file.
+
+timezone: America/New_York
+
+fomc:
+  # Decision day (second day of the meeting). Statement ~14:00 ET, presser ~14:30.
+  # Source: Federal Reserve tentative 2026 schedule.
+  - { date: 2026-01-28, title: FOMC decision, sep: false }
+  - { date: 2026-03-18, title: FOMC decision + SEP, sep: true }
+  - { date: 2026-04-29, title: FOMC decision, sep: false }
+  - { date: 2026-06-17, title: FOMC decision + SEP, sep: true }
+  - { date: 2026-07-29, title: FOMC decision, sep: false }
+  - { date: 2026-09-16, title: FOMC decision + SEP, sep: true }
+  - { date: 2026-10-28, title: FOMC decision, sep: false }
+  - { date: 2026-12-09, title: FOMC decision + SEP, sep: true }
+
+cpi:
+  # BLS CPI release 08:30 ET. Remaining 2026 dates.
+  - { date: 2026-09-11, title: CPI (August) }
+  - { date: 2026-10-14, title: CPI (September) }
+  - { date: 2026-11-10, title: CPI (October) }
+  - { date: 2026-12-10, title: CPI (November) }
+
+other:
+  - { date: 2026-11-03, title: US midterm elections, type: election }

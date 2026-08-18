@@ -1,0 +1,42 @@
+# Google News RSS queries. One query per Outlook/Live news bucket.
+# URL shape: https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en
+
+buckets:
+  - category: sector
+    queries:
+      - "US sector rotation stock market"
+      - "S&P 500 sectors XLK XLE XLF"
+
+  - category: rates
+    queries:
+      - "Treasury yields 10-year"
+      - "Federal Reserve FOMC rates"
+
+  - category: commodities
+    queries:
+      - "WTI crude oil price"
+      - "gold price dollar"
+
+  - category: inflation
+    queries:
+      - "US CPI inflation PCE"
+
+  - category: growth
+    queries:
+      - "US jobs payrolls unemployment GDP"
+
+  - category: credit
+    queries:
+      - "high yield credit spreads HYG"
+
+  - category: fx
+    queries:
+      - "US dollar index DXY"
+
+  - category: thematic
+    queries:
+      - "AI semiconductors software stocks"
+
+  - category: single_names
+    queries:
+      - "S&P 500 stock movers earnings"
