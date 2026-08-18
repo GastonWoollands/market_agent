@@ -22,6 +22,8 @@ class HealthResponse(BaseModel):
     quotes: int = 0
     macro_observations: int = 0
     odds_snapshots: int = 0
+    rrg_points: int = 0
+    return_stats: int = 0
     jobs: list[JobStatus] = []
 
 
@@ -110,3 +112,37 @@ class LiveResponse(BaseModel):
     drilldown: LiveDrilldown | None = None
     risk_on: LiveRiskOn | None = None
     odds: list[LiveOdds] = Field(default_factory=list)
+
+
+class DynamicsTrailPoint(BaseModel):
+    as_of: date
+    rs_ratio: float
+    rs_momentum: float
+
+
+class DynamicsPoint(BaseModel):
+    date: date
+    value: float
+
+
+class DynamicsMember(BaseModel):
+    ticker: str
+    name: str
+    role: str | None = None
+    sector: str | None = None
+    quadrant: str
+    rs_ratio: float
+    rs_momentum: float
+    trail: list[DynamicsTrailPoint] = Field(default_factory=list)
+    ret_1w: float | None = None
+    ret_1m: float | None = None
+    ret_3m: float | None = None
+    ret_1y: float | None = None
+    indexed: list[DynamicsPoint] = Field(default_factory=list)
+
+
+class DynamicsResponse(BaseModel):
+    as_of: date | None = None
+    stale: bool = True
+    benchmark: str = "SPY"
+    members: list[DynamicsMember] = Field(default_factory=list)

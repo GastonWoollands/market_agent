@@ -45,6 +45,11 @@ def load_universes() -> UniversesFile:
     return UniversesFile.model_validate(raw)
 
 
+def tape_with_roles(catalog: UniversesFile, roles: list[str]) -> list[CatalogInstrument]:
+    wanted = set(roles)
+    return [item for item in catalog.tape.instruments if item.role in wanted]
+
+
 class FredSeriesItem(BaseModel):
     id: str
     name: str

@@ -4,11 +4,9 @@ Personal US market research terminal. Delayed data, no trading.
 
 **Northstar:** [docs/NORTHSTAR.md](docs/NORTHSTAR.md) — product, schema, sources, and day-by-day plan. Read that before adding features.
 
-## Day 6 (current)
+## Day 7 (current)
 
-Live shows **market-implied** Polymarket odds (Fed / inflation / recession) from `odds_snapshot`. Odds are **not** an input to Risk-On. The browser never calls Gamma.
-
-Slugs in `config/polymarket_slugs.yaml` expire; if ingest 404s it logs Gamma search candidates — paste a replacement slug, do not scrape the site.
+Dynamics shows **JdK RS-Ratio / RS-Momentum vs SPY** for tape sector/group ETFs, plus 1W/1M/3M/1Y returns and a 63-session indexed-to-100 sparkline. Computed from stored `bar_daily` by `jobs.compute_dynamics` into `rrg_point` / `return_stats`. The browser never calls Yahoo. Credit, vol, FX, and Polymarket are not on this plot.
 
 Postgres is published on **host port 5433**.
 
@@ -24,13 +22,14 @@ python -m jobs.seed_tape
 python -m jobs.ingest_yahoo
 python -m jobs.ingest_fred
 python -m jobs.ingest_polymarket
+python -m jobs.compute_dynamics
 
 uvicorn api.main:app --reload --port 8000
 # other terminal
 npm --prefix web run dev
 ```
 
-Or `make db migrate seed yahoo fred poly api` and `make web`.
+Or `make db migrate seed yahoo fred poly dynamics api` and `make web`.
 
 ## Config
 
@@ -44,4 +43,4 @@ Or `make db migrate seed yahoo fred poly api` and `make web`.
 
 ## Next
 
-Day 7: Dynamics core (returns, RRG, indexed-to-100). No new vendors.
+Day 8: Dynamics extras (relative overlay, sector table, 63d corr, lead-lag). No new vendors.

@@ -7,18 +7,30 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from analytics.risk_on import CURVE_SERIES, RISK_ON_TICKERS, VIX_SERIES
+from analytics.rrg import TRAIL_WEEKS
+from api.dynamics import build_dynamics, stored_from_rows
 from api.live import HISTORY_DAYS, build_live, resolve_lever, risk_on_from_store
-from api.schemas import HealthResponse, JobStatus, LiveResponse
+from api.schemas import DynamicsResponse, HealthResponse, JobStatus, LiveResponse
 from store.catalog import load_fred_series, load_polymarket, load_universes
 from store.engine import get_db
-from store.models import BarDaily, MacroObservation, OddsSnapshot, QuoteLatest
+from store.models import (
+    BarDaily,
+    MacroObservation,
+    OddsSnapshot,
+    QuoteLatest,
+    ReturnStats,
+    RrgPoint,
+)
 from store.repos import (
     closes_for_tickers,
     latest_jobs,
     latest_odds,
+    latest_return_stats,
+    latest_rrg_points,
     live_macro_rows,
     live_tape_rows,
     macro_observations,
+    rrg_trails,
     table_count,
     universe_size,
 )
@@ -59,6 +71,8 @@ def health(db: Session = Depends(get_db)) -> HealthResponse | JSONResponse:
             quotes=table_count(db, QuoteLatest),
             macro_observations=table_count(db, MacroObservation),
             odds_snapshots=table_count(db, OddsSnapshot),
+            rrg_points=table_count(db, RrgPoint),
+            return_stats=table_count(db, ReturnStats),
             jobs=jobs,
         )
     except Exception as exc:
@@ -91,4 +105,26 @@ def live(lever: str = "DGS10", db: Session = Depends(get_db)) -> LiveResponse | 
         )
     except Exception:
         payload = LiveResponse(stale=True)
+        return JSONResponse(status_code=503, content=payload.model_dump(mode="json"))
+
+
+@app.get("/dynamics", response_model=DynamicsResponse)
+def dynamics(
+    as_of: date | None = None,
+    db: Session = Depends(get_db),
+) -> DynamicsResponse | JSONResponse:
+    try:
+        pairs = latest_rrg_points(db, as_of)
+        if not pairs:
+            return DynamicsResponse(stale=True)
+        ids = [instrument.id for instrument, _ in pairs]
+        cutoff = as_of or max(point.as_of for _, point in pairs)
+        stored = stored_from_rows(
+            pairs,
+            rrg_trails(db, ids, as_of=cutoff, limit=TRAIL_WEEKS + 1),
+            latest_return_stats(db, cutoff),
+        )
+        return build_dynamics(stored, load_universes(), now=date.today())
+    except Exception:
+        payload = DynamicsResponse(stale=True)
         return JSONResponse(status_code=503, content=payload.model_dump(mode="json"))

@@ -168,3 +168,40 @@ class OddsSnapshot(Base):
     implied_yes: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
     liquidity: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
     raw: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+
+
+class ReturnStats(Base):
+    __tablename__ = "return_stats"
+
+    instrument_id: Mapped[int] = mapped_column(
+        ForeignKey("instrument.id", ondelete="CASCADE"), primary_key=True
+    )
+    as_of: Mapped[date] = mapped_column(Date, primary_key=True)
+    ret_1w: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    ret_1m: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    ret_3m: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    ret_1y: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    indexed: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
+
+    instrument: Mapped[Instrument] = relationship()
+
+
+class RrgPoint(Base):
+    __tablename__ = "rrg_point"
+
+    instrument_id: Mapped[int] = mapped_column(
+        ForeignKey("instrument.id", ondelete="CASCADE"), primary_key=True
+    )
+    as_of: Mapped[date] = mapped_column(Date, primary_key=True)
+    rs_ratio: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    rs_momentum: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    quadrant: Mapped[str] = mapped_column(String(16), nullable=False)
+
+    instrument: Mapped[Instrument] = relationship()
+
+    __table_args__ = (
+        CheckConstraint(
+            "quadrant IN ('leading', 'weakening', 'lagging', 'improving')",
+            name="ck_rrg_point_quadrant",
+        ),
+    )

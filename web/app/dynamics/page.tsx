@@ -1,10 +1,16 @@
-import { PageHeader } from "@/components/PageHeader";
+import { DynamicsView } from "@/components/DynamicsView";
+import { fetchDynamics } from "@/lib/api";
 
-export default function DynamicsPage() {
-  return (
-    <PageHeader title="Dynamics">
-      How sector groups move relative to each other — leading, fading, and whether any of
-      it is predictable. Built from daily bars already in Postgres (Day 7–8).
-    </PageHeader>
-  );
+export const dynamic = "force-dynamic";
+
+export default async function DynamicsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ as_of?: string | string[] }>;
+}) {
+  const params = await searchParams;
+  const raw = params.as_of;
+  const asOf = Array.isArray(raw) ? raw[0] : raw;
+  const tape = await fetchDynamics(asOf);
+  return <DynamicsView tape={tape} />;
 }

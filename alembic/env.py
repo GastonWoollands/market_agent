@@ -12,6 +12,8 @@ from store.models import (  # noqa: F401
     MacroSeries,
     OddsSnapshot,
     QuoteLatest,
+    ReturnStats,
+    RrgPoint,
     Universe,
     UniverseMember,
 )

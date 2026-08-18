@@ -19,6 +19,8 @@ export type Health = {
   quotes?: number;
   macro_observations?: number;
   odds_snapshots?: number;
+  rrg_points?: number;
+  return_stats?: number;
   jobs: JobStatus[];
 };
 
@@ -126,6 +128,53 @@ export async function fetchLive(lever = "DGS10"): Promise<LiveTape | null> {
       return null;
     }
     return (await response.json()) as LiveTape;
+  } catch {
+    return null;
+  }
+}
+
+export type DynamicsTrailPoint = {
+  as_of: string;
+  rs_ratio: number;
+  rs_momentum: number;
+};
+
+export type DynamicsPoint = {
+  date: string;
+  value: number;
+};
+
+export type DynamicsMember = {
+  ticker: string;
+  name: string;
+  role: string | null;
+  sector: string | null;
+  quadrant: string;
+  rs_ratio: number;
+  rs_momentum: number;
+  trail: DynamicsTrailPoint[];
+  ret_1w: number | null;
+  ret_1m: number | null;
+  ret_3m: number | null;
+  ret_1y: number | null;
+  indexed: DynamicsPoint[];
+};
+
+export type DynamicsTape = {
+  as_of: string | null;
+  stale: boolean;
+  benchmark: string;
+  members: DynamicsMember[];
+};
+
+export async function fetchDynamics(asOf?: string): Promise<DynamicsTape | null> {
+  try {
+    const query = asOf ? `?${new URLSearchParams({ as_of: asOf }).toString()}` : "";
+    const response = await fetch(`${API_URL}/dynamics${query}`, { cache: "no-store" });
+    if (!response.ok) {
+      return null;
+    }
+    return (await response.json()) as DynamicsTape;
   } catch {
     return null;
   }

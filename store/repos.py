@@ -17,6 +17,8 @@ from store.models import (
     MacroSeries,
     OddsSnapshot,
     QuoteLatest,
+    ReturnStats,
+    RrgPoint,
     Universe,
     UniverseMember,
 )
@@ -436,3 +438,102 @@ def upsert_odds(session: Session, point: OddsPoint) -> None:
 def latest_odds(session: Session) -> list[OddsSnapshot]:
     stmt = select(OddsSnapshot).order_by(OddsSnapshot.slug)
     return list(session.execute(stmt).scalars())
+
+
+def upsert_rrg_points(
+    session: Session,
+    rows: Sequence[dict[str, object]],
+) -> int:
+    if not rows:
+        return 0
+    stmt = insert(RrgPoint).values(list(rows))
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["instrument_id", "as_of"],
+        set_={
+            "rs_ratio": stmt.excluded.rs_ratio,
+            "rs_momentum": stmt.excluded.rs_momentum,
+            "quadrant": stmt.excluded.quadrant,
+        },
+    )
+    session.execute(stmt)
+    return len(rows)
+
+
+def upsert_return_stats(
+    session: Session,
+    rows: Sequence[dict[str, object]],
+) -> int:
+    if not rows:
+        return 0
+    stmt = insert(ReturnStats).values(list(rows))
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["instrument_id", "as_of"],
+        set_={
+            "ret_1w": stmt.excluded.ret_1w,
+            "ret_1m": stmt.excluded.ret_1m,
+            "ret_3m": stmt.excluded.ret_3m,
+            "ret_1y": stmt.excluded.ret_1y,
+            "indexed": stmt.excluded.indexed,
+        },
+    )
+    session.execute(stmt)
+    return len(rows)
+
+
+def latest_rrg_points(
+    session: Session,
+    before: date | None = None,
+) -> list[tuple[Instrument, RrgPoint]]:
+    latest = select(
+        RrgPoint.instrument_id,
+        func.max(RrgPoint.as_of).label("as_of"),
+    )
+    if before is not None:
+        latest = latest.where(RrgPoint.as_of <= before)
+    latest = latest.group_by(RrgPoint.instrument_id).subquery()
+    stmt = (
+        select(Instrument, RrgPoint)
+        .join(RrgPoint, RrgPoint.instrument_id == Instrument.id)
+        .join(
+            latest,
+            (RrgPoint.instrument_id == latest.c.instrument_id)
+            & (RrgPoint.as_of == latest.c.as_of),
+        )
+        .order_by(Instrument.ticker)
+    )
+    return list(session.execute(stmt).all())
+
+
+def rrg_trails(
+    session: Session,
+    instrument_ids: Sequence[int],
+    *,
+    as_of: date,
+    limit: int,
+) -> dict[int, list[RrgPoint]]:
+    if not instrument_ids:
+        return {}
+    stmt = (
+        select(RrgPoint)
+        .where(
+            RrgPoint.instrument_id.in_(list(instrument_ids)),
+            RrgPoint.as_of <= as_of,
+        )
+        .order_by(RrgPoint.instrument_id, RrgPoint.as_of)
+    )
+    grouped: dict[int, list[RrgPoint]] = {}
+    for point in session.execute(stmt).scalars():
+        grouped.setdefault(point.instrument_id, []).append(point)
+    return {iid: points[-limit:] for iid, points in grouped.items()}
+
+
+def latest_return_stats(session: Session, before: date | None = None) -> dict[int, ReturnStats]:
+    stmt = select(ReturnStats)
+    if before is not None:
+        stmt = stmt.where(ReturnStats.as_of <= before)
+    best: dict[int, ReturnStats] = {}
+    for row in session.execute(stmt).scalars():
+        current = best.get(row.instrument_id)
+        if current is None or row.as_of > current.as_of:
+            best[row.instrument_id] = row
+    return best
