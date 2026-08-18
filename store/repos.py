@@ -37,6 +37,7 @@ from store.models import (
     RrgPoint,
     Universe,
     UniverseMember,
+    ValuationDaily,
 )
 
 
@@ -793,3 +794,127 @@ def latest_metric_ttm(
         .order_by(MetricTtm.revenue.desc(), Instrument.ticker)
     )
     return list(session.execute(stmt).all())
+
+
+def metric_ttm_history(
+    session: Session, instrument_ids: Sequence[int]
+) -> dict[int, list[MetricTtm]]:
+    if not instrument_ids:
+        return {}
+    stmt = (
+        select(MetricTtm)
+        .where(MetricTtm.instrument_id.in_(list(instrument_ids)))
+        .order_by(MetricTtm.instrument_id, MetricTtm.as_of)
+    )
+    out: dict[int, list[MetricTtm]] = {int(item): [] for item in instrument_ids}
+    for row in session.execute(stmt).scalars():
+        out.setdefault(row.instrument_id, []).append(row)
+    return out
+
+
+def closes_for_instrument_ids(
+    session: Session,
+    instrument_ids: Sequence[int],
+    *,
+    start: date | None = None,
+) -> dict[int, list[tuple[date, Decimal]]]:
+    if not instrument_ids:
+        return {}
+    stmt = select(BarDaily.instrument_id, BarDaily.date, BarDaily.close).where(
+        BarDaily.instrument_id.in_(list(instrument_ids))
+    )
+    if start is not None:
+        stmt = stmt.where(BarDaily.date >= start)
+    stmt = stmt.order_by(BarDaily.instrument_id, BarDaily.date)
+    out: dict[int, list[tuple[date, Decimal]]] = {int(item): [] for item in instrument_ids}
+    for instrument_id, day, close in session.execute(stmt):
+        out.setdefault(instrument_id, []).append((day, close))
+    return out
+
+
+def upsert_valuation_daily(session: Session, rows: Sequence[dict[str, object]]) -> int:
+    if not rows:
+        return 0
+    stmt = insert(ValuationDaily).values(list(rows))
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["instrument_id", "as_of"],
+        set_={
+            "ev": stmt.excluded.ev,
+            "ebitda": stmt.excluded.ebitda,
+            "ev_ebitda": stmt.excluded.ev_ebitda,
+            "pctile_5y": stmt.excluded.pctile_5y,
+            "ebitda_growth_1y": stmt.excluded.ebitda_growth_1y,
+            "multiple_change_1y": stmt.excluded.multiple_change_1y,
+            "comparable": stmt.excluded.comparable,
+            "sample_size": stmt.excluded.sample_size,
+        },
+    )
+    session.execute(stmt)
+    return len(rows)
+
+
+def latest_valuation_rows(
+    session: Session, universe: str = "valuation"
+) -> list[tuple[Instrument, MetricTtm, ValuationDaily]]:
+    metric_as_of = (
+        select(
+            MetricTtm.instrument_id,
+            func.max(MetricTtm.as_of).label("as_of"),
+        )
+        .group_by(MetricTtm.instrument_id)
+        .subquery()
+    )
+    value_as_of = (
+        select(
+            ValuationDaily.instrument_id,
+            func.max(ValuationDaily.as_of).label("as_of"),
+        )
+        .group_by(ValuationDaily.instrument_id)
+        .subquery()
+    )
+    stmt = (
+        select(Instrument, MetricTtm, ValuationDaily)
+        .join(UniverseMember, UniverseMember.instrument_id == Instrument.id)
+        .join(Universe, Universe.id == UniverseMember.universe_id)
+        .join(MetricTtm, MetricTtm.instrument_id == Instrument.id)
+        .join(
+            metric_as_of,
+            (MetricTtm.instrument_id == metric_as_of.c.instrument_id)
+            & (MetricTtm.as_of == metric_as_of.c.as_of),
+        )
+        .join(ValuationDaily, ValuationDaily.instrument_id == Instrument.id)
+        .join(
+            value_as_of,
+            (ValuationDaily.instrument_id == value_as_of.c.instrument_id)
+            & (ValuationDaily.as_of == value_as_of.c.as_of),
+        )
+        .where(Universe.name == universe, Instrument.is_active.is_(True))
+        .order_by(Instrument.ticker)
+    )
+    return list(session.execute(stmt).all())
+
+
+def comparable_valuation_counts(
+    session: Session, universe: str = "valuation"
+) -> tuple[int, int]:
+    latest = (
+        select(
+            ValuationDaily.instrument_id,
+            func.max(ValuationDaily.as_of).label("as_of"),
+        )
+        .group_by(ValuationDaily.instrument_id)
+        .subquery()
+    )
+    comparable = (
+        select(func.count())
+        .select_from(ValuationDaily)
+        .join(
+            latest,
+            (ValuationDaily.instrument_id == latest.c.instrument_id)
+            & (ValuationDaily.as_of == latest.c.as_of),
+        )
+        .join(UniverseMember, UniverseMember.instrument_id == ValuationDaily.instrument_id)
+        .join(Universe, Universe.id == UniverseMember.universe_id)
+        .where(Universe.name == universe, ValuationDaily.comparable.is_(True))
+    )
+    return int(session.execute(comparable).scalar_one() or 0), universe_size(session, universe)

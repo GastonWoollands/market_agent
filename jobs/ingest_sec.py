@@ -8,7 +8,13 @@ from pathlib import Path
 
 from ingest.sec.client import CompanyFactsArchive, SecClient
 from ingest.sec.errors import SecError, SecHttpError, SecParseError
-from ingest.sec.parse import fresh_ttm, ttm_from_facts, usable_ttm, yahoo_symbol
+from ingest.sec.parse import (
+    fresh_ttm,
+    ttm_from_facts,
+    ttm_history_from_facts,
+    usable_ttm,
+    yahoo_symbol,
+)
 from jobs.runtime import record_job
 from store.catalog import CatalogInstrument, load_universes
 from store.engine import session_scope
@@ -86,17 +92,20 @@ def _write_members(client, listed, floor: Decimal, archive, failures: list[str])
         for index, item in enumerate(listed, start=1):
             try:
                 if archive is not None:
-                    metric = client.metric_from_archive(
-                        archive, item.cik, require_quarters=True
-                    )
+                    payload = archive.load(item.cik)
                 else:
-                    metric = ttm_from_facts(
-                        client.fetch_companyfacts(item.cik), require_quarters=True
-                    )
+                    payload = client.fetch_companyfacts(item.cik)
             except (SecHttpError, SecParseError, SecError, ValueError) as exc:
                 failures.append(f"{item.ticker}: {exc}")
                 if isinstance(exc, SecHttpError) and exc.status_code == 429:
                     raise RuntimeError("SEC rate limited") from exc
+                continue
+            if not payload:
+                continue
+            try:
+                metric = ttm_from_facts(payload, require_quarters=True)
+            except (SecParseError, ValueError) as exc:
+                failures.append(f"{item.ticker}: {exc}")
                 continue
             if (
                 metric is None
@@ -117,7 +126,12 @@ def _write_members(client, listed, floor: Decimal, archive, failures: list[str])
                 ),
             )
             session.flush()
-            upsert_metric_ttm(session, instrument.id, metric)
+            snapshots = ttm_history_from_facts(payload, require_quarters=True)
+            as_ofs = {snap.as_of for snap in snapshots}
+            if metric.as_of not in as_ofs:
+                snapshots = [*snapshots, metric]
+            for snap in snapshots:
+                upsert_metric_ttm(session, instrument.id, snap)
             ids.append(instrument.id)
             kept += 1
             if index % 500 == 0:

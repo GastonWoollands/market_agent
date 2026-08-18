@@ -1,4 +1,4 @@
-.PHONY: db migrate seed yahoo fred poly dynamics news calendar pack outlook sec api web test
+.PHONY: db migrate seed yahoo fred poly dynamics news calendar pack outlook sec yahoo-val valuation api web test
 
 db:
 	docker compose up -d db
@@ -38,6 +38,9 @@ sec:
 
 yahoo-val:
 	.venv/bin/python -m jobs.ingest_yahoo --universe valuation
+
+valuation:
+	.venv/bin/python -m jobs.compute_valuation
 
 api:
 	.venv/bin/uvicorn api.main:app --reload --port 8000

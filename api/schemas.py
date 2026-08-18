@@ -30,6 +30,7 @@ class HealthResponse(BaseModel):
     outlook_reports: int = 0
     valuation_instruments: int = 0
     metric_ttm: int = 0
+    valuation_daily: int = 0
     jobs: list[JobStatus] = []
 
 
@@ -224,17 +225,31 @@ class ValuationMember(BaseModel):
     ticker: str
     name: str
     exchange: str | None = None
+    industry: str | None = None
     cik: str | None = None
     as_of: date | None = None
     revenue: float | None = None
     ebitda: float | None = None
     fcf: float | None = None
     net_debt: float | None = None
+    ev: float | None = None
+    ev_ebitda: float | None = None
+    pctile_5y: float | None = None
+    ebitda_growth_1y: float | None = None
+    multiple_change_1y: float | None = None
+    comparable: bool = False
 
 
 class ValuationResponse(BaseModel):
     as_of: date | None = None
     stale: bool = True
     min_revenue: float = 1_000_000_000
+    comparable_n: int = 0
+    comparable_m: int = 0
     count: int = 0
+    q: str = ""
+    industry: str = ""
+    sort: str = "pctile"
+    min_rev: float | None = None
+    industries: list[str] = Field(default_factory=list)
     members: list[ValuationMember] = Field(default_factory=list)

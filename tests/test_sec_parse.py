@@ -5,6 +5,7 @@ from ingest.sec.parse import (
     fresh_ttm,
     tickers_from_payload,
     ttm_from_facts,
+    ttm_history_from_facts,
     usable_ttm,
     yahoo_symbol,
 )
@@ -264,6 +265,13 @@ def test_shares_fall_back_to_weighted_average() -> None:
     assert metric is not None
     assert metric.shares == Decimal("2500000000")
     assert usable_ttm(metric)
+
+
+def test_ttm_history_keeps_complete_windows_only() -> None:
+    payload = _ev_payload()
+    rows = ttm_history_from_facts(payload, today=date(2026, 8, 18), years=5)
+    assert [item.as_of for item in rows] == [date(2025, 6, 30)]
+    assert ttm_from_facts(payload, require_quarters=True, through=date(2025, 3, 31)) is None
 
 
 def _q(start: str, end: str, val: int, form: str) -> dict[str, object]:

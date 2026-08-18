@@ -27,6 +27,7 @@ export type Health = {
   outlook_reports?: number;
   valuation_instruments?: number;
   metric_ttm?: number;
+  valuation_daily?: number;
   jobs: JobStatus[];
 };
 
@@ -283,25 +284,58 @@ export type ValuationMember = {
   ticker: string;
   name: string;
   exchange: string | null;
+  industry: string | null;
   cik: string | null;
   as_of: string | null;
   revenue: number | null;
   ebitda: number | null;
   fcf: number | null;
   net_debt: number | null;
+  ev: number | null;
+  ev_ebitda: number | null;
+  pctile_5y: number | null;
+  ebitda_growth_1y: number | null;
+  multiple_change_1y: number | null;
+  comparable: boolean;
 };
 
 export type ValuationTape = {
   as_of: string | null;
   stale: boolean;
   min_revenue: number;
+  comparable_n: number;
+  comparable_m: number;
   count: number;
+  q: string;
+  industry: string;
+  sort: string;
+  min_rev: number | null;
+  industries: string[];
   members: ValuationMember[];
 };
 
-export async function fetchValuation(): Promise<ValuationTape | null> {
+export async function fetchValuation(query?: {
+  q?: string;
+  industry?: string;
+  sort?: string;
+  minRev?: string;
+}): Promise<ValuationTape | null> {
   try {
-    const response = await fetch(`${API_URL}/valuation`, { cache: "no-store" });
+    const params = new URLSearchParams();
+    if (query?.q) {
+      params.set("q", query.q);
+    }
+    if (query?.industry) {
+      params.set("industry", query.industry);
+    }
+    if (query?.sort) {
+      params.set("sort", query.sort);
+    }
+    if (query?.minRev) {
+      params.set("min_rev", query.minRev);
+    }
+    const suffix = params.toString() ? `?${params.toString()}` : "";
+    const response = await fetch(`${API_URL}/valuation${suffix}`, { cache: "no-store" });
     if (!response.ok) {
       return null;
     }

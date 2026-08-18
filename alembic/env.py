@@ -21,6 +21,7 @@ from store.models import (  # noqa: F401
     RrgPoint,
     Universe,
     UniverseMember,
+    ValuationDaily,
 )
 from store.settings import settings
 

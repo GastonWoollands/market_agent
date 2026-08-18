@@ -286,3 +286,22 @@ class MetricTtm(Base):
     source: Mapped[str] = mapped_column(String(16), nullable=False)
 
     instrument: Mapped[Instrument] = relationship()
+
+
+class ValuationDaily(Base):
+    __tablename__ = "valuation_daily"
+
+    instrument_id: Mapped[int] = mapped_column(
+        ForeignKey("instrument.id", ondelete="CASCADE"), primary_key=True
+    )
+    as_of: Mapped[date] = mapped_column(Date, primary_key=True)
+    ev: Mapped[Decimal] = mapped_column(Numeric(20, 2), nullable=False)
+    ebitda: Mapped[Decimal] = mapped_column(Numeric(20, 2), nullable=False)
+    ev_ebitda: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    pctile_5y: Mapped[Decimal | None] = mapped_column(Numeric(8, 4))
+    ebitda_growth_1y: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    multiple_change_1y: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    comparable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    sample_size: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    instrument: Mapped[Instrument] = relationship()

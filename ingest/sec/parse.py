@@ -99,7 +99,12 @@ def tickers_from_payload(payload: Any, *, exchanges: list[str]) -> list[SecTicke
     return out
 
 
-def ttm_from_facts(payload: dict[str, Any], *, require_quarters: bool = False) -> MetricTtm | None:
+def ttm_from_facts(
+    payload: dict[str, Any],
+    *,
+    require_quarters: bool = False,
+    through: date | None = None,
+) -> MetricTtm | None:
     facts = payload.get("facts")
     if not isinstance(facts, dict):
         return None
@@ -107,18 +112,18 @@ def ttm_from_facts(payload: dict[str, Any], *, require_quarters: bool = False) -
     if raw_cik is None:
         return None
     cik = pad_cik(raw_cik)
-    revenue, as_of, method = _flow_ttm(facts, REVENUE_CONCEPTS)
+    revenue, as_of, method = _flow_ttm(facts, REVENUE_CONCEPTS, through=through)
     if revenue is None or as_of is None:
         return None
     if require_quarters and method != "quarters":
         return None
-    ebit, _, _ = _flow_ttm(facts, EBIT_CONCEPTS)
-    da, _, _ = _da_ttm(facts)
+    ebit, _, _ = _flow_ttm(facts, EBIT_CONCEPTS, through=through)
+    da, _, _ = _da_ttm(facts, through=through)
     ebitda = None
     if ebit is not None and da is not None:
         ebitda = ebit + da
-    cfo, _, _ = _flow_ttm(facts, CFO_CONCEPTS)
-    capex, _, _ = _flow_ttm(facts, CAPEX_CONCEPTS)
+    cfo, _, _ = _flow_ttm(facts, CFO_CONCEPTS, through=through)
+    capex, _, _ = _flow_ttm(facts, CAPEX_CONCEPTS, through=through)
     fcf = None
     if cfo is not None and capex is not None:
         fcf = cfo - abs(capex)
@@ -137,6 +142,31 @@ def ttm_from_facts(payload: dict[str, Any], *, require_quarters: bool = False) -
         net_debt=net_debt,
         shares=shares,
     )
+
+
+def ttm_history_from_facts(
+    payload: dict[str, Any],
+    *,
+    require_quarters: bool = True,
+    today: date | None = None,
+    years: int = 5,
+) -> list[MetricTtm]:
+    facts = payload.get("facts")
+    if not isinstance(facts, dict):
+        return []
+    start = (today or date.today()) - timedelta(days=years * 365 + 30)
+    out: list[MetricTtm] = []
+    seen: set[date] = set()
+    for end in _quarter_ends(facts, REVENUE_CONCEPTS):
+        if end < start:
+            continue
+        metric = ttm_from_facts(payload, require_quarters=require_quarters, through=end)
+        if metric is None or metric.as_of in seen:
+            continue
+        seen.add(metric.as_of)
+        out.append(metric)
+    out.sort(key=lambda item: item.as_of)
+    return out
 
 
 def usable_ttm(metric: MetricTtm) -> bool:
@@ -179,12 +209,17 @@ def _norm_exchange(value: str) -> str:
 
 
 def _flow_ttm(
-    facts: dict[str, Any], concepts: tuple[tuple[str, str], ...]
+    facts: dict[str, Any],
+    concepts: tuple[tuple[str, str], ...],
+    *,
+    through: date | None = None,
 ) -> tuple[Decimal | None, date | None, str | None]:
     best_q: tuple[date, Decimal] | None = None
     best_a: tuple[date, Decimal] | None = None
     for taxonomy, concept in concepts:
         points = _duration_points(facts, taxonomy, concept)
+        if through is not None:
+            points = [item for item in points if item[1] <= through]
         quarterly = [item for item in points if 60 <= item[0] <= 120]
         picked = _last_quarters(quarterly, 4)
         if len(picked) == 4:
@@ -204,12 +239,14 @@ def _flow_ttm(
     return None, None, None
 
 
-def _da_ttm(facts: dict[str, Any]) -> tuple[Decimal | None, date | None, str | None]:
-    combined = _flow_ttm(facts, DA_CONCEPTS)
+def _da_ttm(
+    facts: dict[str, Any], *, through: date | None = None
+) -> tuple[Decimal | None, date | None, str | None]:
+    combined = _flow_ttm(facts, DA_CONCEPTS, through=through)
     if combined[0] is not None:
         return combined
-    dep = _flow_ttm(facts, DEP_CONCEPTS)
-    amort = _flow_ttm(facts, AMORT_CONCEPTS)
+    dep = _flow_ttm(facts, DEP_CONCEPTS, through=through)
+    amort = _flow_ttm(facts, AMORT_CONCEPTS, through=through)
     if (
         dep[0] is not None
         and amort[0] is not None
@@ -241,6 +278,15 @@ def _duration_points(
         out.append((days, end, value))
     out.sort(key=lambda item: item[1], reverse=True)
     return out
+
+
+def _quarter_ends(facts: dict[str, Any], concepts: tuple[tuple[str, str], ...]) -> list[date]:
+    ends: set[date] = set()
+    for taxonomy, concept in concepts:
+        for days, end, _value in _duration_points(facts, taxonomy, concept):
+            if 60 <= days <= 120:
+                ends.add(end)
+    return sorted(ends)
 
 
 def _last_quarters(

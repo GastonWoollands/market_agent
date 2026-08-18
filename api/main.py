@@ -21,7 +21,7 @@ from api.schemas import (
     OutlookResponse,
     ValuationResponse,
 )
-from api.valuation import STALE_AFTER_DAYS, build_valuation
+from api.valuation import DEFAULT_SORT, STALE_AFTER_DAYS, build_valuation
 from store.catalog import load_fred_series, load_polymarket, load_universes, tape_with_roles
 from store.engine import get_db
 from store.models import (
@@ -36,14 +36,16 @@ from store.models import (
     QuoteLatest,
     ReturnStats,
     RrgPoint,
+    ValuationDaily,
 )
 from store.repos import (
     closes_for_tickers,
+    comparable_valuation_counts,
     latest_jobs,
-    latest_metric_ttm,
     latest_odds,
     latest_return_stats,
     latest_rrg_points,
+    latest_valuation_rows,
     live_macro_rows,
     live_tape_rows,
     macro_observations,
@@ -96,6 +98,7 @@ def health(db: Session = Depends(get_db)) -> HealthResponse | JSONResponse:
             outlook_reports=table_count(db, OutlookReport),
             valuation_instruments=universe_size(db, "valuation"),
             metric_ttm=table_count(db, MetricTtm),
+            valuation_daily=table_count(db, ValuationDaily),
             jobs=jobs,
         )
     except Exception as exc:
@@ -188,24 +191,37 @@ def outlook(
 
 
 @app.get("/valuation", response_model=ValuationResponse)
-def valuation(db: Session = Depends(get_db)) -> ValuationResponse | JSONResponse:
+def valuation(
+    q: str = "",
+    industry: str = "",
+    sort: str = DEFAULT_SORT,
+    min_rev: float | None = None,
+    db: Session = Depends(get_db),
+) -> ValuationResponse | JSONResponse:
     try:
         catalog = load_universes()
-        rows = latest_metric_ttm(db)
-        as_of = max((metric.as_of for _, metric in rows), default=None)
+        rows = latest_valuation_rows(db)
+        comparable_n, comparable_m = comparable_valuation_counts(db)
+        as_of = max((value.as_of for _, _, value in rows), default=None)
         stale = not rows
-        sec = next((job for job in latest_jobs(db) if job.job_name == "ingest_sec"), None)
-        if sec is None or sec.status != "ok":
+        job = next((item for item in latest_jobs(db) if item.job_name == "compute_valuation"), None)
+        if job is None or job.status != "ok":
             stale = True
-        elif sec.finished_at is not None:
-            clock = datetime.now(sec.finished_at.tzinfo)
-            if (clock - sec.finished_at).days > STALE_AFTER_DAYS:
+        elif job.finished_at is not None:
+            clock = datetime.now(job.finished_at.tzinfo)
+            if (clock - job.finished_at).days > STALE_AFTER_DAYS:
                 stale = True
         return build_valuation(
             rows,
+            comparable_n=comparable_n,
+            comparable_m=comparable_m,
             min_revenue=float(catalog.valuation.min_revenue_usd),
             as_of=as_of,
             stale=stale,
+            q=q,
+            industry=industry,
+            sort=sort,
+            min_rev=min_rev,
         )
     except Exception:
         payload = ValuationResponse(stale=True)
