@@ -6,6 +6,8 @@ Personal US market research terminal. Delayed data, no trading.
 
 **Runbook:** [docs/PIPELINES.md](docs/PIPELINES.md) — setup, job order, when to re-run, flags, backup.
 
+**Coding agents:** [AGENTS.md](AGENTS.md) — Cursor / Claude Code map. Do not paste Northstar into agent rules.
+
 ## Day 19 (current)
 
 Hardening reuses the existing adapters. Yahoo 429 still fails fast. Timeouts and 5xx retry up to 3 times. Kill a Yahoo ingest mid-run and continue with `--resume`; upserts do not duplicate bars. Postgres is on **host port 5433**.

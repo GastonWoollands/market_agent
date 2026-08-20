@@ -1,0 +1,17 @@
+---
+description: Vendor adapter conventions — canonical models in, HTTP/yfinance out of jobs only
+globs: ingest/**/*.py, jobs/ingest_*.py
+alwaysApply: false
+---
+
+# Ingest adapters
+
+One package per vendor: `client.py`, `parse.py`, `errors.py`. Jobs call the client; repos never talk to vendors.
+
+- Return frozen Pydantic from `store/canonical.py`. Do not persist raw vendor payloads in hot tables.
+- HTTP vendors: follow `ingest/fred/` (`httpx` + `ingest.retry`). Yahoo is special: `ingest/yahoo/` (`yfinance==1.6.0`, `curl_cffi` Chrome session, `TokenBucket` ≤2 req/s, `auto_adjust=False`). Do not let Yahoo fall back to `requests`.
+- HTTP 429 fails fast (no retry). Timeouts and 5xx retry ≤3.
+- Tests use parse fixtures (`tests/test_yahoo_parse.py`, `tests/test_fred_parse.py`). No live network in unit tests.
+- Do not import `ingest` from `api/` or `web/`.
+
+New vendor: use skill `add-adapter`. New ingest CLI: use skill `add-job`.

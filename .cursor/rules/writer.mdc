@@ -1,0 +1,18 @@
+---
+description: Outlook and memo writer — pack-grounded, no tools, citation-checked
+globs: agent/**/*.py, jobs/generate_outlook.py, jobs/generate_memos.py, jobs/build_pack.py
+alwaysApply: false
+---
+
+# Writer (`agent/`)
+
+This package narrates stored evidence. It is not a coding agent and must not grow tools.
+
+- Official `anthropic` / `google-genai` SDKs via `agent/providers.py`. No LangChain. No web search. No live prices.
+- Outlook: `agent/prompts.py` (`PROMPT_VERSION`, `SYSTEM_PROMPT`) + `agent/outlook.py`.
+- Memos: `agent/memos.py` (`MEMO_PROMPT_VERSION`, schema `{why_scored, what_10q_changed, invalidation, caveats}`).
+- After generation, `agent/citations.py` must pass. On failure, keep yesterday’s report (Outlook) or skip the memo.
+- Template fallback when the API is down or `--template` is set.
+- Pack assembly is Python → JSONB (`agent/pack.py`). The model never computes a multiple.
+
+Prompt/citation changes: use skill `change-outlook-writer`.

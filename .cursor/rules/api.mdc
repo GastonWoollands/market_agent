@@ -1,0 +1,15 @@
+---
+description: FastAPI is read-only over Postgres — no vendor I/O in request handlers
+globs: api/**/*.py
+alwaysApply: false
+---
+
+# API
+
+Screen-shaped routes over stored data. `def` handlers (threadpool). Sync SQLAlchemy.
+
+- Do not import `ingest`. Do not call Yahoo, FRED, SEC, or the LLM from a request.
+- Exception: watchlist add/delete and explicit refresh triggers may enqueue or call a job helper — still no vendor client inside the route.
+- Every payload includes `as_of` and stale flags. Shape lives in `api/schemas.py`.
+- Canonical handler: `api/live.py` (build from repos, not adapters).
+- CORS stays origin-reflecting; do not replace it with a host allow-list (Firefox IPv6).
