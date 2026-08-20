@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from typing import Any
 
@@ -12,6 +13,7 @@ from agent.errors import AgentError, CitationError
 from agent.prompts import PROMPT_VERSION, SYSTEM_PROMPT
 from agent.providers import AgentClient
 
+log = logging.getLogger("agent.outlook")
 TEMPLATE_MODEL = "template"
 
 
@@ -68,6 +70,7 @@ def narrate(pack: dict[str, Any], *, client: AgentClient | None) -> WrittenBrief
     text = render_markdown(brief)
     issues = citation_issues(pack, text)
     if issues:
+        log.warning("citation check failed: %s\n%s", ", ".join(issues), text)
         raise CitationError(issues)
     return WrittenBrief(
         body_md=text,

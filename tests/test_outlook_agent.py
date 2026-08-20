@@ -33,6 +33,20 @@ def test_citation_rejects_invented_ticker_and_percent() -> None:
     assert "pct:99.9%" in citation_issues(pack, "^GSPC printed 99.9%.")
 
 
+def test_citation_allows_implied_yes_as_percent() -> None:
+    pack = _pack()
+    pack["odds"] = [
+        {
+            "slug": "how-many-fed-rate-cuts-in-2026",
+            "implied_yes": 0.8525,
+            "as_of": "2026-08-19T09:55:52+00:00",
+        }
+    ]
+    assert citation_issues(pack, "Cuts implied_yes 85.25%.") == []
+    assert citation_issues(pack, "Cuts implied_yes 0.8525%.") == []
+    assert "pct:99.9%" in citation_issues(pack, "Cuts implied_yes 99.9%.")
+
+
 def test_template_brief_uses_only_pack_numbers() -> None:
     pack = _pack()
     brief = template_brief(pack)
@@ -61,10 +75,29 @@ def test_narrate_keeps_cited_agent_output() -> None:
     written = narrate(pack, client=_Client())
     assert written.status == "ok"
     assert written.model == "gemini/gemini-2.5-flash"
-    assert written.prompt_version == "outlook-v2"
+    assert written.prompt_version == "outlook-v3"
 
 
-def test_narrate_drops_uncited_agent_output() -> None:
+def test_narrate_keeps_implied_yes_percent() -> None:
+    pack = _pack()
+    pack["odds"] = [{"slug": "how-many-fed-rate-cuts-in-2026", "implied_yes": 0.8525}]
+
+    class _Client:
+        provider = "gemini"
+        model = "gemini-2.5-flash"
+
+        def complete(self, *, system: str, user: str) -> OutlookBrief:
+            return OutlookBrief(
+                headline="Tape",
+                body_md="^GSPC 5600.0 (-0.12%). Cuts implied_yes 85.25%.",
+            )
+
+    written = narrate(pack, client=_Client())
+    assert written.status == "ok"
+    assert "85.25%" in written.body_md
+
+
+def test_narrate_drops_uncited_agent_output(caplog: pytest.LogCaptureFixture) -> None:
     pack = _pack()
 
     class _Client:
@@ -74,10 +107,12 @@ def test_narrate_drops_uncited_agent_output() -> None:
         def complete(self, *, system: str, user: str) -> OutlookBrief:
             return OutlookBrief(headline="Tape", body_md="Buy TSLA into 99.9%.")
 
-    with pytest.raises(CitationError) as caught:
-        narrate(pack, client=_Client())
+    with caplog.at_level("WARNING"):
+        with pytest.raises(CitationError) as caught:
+            narrate(pack, client=_Client())
     assert "ticker:TSLA" in caught.value.issues
     assert "pct:99.9%" in caught.value.issues
+    assert "Buy TSLA into 99.9%." in caplog.text
 
 
 def test_narrate_falls_back_to_template_without_client() -> None:
