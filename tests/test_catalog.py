@@ -17,10 +17,23 @@ def test_universes_yaml_loads() -> None:
 def test_fred_series_yaml_has_ten_year() -> None:
     catalog = load_fred_series()
     ids = [item.id for item in catalog.series]
-    assert len(ids) == 13
     assert ids[0] == "DGS10"
     assert catalog.series[0].unit == "percent"
-    assert {item.id for item in catalog.series} >= {"DGS10", "DGS2", "VIXCLS", "UNRATE"}
+    assert catalog.series[0].pack_view == "yield_bp"
+    assert {item.id for item in catalog.series} >= {
+        "DGS10",
+        "DGS2",
+        "VIXCLS",
+        "UNRATE",
+        "PAYEMS",
+        "T5YIE",
+        "ECBDFR",
+        "GFDEGDQ188S",
+    }
+    icsa = next(item for item in catalog.series if item.id == "ICSA")
+    assert icsa.scale == 0.001
+    assert icsa.spine is True
+    assert any(item.id == "IRLTLT01JPM156N" and not item.show_on_live for item in catalog.series)
 
 
 def test_polymarket_yaml_has_live_fed_inflation_recession() -> None:

@@ -24,7 +24,7 @@ RSS = """<?xml version="1.0" encoding="UTF-8"?>
 def test_news_queries_yaml_has_rates_and_inflation() -> None:
     catalog = load_news_queries()
     categories = {item.category for item in catalog.buckets}
-    assert {"rates", "inflation", "sector", "growth"} <= categories
+    assert {"rates", "inflation", "sector", "growth", "ecb", "geo", "fiscal"} <= categories
     assert all(item.queries for item in catalog.buckets)
 
 
@@ -41,13 +41,20 @@ def test_catalysts_yaml_has_remaining_2026_fomc_and_cpi() -> None:
     catalog = load_catalysts()
     events = events_from_yaml(catalog)
     kinds = {item.kind for item in events}
-    assert {"fomc", "cpi", "election"} <= kinds
+    assert {"fomc", "cpi", "pce", "nfp", "gdp", "jolts", "election", "central_bank"} <= kinds
     assert all(item.source == "yaml" for item in events)
     fomc_dates = {item.date for item in events if item.kind == "fomc"}
     assert date(2026, 9, 16) in fomc_dates
     assert date(2026, 12, 9) in fomc_dates
     cpi_dates = {item.date for item in events if item.kind == "cpi"}
     assert date(2026, 9, 11) in cpi_dates
+    nfp_dates = {item.date for item in events if item.kind == "nfp"}
+    assert date(2026, 9, 4) in nfp_dates
+    cb_titles = {item.title for item in events if item.kind == "central_bank"}
+    assert "ECB decision" in cb_titles
+    assert "BoE decision" in cb_titles
+    slugs = [item.slug for item in events]
+    assert len(slugs) == len(set(slugs))
 
 
 def test_finnhub_earnings_filter_to_watchlist() -> None:

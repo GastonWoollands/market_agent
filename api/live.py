@@ -40,6 +40,12 @@ def _to_float(value: Decimal | None) -> float | None:
     return round(float(value), 4)
 
 
+def _scaled_macro(value: Decimal | None, scale: float) -> Decimal | None:
+    if value is None or scale == 1:
+        return value
+    return value * Decimal(str(scale))
+
+
 def _aware(value: datetime) -> datetime:
     return value if value.tzinfo else value.replace(tzinfo=UTC)
 
@@ -146,9 +152,11 @@ def _macro_items(rows: list[LiveMacroRow], fred: FredSeriesFile | None) -> list[
     by_id = {row.series_id: row for row in rows}
     items: list[LiveMacro] = []
     for item in fred.series:
+        if not item.show_on_live:
+            continue
         row = by_id.get(item.id)
-        last = row.last if row else None
-        prev = row.prev if row else None
+        last = _scaled_macro(row.last if row else None, item.scale)
+        prev = _scaled_macro(row.prev if row else None, item.scale)
         items.append(
             LiveMacro(
                 series_id=item.id,
@@ -182,6 +190,9 @@ def _drilldown(
     meta = next((item for item in fred.series if item.id == lever), None)
     if meta is None:
         return None
+    if meta.scale != 1:
+        factor = Decimal(str(meta.scale))
+        history = [(day, value * factor) for day, value in history]
     d1, w1, m1, y1 = window_deltas(history)
     last = history[-1] if history else None
     by_ticker = {row.ticker: row for row in tape_rows}

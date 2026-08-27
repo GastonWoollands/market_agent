@@ -73,7 +73,7 @@ class AnthropicAgent:
             if parse is not None:
                 result = parse(
                     model=self.model,
-                    max_tokens=2048,
+                    max_tokens=4096,
                     temperature=0.2,
                     system=system,
                     messages=[{"role": "user", "content": user}],
@@ -127,6 +127,7 @@ class GeminiAgent:
                 config={
                     "system_instruction": system,
                     "temperature": 0.2,
+                    "max_output_tokens": 4096,
                     "response_mime_type": "application/json",
                     "response_json_schema": output.model_json_schema(),
                     "automatic_function_calling": {"disable": True},

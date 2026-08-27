@@ -14,7 +14,10 @@ STOP = frozenset(
         "ARE",
         "BLS",
         "BUT",
+        "BOE",
+        "BOJ",
         "CPI",
+        "ECB",
         "ETF",
         "ETFS",
         "ET",
@@ -27,9 +30,14 @@ STOP = frozenset(
         "GDP",
         "HAS",
         "HAVE",
+        "HY",
+        "IG",
         "JSON",
+        "JOLTS",
         "MOM",
+        "NFP",
         "NOT",
+        "OAS",
         "PCE",
         "PM",
         "RRG",
@@ -67,6 +75,25 @@ def citation_issues(pack: dict[str, Any], text: str) -> list[str]:
         value = float(match.group(1))
         if not _cited_number(value, numbers):
             issues.append(f"pct:{match.group(0)}")
+    return issues
+
+
+def coverage_issues(pack: dict[str, Any], text: str) -> list[str]:
+    issues: list[str] = []
+    blob = text.lower()
+    for row in pack.get("macro") or []:
+        if not isinstance(row, dict):
+            continue
+        if row.get("series_id") == "CPIAUCSL" and row.get("yoy_pct") is not None:
+            yoy = row["yoy_pct"]
+            if "cpiaucsl" not in blob and "cpi" not in blob:
+                issues.append("coverage:CPIAUCSL")
+            if str(yoy) not in text:
+                issues.append("coverage:CPIAUCSL_yoy")
+        if row.get("series_id") == "ICSA" and row.get("change_label") == "weekly":
+            mentions = "icsa" in blob or "claims" in blob
+            if mentions and "weekly" not in blob:
+                issues.append("coverage:ICSA_weekly")
     return issues
 
 

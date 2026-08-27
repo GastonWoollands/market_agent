@@ -146,6 +146,27 @@ def test_build_live_macro_uses_level_change_not_percent_return() -> None:
     assert resolve_level_change(Decimal("4.25"), Decimal("4.20")) == Decimal("0.05")
 
 
+def test_build_live_skips_pack_only_fred_series() -> None:
+    fred = FredSeriesFile(
+        series=[
+            FredSeriesItem(id="DGS10", name="10Y", unit="percent"),
+            FredSeriesItem(
+                id="DEXUSEU",
+                name="USD per EUR",
+                unit="usd_per_eur",
+                show_on_live=False,
+            ),
+        ]
+    )
+    tape = build_live(
+        [],
+        _catalog(),
+        now=datetime(2026, 8, 14, tzinfo=UTC),
+        fred=fred,
+    )
+    assert [item.series_id for item in tape.macro] == ["DGS10"]
+
+
 def test_build_live_drilldown_uses_yaml_insight_and_level_deltas() -> None:
     fred = FredSeriesFile(
         series=[

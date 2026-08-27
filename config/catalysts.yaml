@@ -1,5 +1,6 @@
 # Hand-curated calendar. Refresh yearly. Do not scrape this.
 # Times are America/New_York. Earnings come from Finnhub at runtime, not this file.
+# Remaining 2026 dates as of 2026-08-27. Decision day = second day of two-day meetings.
 
 timezone: America/New_York
 
@@ -22,5 +23,42 @@ cpi:
   - { date: 2026-11-10, title: CPI (October) }
   - { date: 2026-12-10, title: CPI (November) }
 
+pce:
+  # BEA Personal Income and Outlays 08:30 ET. Remaining 2026 dates.
+  - { date: 2026-09-30, title: PCE (August) }
+  - { date: 2026-10-29, title: PCE (September) }
+  - { date: 2026-11-25, title: PCE (October) }
+  - { date: 2026-12-23, title: PCE (November) }
+
+nfp:
+  # BLS Employment Situation 08:30 ET.
+  - { date: 2026-09-04, title: Employment Situation (August) }
+  - { date: 2026-10-02, title: Employment Situation (September) }
+  - { date: 2026-11-06, title: Employment Situation (October) }
+  - { date: 2026-12-04, title: Employment Situation (November) }
+
+gdp:
+  # BEA GDP 08:30 ET. Remaining 2026 dates.
+  - { date: 2026-09-30, title: GDP Q2 third estimate }
+  - { date: 2026-10-29, title: GDP Q3 advance }
+  - { date: 2026-11-25, title: GDP Q3 second estimate }
+  - { date: 2026-12-23, title: GDP Q3 third estimate }
+
+jolts:
+  # BLS JOLTS 10:00 ET. Remaining 2026 dates.
+  - { date: 2026-09-01, title: JOLTS (July) }
+  - { date: 2026-09-29, title: JOLTS (August) }
+  - { date: 2026-11-03, title: JOLTS (September) }
+  - { date: 2026-12-01, title: JOLTS (October) }
+
 other:
   - { date: 2026-11-03, title: US midterm elections, type: election }
+  - { date: 2026-09-10, title: ECB decision, type: central_bank }
+  - { date: 2026-10-29, title: ECB decision, type: central_bank }
+  - { date: 2026-12-17, title: ECB decision, type: central_bank }
+  - { date: 2026-09-17, title: BoE decision, type: central_bank }
+  - { date: 2026-11-05, title: BoE decision, type: central_bank }
+  - { date: 2026-12-17, title: BoE decision, type: central_bank }
+  - { date: 2026-09-18, title: BoJ decision, type: central_bank }
+  - { date: 2026-10-30, title: BoJ decision, type: central_bank }
+  - { date: 2026-12-18, title: BoJ decision, type: central_bank }

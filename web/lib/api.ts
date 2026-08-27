@@ -260,6 +260,72 @@ export type OutlookEvent = {
   source: string;
 };
 
+export type OutlookMacro = {
+  series_id: string;
+  name: string | null;
+  unit: string | null;
+  category: string | null;
+  region: string | null;
+  frequency: string | null;
+  pack_view: string | null;
+  as_of: string | null;
+  lag_days: number | null;
+  stale: boolean;
+  value: number | null;
+  yoy_pct: number | null;
+  mom_pct: number | null;
+  d1_bp: number | null;
+  w1_bp: number | null;
+  m1_bp: number | null;
+  mom_change: number | null;
+  print_change: number | null;
+  change_label: string | null;
+  spine: boolean;
+  d1: number | null;
+  w1: number | null;
+  m1: number | null;
+};
+
+export type OutlookOddsOutcome = {
+  label: string;
+  implied_yes: number;
+};
+
+export type OutlookOdds = {
+  slug: string;
+  label: string | null;
+  category: string | null;
+  implied_yes: number | null;
+  as_of: string | null;
+  outcomes: OutlookOddsOutcome[];
+  top_outcome: string | null;
+  top_implied_yes: number | null;
+};
+
+export type OutlookTension = {
+  left: string;
+  right: string;
+  note: string;
+};
+
+export type OutlookWatch = {
+  date: string | null;
+  title: string | null;
+  kind: string | null;
+  last_print: string | null;
+  why: string | null;
+};
+
+export type OutlookJudgment = {
+  takeaways: string[];
+  tensions: OutlookTension[];
+  regime: Record<string, string | null>;
+  watch: OutlookWatch[];
+  invalidation: string | null;
+  odds_read: string | null;
+  abstract: string | null;
+};
+
 export type OutlookTape = {
   as_of: string | null;
   stale: boolean;
@@ -268,8 +334,20 @@ export type OutlookTape = {
   brief: string | null;
   brief_status: string | null;
   brief_model: string | null;
+  headline: string | null;
+  abstract: string | null;
+  conclusions: string[];
+  expect: string | null;
+  macro_md: string | null;
+  market_md: string | null;
+  near_term_md: string | null;
+  facts: Record<string, number | null>;
+  judgment: OutlookJudgment | null;
+  macro_snapshot: OutlookMacro[];
+  odds: OutlookOdds[];
   news: OutlookNews[];
   events: OutlookEvent[];
+  events_later: OutlookEvent[];
   sources: OutlookSource[];
 };
 
