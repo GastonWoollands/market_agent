@@ -2,8 +2,11 @@
 
 Personal US research terminal. Delayed data, no trading. UI name: Sector Panel.
 
-Read `docs/NORTHSTAR.md` before changing product intent, schema, or source stack.
-Read `docs/PIPELINES.md` before running or adding jobs.
+v1 is shipped. Do not implement Northstar gaps (Form 4, Alpaca, scheduler, Pi host, `filing` tables) unless `docs/northstar.md` is updated first.
+
+Read `docs/northstar.md` before changing product intent, schema meaning, or source stack.
+Read `docs/system.md` for orientation (job → table → API → UI).
+Read `docs/pipelines.md` before running or adding jobs.
 Do not paste those files into chat. Open them when the task needs them.
 
 `agent/` is the Outlook/memo **writer** (Anthropic/Gemini SDK, pack-grounded).
@@ -47,12 +50,12 @@ Canonical examples: `ingest/yahoo/client.py`, `ingest/fred/client.py`,
 
 Python 3.12, venv `.venv`, `pip install -e ".[dev]"`.
 `make db migrate test api web`
-Jobs: `python -m jobs.<module>` or matching `make` targets. See PIPELINES.md.
+Jobs: `python -m jobs.<module>` or matching `make` targets. See pipelines.md.
 Lint: `ruff` (line-length 100). Tests: `pytest`.
 
 ## When changing X
 
-- Schema → Alembic + `store/models.py` + Northstar §8 if the contract changes
-- New vendor → new `ingest/<vendor>/`, yaml catalog if needed, job, tests with fixtures
+- Schema contract (new table, vendor, universe, page) → Alembic + `store/models.py` + Northstar §8
+- New vendor → Northstar §6 first, then new `ingest/<vendor>/`, yaml catalog if needed, job, tests with fixtures
 - Outlook prose → `agent/prompts.py` + citation tests; never give the model fetch tools
 - UI data → FastAPI schema first, then `web/lib/api.ts`; no vendor calls from the browser

@@ -5,7 +5,7 @@ description: Adds a vendor ingest adapter (client, parse, errors, canonical mode
 
 # Add ingest adapter
 
-If this is a new v1 source, update `docs/NORTHSTAR.md` §6 first. Do not add scraping, unofficial APIs, or non-US listings.
+If this is a new v1 source, update `docs/northstar.md` §6 (Source stack) first. Do not add scraping, unofficial APIs, or non-US listings.
 
 ## Layout
 

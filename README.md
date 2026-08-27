@@ -1,33 +1,34 @@
 # Market Agent
 
-Personal US market research terminal. Delayed data, no trading.
+Personal US market research terminal. Delayed data, no trading. UI name: **Sector Panel**.
 
-**Northstar:** [docs/NORTHSTAR.md](docs/NORTHSTAR.md) — product, schema, sources, and day-by-day plan. Read that before adding features.
+v1 is shipped: Live, Outlook, Dynamics, Valuation, Opportunities, Watchlist — all from Postgres. Vendors and the writer LLM are never called from the UI.
 
-**Runbook:** [docs/PIPELINES.md](docs/PIPELINES.md) — setup, job order, when to re-run, flags, backup.
+| Doc | Use |
+|-----|-----|
+| [docs/northstar.md](docs/northstar.md) | Product contract (intent, sources, schema meaning, non-goals) |
+| [docs/system.md](docs/system.md) | As-built map: job → table → API → UI |
+| [docs/pipelines.md](docs/pipelines.md) | Setup, job order, flags, backup |
+| [AGENTS.md](AGENTS.md) | Cursor / Claude Code map |
 
-**Coding agents:** [AGENTS.md](AGENTS.md) — Cursor / Claude Code map. Do not paste Northstar into agent rules.
-
-## Day 19 (current)
-
-Hardening reuses the existing adapters. Yahoo 429 still fails fast. Timeouts and 5xx retry up to 3 times. Kill a Yahoo ingest mid-run and continue with `--resume`; upserts do not duplicate bars. Postgres is on **host port 5433**.
+## Run
 
 ```bash
-python -m jobs.ingest_yahoo --resume
-python -m jobs.backfill yahoo --universe tape --resume
-bash scripts/pg_dump.sh
+cp .env.example .env          # fill keys — see pipelines.md
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+docker compose up -d db       # Postgres on host port 5433
+alembic upgrade head
 ```
+
+First load and recurring recipes: [pipelines.md](docs/pipelines.md). Serve with `make api` and `make web` (UI `http://localhost:3000`, health `http://localhost:8000/health`).
 
 ## Config
 
 | File | Purpose |
 |------|---------|
 | `config/universes.yaml` | Tape ETFs/indices, Live header, seed watchlist, valuation floor |
-| `config/fred_series.yaml` | 13 FRED levers + insight templates |
+| `config/fred_series.yaml` | FRED levers + insight templates |
 | `config/polymarket_slugs.yaml` | Odds markets (slugs rotate — edit when a contract expires) |
 | `config/news_queries.yaml` | Google News RSS buckets |
 | `config/catalysts.yaml` | FOMC / CPI / elections (hand-maintained) |
-
-## Next
-
-Day 20 (optional): same Compose on a Pi; restore dump; Outlook job without the Mac.
