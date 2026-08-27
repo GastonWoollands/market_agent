@@ -1,8 +1,16 @@
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from agent.pack import EVENTS_AHEAD_DAYS, sources_from_counts, store_counts
-from api.schemas import OutlookEvent, OutlookNews, OutlookResponse, OutlookSource
+from agent.pack import EVENTS_AHEAD_DAYS, partition_events, sources_from_counts, store_counts
+from api.schemas import (
+    OutlookEvent,
+    OutlookJudgment,
+    OutlookMacro,
+    OutlookNews,
+    OutlookOdds,
+    OutlookResponse,
+    OutlookSource,
+)
 from store.models import EventItem, EvidencePack, NewsItem, OutlookReport
 from store.repos import (
     latest_evidence_pack,
@@ -30,6 +38,9 @@ def build_outlook(
 ) -> OutlookResponse:
     pack_day = pack.as_of if pack else None
     stale = pack is None or (as_of - pack.as_of) > STALE_AFTER
+    payload = pack.pack if pack is not None else {}
+    body = report.body_json if report is not None else {}
+    near, later = _split_events(events, as_of)
     return OutlookResponse(
         as_of=pack_day or as_of,
         stale=stale,
@@ -38,6 +49,17 @@ def build_outlook(
         brief=report.body_md if report else None,
         brief_status=report.status if report else None,
         brief_model=report.model if report else None,
+        headline=_str(body, "headline"),
+        abstract=_str(body, "abstract"),
+        conclusions=_str_list(body, "conclusions"),
+        expect=_str(body, "expect"),
+        macro_md=_str(body, "macro_md"),
+        market_md=_str(body, "market_md"),
+        near_term_md=_str(body, "near_term_md"),
+        facts=_facts(payload.get("facts")),
+        judgment=_judgment(payload.get("judgment")),
+        macro_snapshot=_macro_snapshot(payload.get("macro")),
+        odds=_odds(payload.get("odds")),
         news=[
             OutlookNews(
                 title=item.title,
@@ -48,18 +70,101 @@ def build_outlook(
             )
             for item in news
         ],
-        events=[
-            OutlookEvent(
-                date=item.date,
-                title=item.title,
-                kind=item.kind,
-                ticker=item.ticker,
-                source=item.source,
-            )
-            for item in events
-        ],
+        events=near,
+        events_later=later,
         sources=sources,
     )
+
+
+def _str_list(body: object, key: str) -> list[str]:
+    if not isinstance(body, dict):
+        return []
+    raw = body.get(key)
+    if not isinstance(raw, list):
+        return []
+    return [item for item in raw if isinstance(item, str) and item.strip()]
+
+
+def _judgment(raw: object) -> OutlookJudgment | None:
+    if not isinstance(raw, dict) or not raw:
+        return None
+    try:
+        return OutlookJudgment.model_validate(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _str(body: object, key: str) -> str | None:
+    if not isinstance(body, dict):
+        return None
+    value = body.get(key)
+    return value if isinstance(value, str) and value.strip() else None
+
+
+def _facts(raw: object) -> dict[str, float | None]:
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, float | None] = {}
+    for key, value in raw.items():
+        if value is None:
+            out[str(key)] = None
+        elif isinstance(value, int | float):
+            out[str(key)] = float(value)
+    return out
+
+
+def _macro_snapshot(raw: object) -> list[OutlookMacro]:
+    if not isinstance(raw, list):
+        return []
+    out: list[OutlookMacro] = []
+    for item in raw:
+        if not isinstance(item, dict) or not item.get("series_id"):
+            continue
+        out.append(OutlookMacro.model_validate(item))
+    return out
+
+
+def _odds(raw: object) -> list[OutlookOdds]:
+    if not isinstance(raw, list):
+        return []
+    out: list[OutlookOdds] = []
+    for item in raw:
+        if not isinstance(item, dict) or not item.get("slug"):
+            continue
+        out.append(OutlookOdds.model_validate(item))
+    return out
+
+
+def _split_events(
+    events: list[EventItem], as_of: date
+) -> tuple[list[OutlookEvent], list[OutlookEvent]]:
+    rows = [
+        {
+            "date": item.date.isoformat(),
+            "title": item.title,
+            "kind": item.kind,
+            "ticker": item.ticker,
+            "source": item.source,
+        }
+        for item in events
+    ]
+    near_rows, later_rows = partition_events(rows, as_of)
+    return _event_models(near_rows), _event_models(later_rows)
+
+
+def _event_models(rows: list[dict]) -> list[OutlookEvent]:
+    out: list[OutlookEvent] = []
+    for row in rows:
+        out.append(
+            OutlookEvent(
+                date=date.fromisoformat(str(row["date"])[:10]),
+                title=str(row["title"]),
+                kind=str(row["kind"]),
+                ticker=row.get("ticker"),
+                source=str(row["source"]),
+            )
+        )
+    return out
 
 
 def outlook_from_store(

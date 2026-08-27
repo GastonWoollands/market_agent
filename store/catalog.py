@@ -69,6 +69,11 @@ class FredSeriesItem(BaseModel):
     insight: str | None = None
     watch: list[str] = Field(default_factory=list)
     frequency: str = "daily"
+    region: str = "us"
+    pack_view: str = "level"
+    show_on_live: bool = True
+    spine: bool = False
+    scale: float = 1.0
 
 
 class FredSeriesFile(BaseModel):
@@ -88,6 +93,7 @@ class PolymarketEvent(BaseModel):
     category: str
     show_on_live: bool = True
     notes: str | None = None
+    short_label: str | None = None
 
 
 class PolymarketFile(BaseModel):
@@ -131,6 +137,10 @@ class CatalystsFile(BaseModel):
     timezone: str = "America/New_York"
     fomc: list[CatalystItem] = Field(default_factory=list)
     cpi: list[CatalystItem] = Field(default_factory=list)
+    pce: list[CatalystItem] = Field(default_factory=list)
+    nfp: list[CatalystItem] = Field(default_factory=list)
+    gdp: list[CatalystItem] = Field(default_factory=list)
+    jolts: list[CatalystItem] = Field(default_factory=list)
     other: list[CatalystItem] = Field(default_factory=list)
 
 

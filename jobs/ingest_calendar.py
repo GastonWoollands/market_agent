@@ -19,7 +19,22 @@ log = logging.getLogger("jobs.ingest_calendar")
 JOB_NAME = "ingest_calendar"
 ET = ZoneInfo("America/New_York")
 EARNINGS_DAYS = 14
-YAML_KINDS = {"fomc", "cpi", "election", "other"}
+YAML_KINDS = {
+    "fomc",
+    "cpi",
+    "pce",
+    "nfp",
+    "gdp",
+    "jolts",
+    "election",
+    "central_bank",
+    "other",
+}
+
+
+def _slug_title(title: str) -> str:
+    raw = "".join(ch.lower() if ch.isalnum() else "-" for ch in title)
+    return "-".join(part for part in raw.split("-") if part)[:48]
 
 
 def events_from_yaml(catalog: CatalystsFile) -> list[CalendarEvent]:
@@ -36,21 +51,31 @@ def events_from_yaml(catalog: CatalystsFile) -> list[CalendarEvent]:
                 extra=extra,
             )
         )
-    for item in catalog.cpi:
-        out.append(
-            CalendarEvent(
-                slug=f"yaml:{item.date.isoformat()}:cpi",
-                date=item.date,
-                title=item.title,
-                kind="cpi",
-                source="yaml",
+    for kind, items in (
+        ("cpi", catalog.cpi),
+        ("pce", catalog.pce),
+        ("nfp", catalog.nfp),
+        ("gdp", catalog.gdp),
+        ("jolts", catalog.jolts),
+    ):
+        for item in items:
+            out.append(
+                CalendarEvent(
+                    slug=f"yaml:{item.date.isoformat()}:{kind}",
+                    date=item.date,
+                    title=item.title,
+                    kind=kind,
+                    source="yaml",
+                )
             )
-        )
     for item in catalog.other:
         kind = item.type if item.type in YAML_KINDS else "other"
+        slug_kind = kind
+        if kind == "central_bank":
+            slug_kind = f"{kind}:{_slug_title(item.title)}"
         out.append(
             CalendarEvent(
-                slug=f"yaml:{item.date.isoformat()}:{kind}",
+                slug=f"yaml:{item.date.isoformat()}:{slug_kind}",
                 date=item.date,
                 title=item.title,
                 kind=kind,

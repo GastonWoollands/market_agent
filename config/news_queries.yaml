@@ -2,28 +2,22 @@
 # URL shape: https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en
 
 buckets:
-  - category: sector
-    queries:
-      - "US sector rotation stock market"
-      - "S&P 500 sectors XLK XLE XLF"
-
   - category: rates
     queries:
-      - "Treasury yields 10-year"
-      - "Federal Reserve FOMC rates"
-
-  - category: commodities
-    queries:
-      - "WTI crude oil price"
-      - "gold price dollar"
+      - "US Treasury yields 10-year FOMC"
+      - "Federal Reserve interest rate decision"
 
   - category: inflation
     queries:
-      - "US CPI inflation PCE"
+      - "US CPI inflation PCE price index"
 
   - category: growth
     queries:
-      - "US jobs payrolls unemployment GDP"
+      - "US jobs payrolls unemployment claims"
+
+  - category: fiscal
+    queries:
+      - "US federal debt Treasury deficit"
 
   - category: credit
     queries:
@@ -31,12 +25,33 @@ buckets:
 
   - category: fx
     queries:
-      - "US dollar index DXY"
+      - "US dollar index DXY euro yen sterling"
+
+  - category: commodities
+    queries:
+      - "WTI crude oil gold price"
+
+  - category: sector
+    queries:
+      - "US sector rotation stock market"
+      - "S&P 500 sectors XLK XLE XLF"
 
   - category: thematic
     queries:
       - "AI semiconductors software stocks"
 
-  - category: single_names
+  - category: ecb
     queries:
-      - "S&P 500 stock movers earnings"
+      - "ECB interest rate Lagarde euro area inflation"
+
+  - category: boe
+    queries:
+      - "Bank of England interest rate UK inflation"
+
+  - category: boj
+    queries:
+      - "Bank of Japan interest rate yen"
+
+  - category: geo
+    queries:
+      - "geopolitics tariffs oil supply US markets"

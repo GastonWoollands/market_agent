@@ -251,7 +251,8 @@ class EventItem(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "kind IN ('fomc', 'cpi', 'earnings', 'election', 'other')",
+            "kind IN ('fomc', 'cpi', 'pce', 'nfp', 'gdp', 'jolts', 'earnings', "
+            "'election', 'central_bank', 'other')",
             name="ck_event_item_kind",
         ),
     )

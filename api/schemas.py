@@ -211,6 +211,72 @@ class OutlookEvent(BaseModel):
     source: str
 
 
+class OutlookMacro(BaseModel):
+    series_id: str
+    name: str | None = None
+    unit: str | None = None
+    category: str | None = None
+    region: str | None = None
+    frequency: str | None = None
+    pack_view: str | None = None
+    as_of: str | None = None
+    lag_days: int | None = None
+    stale: bool = False
+    value: float | None = None
+    yoy_pct: float | None = None
+    mom_pct: float | None = None
+    d1_bp: float | None = None
+    w1_bp: float | None = None
+    m1_bp: float | None = None
+    mom_change: float | None = None
+    print_change: float | None = None
+    change_label: str | None = None
+    spine: bool = False
+    d1: float | None = None
+    w1: float | None = None
+    m1: float | None = None
+
+
+class OutlookOddsOutcome(BaseModel):
+    label: str
+    implied_yes: float
+
+
+class OutlookOdds(BaseModel):
+    slug: str
+    label: str | None = None
+    category: str | None = None
+    implied_yes: float | None = None
+    as_of: str | None = None
+    outcomes: list[OutlookOddsOutcome] = Field(default_factory=list)
+    top_outcome: str | None = None
+    top_implied_yes: float | None = None
+
+
+class OutlookTension(BaseModel):
+    left: str
+    right: str
+    note: str
+
+
+class OutlookWatch(BaseModel):
+    date: str | None = None
+    title: str | None = None
+    kind: str | None = None
+    last_print: str | None = None
+    why: str | None = None
+
+
+class OutlookJudgment(BaseModel):
+    takeaways: list[str] = Field(default_factory=list)
+    tensions: list[OutlookTension] = Field(default_factory=list)
+    regime: dict[str, str | None] = Field(default_factory=dict)
+    watch: list[OutlookWatch] = Field(default_factory=list)
+    invalidation: str | None = None
+    odds_read: str | None = None
+    abstract: str | None = None
+
+
 class OutlookResponse(BaseModel):
     as_of: date | None = None
     stale: bool = True
@@ -219,8 +285,20 @@ class OutlookResponse(BaseModel):
     brief: str | None = None
     brief_status: str | None = None
     brief_model: str | None = None
+    headline: str | None = None
+    abstract: str | None = None
+    conclusions: list[str] = Field(default_factory=list)
+    expect: str | None = None
+    macro_md: str | None = None
+    market_md: str | None = None
+    near_term_md: str | None = None
+    facts: dict[str, float | None] = Field(default_factory=dict)
+    judgment: OutlookJudgment | None = None
+    macro_snapshot: list[OutlookMacro] = Field(default_factory=list)
+    odds: list[OutlookOdds] = Field(default_factory=list)
     news: list[OutlookNews] = Field(default_factory=list)
     events: list[OutlookEvent] = Field(default_factory=list)
+    events_later: list[OutlookEvent] = Field(default_factory=list)
     sources: list[OutlookSource] = Field(default_factory=list)
 
 

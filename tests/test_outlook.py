@@ -1,6 +1,6 @@
 from datetime import UTC, date, datetime
 
-from agent.pack import assemble_pack, pack_hash, source_dicts, sources_from_counts
+from agent.pack import assemble_pack, pack_hash, partition_events, source_dicts, sources_from_counts
 from api.outlook import build_outlook
 from api.schemas import OutlookSource
 from store.models import EventItem, NewsItem, OutlookReport
@@ -13,6 +13,32 @@ class _Job:
         self.started_at = datetime(2026, 8, 18, 11, 0, tzinfo=UTC)
         self.finished_at = datetime(2026, 8, 18, 11, 1, tzinfo=UTC)
         self.error = None
+
+
+def test_partition_events_keeps_next_cpi_outside_10d() -> None:
+    as_of = date(2026, 8, 27)
+    rows = [
+        {"date": "2026-09-01", "title": "JOLTS (July)", "kind": "jolts", "source": "yaml"},
+        {
+            "date": "2026-09-04",
+            "title": "Employment Situation (August)",
+            "kind": "nfp",
+            "source": "yaml",
+        },
+        {"date": "2026-09-11", "title": "CPI (August)", "kind": "cpi", "source": "yaml"},
+        {"date": "2026-09-16", "title": "FOMC decision + SEP", "kind": "fomc", "source": "yaml"},
+        {
+            "date": "2026-10-02",
+            "title": "Employment Situation (September)",
+            "kind": "nfp",
+            "source": "yaml",
+        },
+    ]
+    near, later = partition_events(rows, as_of)
+    kinds = [row["kind"] for row in near]
+    assert kinds == ["jolts", "nfp", "cpi", "fomc"]
+    assert later[0]["kind"] == "nfp"
+    assert later[0]["date"] == "2026-10-02"
 
 
 def test_pack_hash_is_stable_and_sources_use_table_counts() -> None:
@@ -86,6 +112,7 @@ def test_build_outlook_sources_and_stale_without_pack() -> None:
     assert payload.brief is None
     assert payload.news[0].publisher == "Reuters"
     assert payload.events[0].kind == "fomc"
+    assert payload.events_later == []
     assert payload.sources[0].vendor == "yahoo"
     assert payload.sources[0].rows == 10
 

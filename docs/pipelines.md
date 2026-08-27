@@ -2,7 +2,7 @@
 
 How data gets into Postgres, when to run each job, and how to serve the UI.
 
-Product and schema live in [NORTHSTAR.md](NORTHSTAR.md). This file is the operator guide.
+Product contract: [northstar.md](northstar.md). As-built map: [system.md](system.md). This file is the operator guide.
 
 Jobs are the only writers of market data. The API and UI never call Yahoo, FRED, SEC, or the LLM. There is no scheduler yet — you run CLIs (or `make` targets). Times below are **America/New_York**, the intended cadence if you later wire `cron` / `launchd`.
 
@@ -78,7 +78,7 @@ Each step needs the ones above it. Skip a block only if you do not care about th
 |---|---------|-----|
 | 1 | `python -m jobs.seed_tape` | Instruments + `tape` / `watchlist` from `config/universes.yaml` |
 | 2 | `python -m jobs.ingest_yahoo` | 5y daily bars + delayed quotes for the tape (~25 names) |
-| 3 | `python -m jobs.ingest_fred` | 13 macro series (needs `FRED_API_KEY`) |
+| 3 | `python -m jobs.ingest_fred` | FRED catalog (US spine + global context; needs `FRED_API_KEY`) |
 | 4 | `python -m jobs.ingest_polymarket` | Fed / inflation / recession odds |
 
 Live tab works after this. Required tape names: **SPY**, **XLK**. Required FRED series: **DGS10**.
@@ -96,7 +96,7 @@ No vendor call. Re-run after a fresh Yahoo daily ingest.
 | # | Command | Why |
 |---|---------|-----|
 | 6 | `python -m jobs.ingest_news` | Google News RSS (`config/news_queries.yaml`) |
-| 7 | `python -m jobs.ingest_calendar` | YAML catalysts + Finnhub watchlist earnings |
+| 7 | `python -m jobs.ingest_calendar` | YAML catalysts (FOMC/CPI/PCE/NFP/GDP/JOLTS/CBs) + Finnhub watchlist earnings |
 | 8 | `python -m jobs.build_pack` | JSON evidence pack from **Postgres only** |
 | 9 | `python -m jobs.generate_outlook` | Brief from that pack |
 
@@ -242,10 +242,10 @@ Catalogs you may edit without code:
 | File | Used by |
 |------|---------|
 | `config/universes.yaml` | seed, Yahoo universes, valuation floor |
-| `config/fred_series.yaml` | FRED ingest + Live insight templates |
+| `config/fred_series.yaml` | FRED ingest + Live insight templates + Outlook pack views |
 | `config/polymarket_slugs.yaml` | odds (edit when a contract expires) |
 | `config/news_queries.yaml` | news ingest |
-| `config/catalysts.yaml` | FOMC / CPI / elections (hand-maintained) |
+| `config/catalysts.yaml` | FOMC / CPI / PCE / NFP / GDP / JOLTS / CBs / elections (hand-maintained) |
 
 ---
 
