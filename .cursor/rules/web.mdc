@@ -1,0 +1,15 @@
+---
+description: Next.js terminal UI — data from FastAPI only, no vendor calls in the browser
+globs: web/**/*.ts, web/**/*.tsx
+alwaysApply: false
+---
+
+# Web
+
+Dark dense terminal. Data comes from FastAPI. Charts: TradingView embed; Recharts/SVG for sparklines/RRG.
+
+- Server components fetch via `API_URL` helpers in `web/lib/api.ts` (`fetchLive`, etc.).
+- Client mutations (watchlist) use `BROWSER_API` (`/backend`), never `localhost:8000`.
+- Add types + fetchers in `web/lib/api.ts` before new UI. Match `api/schemas.py`.
+- Green/red only for signed changes. No vendor HTTP from the browser.
+- Canonical page: `web/app/page.tsx` → `web/components/LiveTape.tsx`.

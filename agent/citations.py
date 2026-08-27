@@ -91,13 +91,17 @@ def _numbers(value: Any) -> list[float]:
 
 
 def _cited_number(value: float, allowed: list[float]) -> bool:
-    for item in allowed:
-        if abs(item - value) < 1e-9:
-            return True
-        if round(item, 1) == round(value, 1):
-            return True
-        if round(item, 2) == round(value, 2):
-            return True
-        if round(item, 4) == round(value, 4):
-            return True
-    return False
+    if any(_number_matches(value, item) for item in allowed):
+        return True
+    # 0-1 pack values written as percents (implied_yes 0.8525 -> 85.25%).
+    return any(_number_matches(value / 100.0, item) for item in allowed)
+
+
+def _number_matches(value: float, item: float) -> bool:
+    if abs(item - value) < 1e-9:
+        return True
+    if round(item, 1) == round(value, 1):
+        return True
+    if round(item, 2) == round(value, 2):
+        return True
+    return round(item, 4) == round(value, 4)
