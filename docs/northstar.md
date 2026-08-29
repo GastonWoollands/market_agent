@@ -55,7 +55,7 @@ Do not implement a non-goal because it appeared in an older plan. Change this se
 
 | Tab | Job |
 |-----|-----|
-| **Live** | Indices, sector tape, macro levers, Polymarket odds, Risk-On pill, drill-down chart |
+| **Live** | Regime header (index, breadth, vol, duration, dollar, credit), today events, Risk-On factors, outlier/co-move chips, stored Outlook slice (`headline` / `live_md` / `expect`), sector tape, Polymarket odds, existing FRED drill-down chart |
 | **Outlook** | Structured brief (macro / market / near-term), numeric snapshot from the pack, news tape, near calendar, **sources freshness table** |
 | **Dynamics** | RRG, indexed relative performance, sector table, correlation, lead-lag |
 | **Valuation** | EV/EBITDA vs own 5y range, industry, growth × re-rating |
@@ -186,18 +186,21 @@ Sleeves in `analytics/scores.py`: Cheap 0.30, Quality 0.25, Change 0.20, Setup 0
 
 **Macro pack:** Python turns stored FRED history into writer-facing rows (bp changes, CPI/PCE YoY/MoM, payrolls change, named facts such as 2s10s and funds-vs-2Y). `analytics/macro_pack.py`. The writer never computes these.
 
+**Outliers / co-moves:** trailing z of 1-day changes across a small stored universe (yields, VIX, dollar, yen, credit, SMH, IWM, XLK/XLU). Ranked chips plus jointly extreme sets with numbers and an optional writer-only `hint`. No causal verbs. `analytics/drivers.py`. The writer never computes these z-scores.
+
 ---
 
 ## 10. AI layer
 
 Unattended local = `cron` / `launchd` → Python job → Anthropic or Gemini (official SDKs). Template fallback when the API is down. No in-process scheduler. Ollama can wait.
 
-**Evidence pack** (Python, stored JSONB) includes index/sector returns, a precomputed macro snapshot (levels, bp/YoY deltas, `lag_days`, named facts), a `judgment` object (takeaways, tensions, watch, invalidation), Risk-On, RRG, labeled Polymarket odds, stored headlines (capped per bucket), near vs later events, watchlist outliers, top opportunity rows, and a `sources[]` freshness table. `agent/pack.py`.
+**Evidence pack** (Python, stored JSONB) includes index/sector returns, a precomputed macro snapshot (levels, bp/YoY deltas, `lag_days`, named facts), a `judgment` object (takeaways, tensions, watch, invalidation, outliers, co_moves), Risk-On, RRG, labeled Polymarket odds, stored headlines (capped per bucket), near vs later events, watchlist outliers, top opportunity rows, and a `sources[]` freshness table. `agent/pack.py`.
 
 **Generation rules**
 
-- Temperature low; structured JSON out: `{headline, abstract, conclusions, expect, macro_md, market_md, near_term_md}`
-- System prompt: *only narrate pack fields; prefer judgment; if a field is missing, say unavailable; not a trading signal; use pack YoY/bp, never raw CPI/PCE indexes as percents*
+- Temperature low; structured JSON out: `{headline, abstract, conclusions, expect, live_md, macro_md, market_md, near_term_md}`
+- `live_md` is the short Live slice (2–4 sentences). Outlook keeps the long sections. No second writer job and no Live-time LLM.
+- System prompt: *only narrate pack fields; prefer judgment (including co_moves / outliers / watch); if a field is missing, say unavailable; not a trading signal; use pack YoY/bp, never raw CPI/PCE indexes as percents; do not invent a mechanism those fields do not support*
 - Post-check: every ticker and every `%` / yield in the output must appear in the pack; CPI YoY and weekly claims must be covered when present — otherwise fail the job and keep yesterday’s report (`agent/citations.py`)
 - Prompt version stored on the row
 - Opportunities: one memo schema `{why_scored, what_10q_changed, invalidation, caveats}` per top name

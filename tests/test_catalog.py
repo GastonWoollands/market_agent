@@ -9,7 +9,7 @@ def test_universes_yaml_loads() -> None:
     assert catalog.watchlist.instruments
     assert {item.ticker for item in catalog.watchlist.instruments} >= {"NVDA", "SPY"}
     header = [item.ticker for item in catalog.live.header]
-    assert header == ["^GSPC", "QQQ", "^RUT", "^DJI", "USO", "GLD"]
+    assert header == ["^GSPC", "IWM", "^VIX", "TLT", "UUP", "HYG"]
     assert "SPY" not in header
     assert catalog.live.header[0].label == "S&P 500"
 
@@ -33,6 +33,8 @@ def test_fred_series_yaml_has_ten_year() -> None:
     icsa = next(item for item in catalog.series if item.id == "ICSA")
     assert icsa.scale == 0.001
     assert icsa.spine is True
+    yen = next(item for item in catalog.series if item.id == "DEXJPUS")
+    assert yen.show_on_live is True
     assert any(item.id == "IRLTLT01JPM156N" and not item.show_on_live for item in catalog.series)
 
 

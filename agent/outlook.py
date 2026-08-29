@@ -31,8 +31,8 @@ def user_prompt(pack: dict[str, Any]) -> str:
     blob = json.dumps(writer_pack(pack), default=str, sort_keys=True)
     return (
         "Write the Outlook from this compact evidence pack JSON. "
-        "Return headline, abstract, conclusions, expect, macro_md, market_md, "
-        "and near_term_md.\n\n"
+        "Return headline, abstract, conclusions, expect, live_md, macro_md, "
+        "market_md, and near_term_md.\n\n"
         f"{blob}"
     )
 
@@ -44,6 +44,7 @@ def render_markdown(brief: OutlookBrief) -> str:
         f"## Abstract\n{brief.abstract.strip()}\n\n"
         f"## Conclusions\n{bullets}\n\n"
         f"## Expect\n{brief.expect.strip()}\n\n"
+        f"## Live\n{brief.live_md.strip()}\n\n"
         f"## Macro\n{brief.macro_md.strip()}\n\n"
         f"## Market\n{brief.market_md.strip()}\n\n"
         f"## Near term\n{brief.near_term_md.strip()}"
@@ -96,10 +97,46 @@ def template_brief(pack: dict[str, Any]) -> OutlookBrief:
         abstract=abstract or "unavailable",
         conclusions=takeaways or [macro or "unavailable"],
         expect=expect or "unavailable",
+        live_md=_live_md(pack, expect),
         macro_md=macro or "unavailable",
         market_md=market or "unavailable",
         near_term_md=near or "unavailable",
     )
+
+
+def _live_md(pack: dict[str, Any], expect: str) -> str:
+    judgment = pack.get("judgment") if isinstance(pack.get("judgment"), dict) else {}
+    parts: list[str] = []
+    watch = judgment.get("watch") or []
+    if isinstance(watch, list) and watch and isinstance(watch[0], dict):
+        title = watch[0].get("title")
+        day = watch[0].get("date")
+        last = watch[0].get("last_print")
+        if title:
+            bit = str(title)
+            if day:
+                bit = f"{bit} {day}"
+            if last:
+                bit = f"{bit}; {last}"
+            parts.append(f"{bit}.")
+    co_moves = judgment.get("co_moves") or []
+    if isinstance(co_moves, list) and co_moves and isinstance(co_moves[0], dict):
+        ids = ",".join(str(item) for item in (co_moves[0].get("ids") or [])[:3])
+        changes = co_moves[0].get("changes") or {}
+        if ids:
+            change_bit = " ".join(f"{key} {value}" for key, value in list(changes.items())[:3])
+            parts.append(f"co_moves {ids} {change_bit}.".strip())
+    outliers = judgment.get("outliers") or []
+    if not parts and isinstance(outliers, list) and outliers and isinstance(outliers[0], dict):
+        row = outliers[0]
+        parts.append(f"{row.get('id')} 1d {row.get('change')} z {row.get('z')}.")
+    takeaways = judgment.get("takeaways") or []
+    if isinstance(takeaways, list) and takeaways:
+        parts.append(str(takeaways[0]))
+    if expect:
+        parts.append(expect)
+    text = " ".join(part for part in parts if part).strip()
+    return text or "unavailable"
 
 
 def narrate(pack: dict[str, Any], *, client: AgentClient | None) -> WrittenBrief:

@@ -1,4 +1,5 @@
 from datetime import UTC, date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,12 +7,25 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from agent.pack import EVENTS_AHEAD_DAYS, partition_events
 from analytics.corr import DEFAULT_LAG, DEFAULT_LEAD
+from analytics.drivers import MACRO_IDS as DRIVER_MACRO_IDS
+from analytics.drivers import TAPE_IDS as DRIVER_TAPE_IDS
+from analytics.drivers import as_dicts, rank_drivers
 from analytics.risk_on import CURVE_SERIES, RISK_ON_TICKERS, VIX_SERIES
 from analytics.rrg import BENCHMARK, TRAIL_WEEKS
 from api.dynamics import HISTORY_DAYS as DYNAMICS_LOOKBACK
 from api.dynamics import build_dynamics, stored_from_rows
-from api.live import HISTORY_DAYS, build_live, resolve_lever, risk_on_from_store
+from api.live import (
+    HISTORY_DAYS,
+    build_live,
+    co_move_models,
+    live_brief,
+    live_event_models,
+    outlier_models,
+    resolve_lever,
+    risk_on_from_store,
+)
 from api.opportunities import DEFAULT_SORT as OPP_SORT
 from api.opportunities import STALE_AFTER_DAYS as OPP_STALE
 from api.opportunities import build_opportunities
@@ -59,6 +73,7 @@ from store.repos import (
     latest_jobs,
     latest_odds,
     latest_opportunity_rows,
+    latest_outlook_report,
     latest_return_stats,
     latest_rrg_points,
     latest_valuation_rows,
@@ -70,8 +85,10 @@ from store.repos import (
     table_count,
     universe_by_name,
     universe_size,
+    upcoming_events,
 )
-from store.settings import settings
+
+ET = ZoneInfo("America/New_York")
 
 app = FastAPI(title="Market Agent", version="0.1.0")
 
@@ -135,11 +152,34 @@ def live(lever: str = "DGS10", db: Session = Depends(get_db)) -> LiveResponse | 
     try:
         fred = load_fred_series()
         chosen = resolve_lever(lever, fred)
-        start = date.today() - timedelta(days=HISTORY_DAYS)
+        today = datetime.now(ET).date()
+        start = today - timedelta(days=HISTORY_DAYS)
         tape_rows = live_tape_rows(db)
+        event_rows = [
+            {
+                "date": item.date.isoformat(),
+                "title": item.title,
+                "kind": item.kind,
+                "ticker": item.ticker,
+                "source": item.source,
+            }
+            for item in upcoming_events(
+                db, start=today, end=today + timedelta(days=EVENTS_AHEAD_DAYS)
+            )
+        ]
+        near, _later = partition_events(event_rows, today, near_days=0)
+        driver_series: dict[str, list[tuple[date, float]]] = {}
+        for ticker, points in closes_for_tickers(db, DRIVER_TAPE_IDS, start=start).items():
+            driver_series[ticker] = [(day, float(value)) for day, value in points]
+        for series_id in DRIVER_MACRO_IDS:
+            driver_series[series_id] = [
+                (day, float(value)) for day, value in macro_observations(db, series_id, start=start)
+            ]
+        outliers, co_moves = as_dicts(*rank_drivers(driver_series))
         return build_live(
             tape_rows,
             load_universes(),
+            now=datetime.now(ET),
             macro_rows=live_macro_rows(db),
             fred=fred,
             lever=chosen,
@@ -148,10 +188,15 @@ def live(lever: str = "DGS10", db: Session = Depends(get_db)) -> LiveResponse | 
                 closes_for_tickers(db, RISK_ON_TICKERS, start=start),
                 macro_observations(db, VIX_SERIES, start=start),
                 macro_observations(db, CURVE_SERIES, start=start),
-                now=date.today(),
+                now=today,
             ),
             odds_rows=latest_odds(db),
             polymarket=load_polymarket(),
+            events=live_event_models(near),
+            brief=live_brief(latest_outlook_report(db, today)),
+            outliers=outlier_models(outliers),
+            co_moves=co_move_models(co_moves),
+            watchlist_rows=live_tape_rows(db, "watchlist"),
         )
     except Exception:
         payload = LiveResponse(stale=True)

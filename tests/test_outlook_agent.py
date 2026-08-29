@@ -42,6 +42,7 @@ def _cited_brief() -> OutlookBrief:
         abstract="DGS10 4.68. CPIAUCSL yoy_pct 2.7. ICSA weekly print_change -4.0.",
         conclusions=["CPIAUCSL yoy_pct 2.7.", "ICSA weekly print_change -4.0."],
         expect="FOMC decision + SEP on 2026-09-16.",
+        live_md="FOMC decision + SEP on 2026-09-16. DGS10 4.68.",
         macro_md="DGS10 4.68. CPIAUCSL yoy_pct 2.7. ICSA weekly print_change -4.0.",
         market_md="^GSPC 5600.0 (-0.12%). Risk-On 0.4. XLK leading.",
         near_term_md="FOMC decision + SEP on 2026-09-16.",
@@ -98,6 +99,7 @@ def test_template_brief_uses_only_pack_numbers() -> None:
     assert "CPIAUCSL yoy_pct" in brief.macro_md
     assert "weekly print_change" in brief.macro_md
     assert "0.4" in brief.market_md
+    assert brief.live_md
     assert "TSLA" not in text
 
 
@@ -115,7 +117,7 @@ def test_narrate_keeps_cited_agent_output() -> None:
     written = narrate(pack, client=_Client())
     assert written.status == "ok"
     assert written.model == "gemini/gemini-2.5-flash"
-    assert written.prompt_version == "outlook-v6"
+    assert written.prompt_version == "outlook-v7"
     assert "## Abstract" in written.body_md
     assert written.body_json["abstract"]
 
@@ -134,6 +136,7 @@ def test_narrate_keeps_implied_yes_percent() -> None:
                 abstract="DGS10 4.68. CPIAUCSL yoy_pct 2.7. ICSA weekly print_change -4.0.",
                 conclusions=["CPIAUCSL yoy_pct 2.7."],
                 expect="unavailable",
+                live_md="DGS10 4.68. CPIAUCSL yoy_pct 2.7.",
                 macro_md="DGS10 4.68. CPIAUCSL yoy_pct 2.7. ICSA weekly print_change -4.0.",
                 market_md="^GSPC 5600.0 (-0.12%). Cuts implied_yes 85.25%.",
                 near_term_md="unavailable",
@@ -157,6 +160,7 @@ def test_narrate_drops_uncited_agent_output(caplog: pytest.LogCaptureFixture) ->
                 abstract="Buy TSLA into 99.9%.",
                 conclusions=["Buy TSLA into 99.9%."],
                 expect="unavailable",
+                live_md="Buy TSLA into 99.9%.",
                 macro_md="Buy TSLA into 99.9%.",
                 market_md="unavailable",
                 near_term_md="unavailable",
@@ -193,7 +197,7 @@ def test_brief_from_text_strips_fences() -> None:
     brief = brief_from_text(
         '```json\n{"headline": "Tape", "abstract": "^GSPC only.", '
         '"conclusions": ["^GSPC only."], "expect": "unavailable", '
-        '"macro_md": "^GSPC only.", "market_md": "unavailable", '
+        '"live_md": "^GSPC only.", "macro_md": "^GSPC only.", "market_md": "unavailable", '
         '"near_term_md": "unavailable"}\n```'
     )
     assert brief.headline == "Tape"

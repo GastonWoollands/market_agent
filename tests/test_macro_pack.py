@@ -113,3 +113,30 @@ def test_judgment_names_be_vs_cpi_and_watch_print() -> None:
     assert judgment["regime"]["policy"] == "hold_base"
     assert any("3.3" in item for item in judgment["takeaways"])
     assert judgment["watch"][0]["last_print"] == "PAYEMS print_change -23.0"
+
+
+def test_judgment_maps_boj_to_yen_and_ecb_to_deposit() -> None:
+    judgment = build_judgment(
+        facts={},
+        macro=[
+            {"series_id": "DEXJPUS", "value": 148.2},
+            {"series_id": "ECBDFR", "value": 2.0},
+        ],
+        odds=[],
+        events=[
+            {"date": "2026-09-18", "title": "BoJ decision", "kind": "central_bank"},
+            {"date": "2026-09-10", "title": "ECB decision", "kind": "central_bank"},
+        ],
+        risk_on=None,
+        co_moves=[
+            {
+                "ids": ["DEXJPUS", "SMH"],
+                "window": "1d",
+                "changes": {"DEXJPUS": -1.2, "SMH": -2.1},
+                "hint": "fx_jpy",
+            }
+        ],
+    )
+    assert judgment["watch"][0]["last_print"] == "DEXJPUS value 148.2"
+    assert judgment["watch"][1]["last_print"] == "ECBDFR value 2.0"
+    assert judgment["co_moves"][0]["hint"] == "fx_jpy"

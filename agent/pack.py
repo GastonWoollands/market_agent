@@ -11,6 +11,9 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from analytics.drivers import MACRO_IDS as DRIVER_MACRO_IDS
+from analytics.drivers import TAPE_IDS as DRIVER_TAPE_IDS
+from analytics.drivers import as_dicts, rank_drivers
 from analytics.macro_pack import named_facts, series_row
 from analytics.outlook_judgment import build_judgment
 from analytics.risk_on import (
@@ -152,6 +155,7 @@ def assemble_pack(
     facts: dict[str, Any] | None = None,
     events_later: list[dict[str, Any]] | None = None,
     judgment: dict[str, Any] | None = None,
+    drivers: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     return {
         "as_of": as_of.isoformat(),
@@ -167,6 +171,7 @@ def assemble_pack(
         "events": events,
         "events_later": events_later or [],
         "watchlist": watchlist,
+        "drivers": drivers or [],
         "opportunities": [],
         "sources": sources,
     }
@@ -237,6 +242,8 @@ def pack_from_store(session: Session, *, as_of: date) -> dict[str, Any]:
     sources = source_dicts(sources_from_counts(latest_jobs(session), store_counts(session)))
     risk_on = _risk_on(session, as_of)
     facts = named_facts(macro)
+    outliers, co_moves = as_dicts(*rank_drivers(_driver_series(session, as_of)))
+    drivers = [_quote_dict(tape[ticker]) for ticker in DRIVER_TAPE_IDS if ticker in tape]
     return assemble_pack(
         as_of=as_of,
         header=header,
@@ -250,14 +257,27 @@ def pack_from_store(session: Session, *, as_of: date) -> dict[str, Any]:
         sources=sources,
         facts=facts,
         events_later=events_later,
+        drivers=drivers,
         judgment=build_judgment(
             facts=facts,
             macro=macro,
             odds=odds,
             events=events,
             risk_on=risk_on,
+            outliers=outliers,
+            co_moves=co_moves,
         ),
     )
+
+
+def _driver_series(session: Session, as_of: date) -> dict[str, list[tuple[date, float]]]:
+    start = as_of - timedelta(days=MACRO_HISTORY_DAYS)
+    out: dict[str, list[tuple[date, float]]] = {}
+    for ticker, points in closes_for_tickers(session, DRIVER_TAPE_IDS, start=start).items():
+        out[ticker] = [(day, float(value)) for day, value in points]
+    for series_id in DRIVER_MACRO_IDS:
+        out[series_id] = _macro_floats(session, series_id, start)
+    return out
 
 
 def _quote_dict(row: Any) -> dict[str, Any]:
@@ -341,16 +361,21 @@ WRITER_SERIES = frozenset(
         "GFDEGDQ188S",
         "BAMLH0A0HYM2",
         "BAMLC0A0CM",
+        "DEXJPUS",
+        "VIXCLS",
+        "DTWEXBGS",
     }
 )
+STALE_FOREIGN_LAG = 60
 
 
 def writer_pack(pack: dict[str, Any]) -> dict[str, Any]:
     macro = [row for row in pack.get("macro") or [] if isinstance(row, dict)]
+    extra = _writer_extra_ids(pack)
     spine = [
         row
         for row in macro
-        if row.get("spine") or row.get("series_id") in WRITER_SERIES
+        if _keep_writer_macro(row, extra)
     ]
     return {
         "as_of": pack.get("as_of"),
@@ -362,8 +387,33 @@ def writer_pack(pack: dict[str, Any]) -> dict[str, Any]:
         "risk_on": pack.get("risk_on"),
         "rrg": pack.get("rrg") or [],
         "header": pack.get("header") or [],
+        "drivers": pack.get("drivers") or [],
         "news": (pack.get("news") or [])[:5],
     }
+
+
+def _writer_extra_ids(pack: dict[str, Any]) -> set[str]:
+    extra: set[str] = set()
+    judgment = pack.get("judgment") if isinstance(pack.get("judgment"), dict) else {}
+    for item in judgment.get("outliers") or []:
+        if isinstance(item, dict) and item.get("id"):
+            extra.add(str(item["id"]))
+    for item in judgment.get("co_moves") or []:
+        if not isinstance(item, dict):
+            continue
+        extra.update(str(name) for name in (item.get("ids") or []) if name)
+    return extra
+
+
+def _keep_writer_macro(row: dict[str, Any], extra: set[str]) -> bool:
+    series_id = str(row.get("series_id") or "")
+    if row.get("spine") or series_id in WRITER_SERIES or series_id in extra:
+        lag = row.get("lag_days")
+        foreign = row.get("region") not in (None, "us")
+        if foreign and isinstance(lag, int) and lag > STALE_FOREIGN_LAG:
+            return False
+        return True
+    return False
 
 
 def _odds_outcomes(raw: dict[str, Any] | None, fallback: str) -> list[dict[str, Any]]:

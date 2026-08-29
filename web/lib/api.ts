@@ -43,6 +43,8 @@ export type LiveQuote = {
   role: string | null;
   price: number | null;
   change_pct: number | null;
+  change_kind?: string | null;
+  gap_pct?: number | null;
   market_state: string | null;
   as_of: string | null;
 };
@@ -112,6 +114,36 @@ export type LiveOdds = {
   outcomes: LiveOddsOutcome[];
 };
 
+export type LiveEvent = {
+  date: string;
+  title: string;
+  kind: string;
+  ticker: string | null;
+  source: string;
+};
+
+export type LiveBrief = {
+  headline: string | null;
+  live_md: string | null;
+  expect: string | null;
+  as_of: string | null;
+  status: string | null;
+};
+
+export type LiveOutlier = {
+  id: string;
+  window: string;
+  change: number | null;
+  z: number | null;
+};
+
+export type LiveCoMove = {
+  ids: string[];
+  window: string;
+  changes: Record<string, number>;
+  hint: string | null;
+};
+
 export type LiveTape = {
   as_of: string | null;
   market_state: string | null;
@@ -122,6 +154,11 @@ export type LiveTape = {
   drilldown: LiveDrilldown | null;
   risk_on: LiveRiskOn | null;
   odds: LiveOdds[];
+  events?: LiveEvent[];
+  brief?: LiveBrief | null;
+  outliers?: LiveOutlier[];
+  co_moves?: LiveCoMove[];
+  watchlist_outliers?: LiveQuote[];
 };
 
 export async function fetchHealth(): Promise<Health | null> {
@@ -338,6 +375,7 @@ export type OutlookTape = {
   abstract: string | null;
   conclusions: string[];
   expect: string | null;
+  live_md?: string | null;
   macro_md: string | null;
   market_md: string | null;
   near_term_md: string | null;

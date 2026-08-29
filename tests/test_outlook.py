@@ -1,6 +1,13 @@
 from datetime import UTC, date, datetime
 
-from agent.pack import assemble_pack, pack_hash, partition_events, source_dicts, sources_from_counts
+from agent.pack import (
+    assemble_pack,
+    pack_hash,
+    partition_events,
+    source_dicts,
+    sources_from_counts,
+    writer_pack,
+)
 from api.outlook import build_outlook
 from api.schemas import OutlookSource
 from store.models import EventItem, NewsItem, OutlookReport
@@ -139,3 +146,42 @@ def test_build_outlook_attaches_stored_brief() -> None:
     assert payload.brief == "Tape. DGS10 4.68%."
     assert payload.brief_status == "ok"
     assert payload.brief_model == "gemini/gemini-2.5-flash"
+
+
+def test_writer_pack_keeps_yen_when_fresh_and_drops_lagged_jgb() -> None:
+    payload = assemble_pack(
+        as_of=date(2026, 8, 18),
+        header=[],
+        movers=[],
+        macro=[
+            {
+                "series_id": "DEXJPUS",
+                "value": 148.2,
+                "region": "jp",
+                "lag_days": 1,
+            },
+            {
+                "series_id": "IRLTLT01JPM156N",
+                "value": 1.1,
+                "region": "jp",
+                "lag_days": 80,
+            },
+            {"series_id": "DGS10", "value": 4.68, "spine": True, "region": "us"},
+        ],
+        risk_on=None,
+        odds=[],
+        news=[],
+        events=[],
+        watchlist=[],
+        sources=[],
+        drivers=[{"ticker": "SMH", "change_pct": -2.1}],
+        judgment={
+            "outliers": [{"id": "DEXJPUS", "window": "1d", "change": -1.2, "z": 2.1}],
+            "co_moves": [],
+        },
+    )
+    compact = writer_pack(payload)
+    ids = {row["series_id"] for row in compact["macro"]}
+    assert "DEXJPUS" in ids
+    assert "IRLTLT01JPM156N" not in ids
+    assert compact["drivers"][0]["ticker"] == "SMH"

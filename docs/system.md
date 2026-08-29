@@ -22,7 +22,7 @@ Add types + fetchers in `web/lib/api.ts` to match `api/schemas.py` before new UI
 
 | Surface | Writers | Tables | API | UI |
 |---------|---------|--------|-----|----|
-| Live | `seed_tape`, `ingest_yahoo`, `ingest_fred`, `ingest_polymarket` | `instrument`, `universe_member`, `bar_daily`, `quote_latest`, `macro_observation`, `odds_snapshot` | `GET /live`, `GET /health` | `web/app/page.tsx` → `LiveTape.tsx` |
+| Live | `seed_tape`, `ingest_yahoo`, `ingest_fred`, `ingest_polymarket` (read-time: calendar + stored outlook slice + drivers) | `instrument`, `universe_member`, `bar_daily`, `quote_latest`, `macro_observation`, `odds_snapshot`, `event_item`, `outlook_report` | `GET /live`, `GET /health` | `web/app/page.tsx` → `LiveTape.tsx` |
 | Dynamics | `compute_dynamics` | `rrg_point`, `return_stats` | `GET /dynamics` | `web/app/dynamics/page.tsx` → `DynamicsView.tsx` |
 | Outlook | `ingest_news`, `ingest_calendar`, `build_pack`, `generate_outlook` | `news_item`, `event_item`, `evidence_pack`, `outlook_report` | `GET /outlook` | `web/app/outlook/page.tsx` → `OutlookView.tsx` (macro / market / near-term + snapshot) |
 | Valuation | `ingest_sec`, `ingest_yahoo --universe valuation`, `compute_valuation` | `metric_ttm`, `valuation_daily`, `universe_member` (valuation) | `GET /valuation` | `web/app/valuation/page.tsx` → `ValuationView.tsx` |
@@ -31,9 +31,9 @@ Add types + fetchers in `web/lib/api.ts` to match `api/schemas.py` before new UI
 
 `jobs/backfill.py` re-runs Yahoo / intraday / FRED with the same upserts. Every job writes `job_run`.
 
-Read-time (no extra tables): Risk-On in `GET /live` (`analytics/risk_on.py`); correlation / lead-lag in `GET /dynamics` (`analytics/corr.py`). Both read stored daily closes.
+Read-time (no extra tables): Risk-On and outliers/co-moves in `GET /live` (`analytics/risk_on.py`, `analytics/drivers.py`); correlation / lead-lag in `GET /dynamics` (`analytics/corr.py`). All read stored daily closes / FRED. Live also mounts today’s `event_item` rows and the stored Outlook `headline` / `live_md` / `expect`.
 
-Analytics (no vendor I/O): `analytics/risk_on.py`, `rrg.py`, `valuation.py`, `scores.py`, `corr.py`, `returns.py`. Writer: `agent/pack.py`, `outlook.py`, `memos.py`, `citations.py`, `prompts.py`.
+Analytics (no vendor I/O): `analytics/risk_on.py`, `rrg.py`, `valuation.py`, `scores.py`, `corr.py`, `returns.py`, `drivers.py`. Writer: `agent/pack.py`, `outlook.py`, `memos.py`, `citations.py`, `prompts.py`.
 
 ---
 

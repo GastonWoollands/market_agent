@@ -4,11 +4,15 @@ from decimal import Decimal
 from analytics.lookback import chart_window, window_deltas
 from analytics.risk_on import CYCLICALS, DEFENSIVES, compute_risk_on
 from api.schemas import (
+    LiveBrief,
+    LiveCoMove,
     LiveDeltas,
     LiveDrilldown,
+    LiveEvent,
     LiveMacro,
     LiveOdds,
     LiveOddsOutcome,
+    LiveOutlier,
     LivePoint,
     LiveQuote,
     LiveResponse,
@@ -32,6 +36,15 @@ _STATE_RANK = {
     "POSTPOST": 4,
     "CLOSED": 5,
 }
+_CHANGE_KIND = {
+    "REGULAR": "session",
+    "PRE": "gap",
+    "PREPRE": "gap",
+    "POST": "after_hours",
+    "POSTPOST": "after_hours",
+    "CLOSED": "close",
+}
+WATCHLIST_OUTLIERS = 3
 
 
 def _to_float(value: Decimal | None) -> float | None:
@@ -61,12 +74,14 @@ def _quote_from_row(
         return LiveQuote(ticker=ticker, name=name, role=role)
     price = resolve_price(row.quote_price, row.last_close)
     change_pct = resolve_change_pct(row.quote_change_pct, row.last_close, row.prev_close)
+    state = row.market_state.upper() if row.market_state else None
     return LiveQuote(
         ticker=ticker,
         name=name,
         role=role,
         price=_to_float(price),
         change_pct=_to_float(change_pct),
+        change_kind=_CHANGE_KIND.get(state) if state else None,
         market_state=row.market_state,
         as_of=row.as_of,
     )
@@ -103,6 +118,11 @@ def build_live(
     risk_on: LiveRiskOn | None = None,
     odds_rows: list[OddsSnapshot] | None = None,
     polymarket: PolymarketFile | None = None,
+    events: list[LiveEvent] | None = None,
+    brief: LiveBrief | None = None,
+    outliers: list[LiveOutlier] | None = None,
+    co_moves: list[LiveCoMove] | None = None,
+    watchlist_rows: list[LiveTapeRow] | None = None,
 ) -> LiveResponse:
     clock = now or datetime.now(UTC)
     by_ticker = {row.ticker: row for row in rows}
@@ -130,6 +150,7 @@ def build_live(
                 row=row,
             )
         )
+    movers.sort(key=lambda item: (item.change_pct is None, -(item.change_pct or 0.0), item.ticker))
 
     quote_times = [item.as_of for item in header if item.as_of is not None]
     as_of = max(quote_times) if quote_times else None
@@ -143,7 +164,76 @@ def build_live(
         drilldown=_drilldown(lever, history or [], fred, rows) if fred is not None else None,
         risk_on=risk_on,
         odds=_odds_items(odds_rows or [], polymarket),
+        events=list(events or []),
+        brief=brief,
+        outliers=list(outliers or []),
+        co_moves=list(co_moves or []),
+        watchlist_outliers=_watchlist_outliers(watchlist_rows or []),
     )
+
+
+def _watchlist_outliers(rows: list[LiveTapeRow]) -> list[LiveQuote]:
+    quotes = [
+        _quote_from_row(ticker=row.ticker, name=row.name, role=None, row=row) for row in rows
+    ]
+    quotes.sort(
+        key=lambda item: (item.change_pct is None, -abs(item.change_pct or 0.0), item.ticker)
+    )
+    return quotes[:WATCHLIST_OUTLIERS]
+
+
+def live_brief(report: object | None) -> LiveBrief | None:
+    if report is None:
+        return None
+    body = getattr(report, "body_json", None)
+    if not isinstance(body, dict):
+        body = {}
+    headline = body.get("headline") if isinstance(body.get("headline"), str) else None
+    live_md = body.get("live_md") if isinstance(body.get("live_md"), str) else None
+    expect = body.get("expect") if isinstance(body.get("expect"), str) else None
+    if not headline and not live_md and not expect:
+        return None
+    return LiveBrief(
+        headline=headline,
+        live_md=live_md,
+        expect=expect,
+        as_of=getattr(report, "as_of", None),
+        status=getattr(report, "status", None),
+    )
+
+
+def live_event_models(rows: list[dict[str, object]]) -> list[LiveEvent]:
+    out: list[LiveEvent] = []
+    for row in rows:
+        raw_date = row.get("date")
+        title = str(row.get("title") or "")
+        kind = str(row.get("kind") or "")
+        source = str(row.get("source") or "")
+        if not title or not kind:
+            continue
+        try:
+            day = raw_date if isinstance(raw_date, date) else date.fromisoformat(str(raw_date)[:10])
+        except ValueError:
+            continue
+        ticker = row.get("ticker")
+        out.append(
+            LiveEvent(
+                date=day,
+                title=title,
+                kind=kind,
+                ticker=str(ticker) if ticker else None,
+                source=source,
+            )
+        )
+    return out
+
+
+def outlier_models(rows: list[dict[str, object]]) -> list[LiveOutlier]:
+    return [LiveOutlier.model_validate(row) for row in rows if row.get("id")]
+
+
+def co_move_models(rows: list[dict[str, object]]) -> list[LiveCoMove]:
+    return [LiveCoMove.model_validate(row) for row in rows if row.get("ids")]
 
 
 def _macro_items(rows: list[LiveMacroRow], fred: FredSeriesFile | None) -> list[LiveMacro]:

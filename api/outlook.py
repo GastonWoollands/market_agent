@@ -53,6 +53,7 @@ def build_outlook(
         abstract=_str(body, "abstract"),
         conclusions=_str_list(body, "conclusions"),
         expect=_str(body, "expect"),
+        live_md=_str(body, "live_md"),
         macro_md=_str(body, "macro_md"),
         market_md=_str(body, "market_md"),
         near_term_md=_str(body, "near_term_md"),

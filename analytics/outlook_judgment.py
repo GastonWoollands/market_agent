@@ -9,7 +9,6 @@ WATCH_PRINT = {
     "cpi": ("CPIAUCSL", "yoy_pct"),
     "pce": ("PCEPILFE", "yoy_pct"),
     "fomc": ("DFF", "value"),
-    "central_bank": ("ECBDFR", "value"),
 }
 
 
@@ -37,6 +36,8 @@ def build_judgment(
     odds: list[dict[str, Any]],
     events: list[dict[str, Any]],
     risk_on: dict[str, Any] | None,
+    outliers: list[dict[str, Any]] | None = None,
+    co_moves: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     cpi = _row(macro, "CPIAUCSL")
     pce = _row(macro, "PCEPILFE")
@@ -118,7 +119,7 @@ def build_judgment(
         kind = str(event.get("kind") or "")
         last_print = None
         why = None
-        pair = WATCH_PRINT.get(kind)
+        pair = _watch_print(kind, str(event.get("title") or ""))
         if pair:
             series_id, key = pair
             row = _row(macro, series_id)
@@ -164,7 +165,25 @@ def build_judgment(
         "invalidation": invalidation,
         "odds_read": odds_read,
         "abstract": " ".join(abstract_parts).strip() or "unavailable",
+        "outliers": list(outliers or []),
+        "co_moves": list(co_moves or []),
     }
+
+
+def _watch_print(kind: str, title: str) -> tuple[str, str] | None:
+    pair = WATCH_PRINT.get(kind)
+    if pair:
+        return pair
+    if kind != "central_bank":
+        return None
+    lower = title.lower()
+    if "boj" in lower:
+        return ("DEXJPUS", "value")
+    if "boe" in lower:
+        return ("DEXUSUK", "value")
+    if "ecb" in lower:
+        return ("ECBDFR", "value")
+    return ("ECBDFR", "value")
 
 
 def _curve_regime(

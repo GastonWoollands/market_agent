@@ -244,8 +244,7 @@ series:
     category: fx
     region: jp
     pack_view: fx
-    show_on_live: false
-    insight: Yen per dollar. A weak yen often tracks US-Japan rate differentials.
+    insight: "Yen per dollar (JPY per USD; a rise is a weaker yen). A weak yen often tracks US-Japan rate differentials."
 
   - id: DEXUSUK
     name: USD per GBP

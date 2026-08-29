@@ -39,11 +39,11 @@ tape:
 live:
   header:
     - { ticker: "^GSPC", label: S&P 500 }
-    - { ticker: QQQ, label: Nasdaq 100 }
-    - { ticker: "^RUT", label: Russell 2000 }
-    - { ticker: "^DJI", label: Dow }
-    - { ticker: USO, label: WTI }
-    - { ticker: GLD, label: Gold }
+    - { ticker: IWM, label: Russell 2000 }
+    - { ticker: "^VIX", label: VIX }
+    - { ticker: TLT, label: 20Y+ Treasury }
+    - { ticker: UUP, label: Dollar }
+    - { ticker: HYG, label: High yield }
   mover_roles: [sector, group]
 
 valuation:

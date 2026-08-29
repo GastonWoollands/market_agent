@@ -43,6 +43,8 @@ class LiveQuote(BaseModel):
     role: str | None = None
     price: float | None = None
     change_pct: float | None = None
+    change_kind: str | None = None
+    gap_pct: float | None = None
     market_state: str | None = None
     as_of: datetime | None = None
 
@@ -112,6 +114,36 @@ class LiveOdds(BaseModel):
     outcomes: list[LiveOddsOutcome] = Field(default_factory=list)
 
 
+class LiveEvent(BaseModel):
+    date: date
+    title: str
+    kind: str
+    ticker: str | None = None
+    source: str
+
+
+class LiveBrief(BaseModel):
+    headline: str | None = None
+    live_md: str | None = None
+    expect: str | None = None
+    as_of: date | None = None
+    status: str | None = None
+
+
+class LiveOutlier(BaseModel):
+    id: str
+    window: str = "1d"
+    change: float | None = None
+    z: float | None = None
+
+
+class LiveCoMove(BaseModel):
+    ids: list[str] = Field(default_factory=list)
+    window: str = "1d"
+    changes: dict[str, float] = Field(default_factory=dict)
+    hint: str | None = None
+
+
 class LiveResponse(BaseModel):
     as_of: datetime | None = None
     market_state: str | None = None
@@ -122,6 +154,11 @@ class LiveResponse(BaseModel):
     drilldown: LiveDrilldown | None = None
     risk_on: LiveRiskOn | None = None
     odds: list[LiveOdds] = Field(default_factory=list)
+    events: list[LiveEvent] = Field(default_factory=list)
+    brief: LiveBrief | None = None
+    outliers: list[LiveOutlier] = Field(default_factory=list)
+    co_moves: list[LiveCoMove] = Field(default_factory=list)
+    watchlist_outliers: list[LiveQuote] = Field(default_factory=list)
 
 
 class DynamicsTrailPoint(BaseModel):
@@ -267,6 +304,20 @@ class OutlookWatch(BaseModel):
     why: str | None = None
 
 
+class OutlookOutlier(BaseModel):
+    id: str
+    window: str = "1d"
+    change: float | None = None
+    z: float | None = None
+
+
+class OutlookCoMove(BaseModel):
+    ids: list[str] = Field(default_factory=list)
+    window: str = "1d"
+    changes: dict[str, float] = Field(default_factory=dict)
+    hint: str | None = None
+
+
 class OutlookJudgment(BaseModel):
     takeaways: list[str] = Field(default_factory=list)
     tensions: list[OutlookTension] = Field(default_factory=list)
@@ -275,6 +326,8 @@ class OutlookJudgment(BaseModel):
     invalidation: str | None = None
     odds_read: str | None = None
     abstract: str | None = None
+    outliers: list[OutlookOutlier] = Field(default_factory=list)
+    co_moves: list[OutlookCoMove] = Field(default_factory=list)
 
 
 class OutlookResponse(BaseModel):
@@ -289,6 +342,7 @@ class OutlookResponse(BaseModel):
     abstract: str | None = None
     conclusions: list[str] = Field(default_factory=list)
     expect: str | None = None
+    live_md: str | None = None
     macro_md: str | None = None
     market_md: str | None = None
     near_term_md: str | None = None
