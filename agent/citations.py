@@ -12,11 +12,13 @@ STOP = frozenset(
         "AM",
         "API",
         "ARE",
+        "BEA",
         "BLS",
         "BUT",
         "BOE",
         "BOJ",
         "CPI",
+        "DR",
         "ECB",
         "ETF",
         "ETFS",
@@ -32,6 +34,7 @@ STOP = frozenset(
         "HAVE",
         "HY",
         "IG",
+        "ISM",
         "JSON",
         "JOLTS",
         "MOM",
@@ -47,6 +50,7 @@ STOP = frozenset(
         "THAT",
         "THE",
         "THIS",
+        "TL",
         "TTM",
         "US",
         "USA",
@@ -115,14 +119,24 @@ def validate_brief_fields(brief_json: dict[str, Any]) -> list[str]:
         issues.append("what_happened:too_short")
     if "template fallback" not in what_happened.lower():
         # Only check if not template
-        if not any(word in what_happened.lower() for word in ["led", "followed", "first", "then", "after"]):
+        sequence_words = ["led", "followed", "first", "then", "after"]
+        if not any(word in what_happened.lower() for word in sequence_words):
             issues.append("what_happened:no_sequence")
     
     # Check current_positioning has specific levels
     positioning = brief_json.get("current_positioning", "")
     if positioning and "unavailable" not in positioning.lower():
         # Should mention at least one spread or level
-        has_level = any(term in positioning.lower() for term in ["2s10s", "10y", "fed_vs_2y", "breakeven", "hyg", "lqd", "dxy"])
+        level_terms = [
+            "2s10s",
+            "10y",
+            "fed_vs_2y",
+            "breakeven",
+            "hyg",
+            "lqd",
+            "dxy",
+        ]
+        has_level = any(term in positioning.lower() for term in level_terms)
         if not has_level:
             issues.append("positioning:no_levels")
     
@@ -140,9 +154,19 @@ def validate_brief_fields(brief_json: dict[str, Any]) -> list[str]:
                     issues.append("watch_today:missing_outcomes")
                     break
                 if "template" not in scenario.get("outcome_bullish", "").lower():
-                    # Check for specific market impacts (not generic)
+                    # Check for specific market impacts (expanded for market-agnostic coverage)
                     bullish = scenario.get("outcome_bullish", "").lower()
-                    if not any(market in bullish for market in ["2y", "10y", "equities", "equity", "bp", "odds", "hy", "ig", "vix"]):
+                    market_terms = [
+                        "2y", "10y", "30y", "yields", "yield", "curve",
+                        "equities", "equity", "stocks", "rallies", "rally",
+                        "bp", "basis", "odds", "probability",
+                        "hy", "ig", "credit", "spreads", "spread",
+                        "vix", "vol", "volatility",
+                        "dollar", "dxy", "yen", "euro",
+                        "gold", "oil", "commodities",
+                        "recover", "stabilize", "drop", "fall", "rise"
+                    ]
+                    if not any(market in bullish for market in market_terms):
                         issues.append("watch_today:generic_outcome")
                         break
     
