@@ -6,6 +6,10 @@ buckets:
     queries:
       - "US Treasury yields 10-year FOMC"
       - "Federal Reserve interest rate decision"
+      - "Jackson Hole Federal Reserve"
+      - "Fed Chair speech"
+      - "FOMC minutes"
+      - "Beige Book Federal Reserve"
 
   - category: inflation
     queries:
@@ -25,11 +29,39 @@ buckets:
 
   - category: fx
     queries:
-      - "US dollar index DXY euro yen sterling"
+      - "US dollar index DXY currency strength"
+      - "euro yen sterling exchange rate"
+      - "emerging market currencies EM FX"
 
   - category: commodities
     queries:
-      - "WTI crude oil gold price"
+      - "WTI Brent crude oil price OPEC"
+      - "gold silver price inflation hedge"
+      - "copper industrial metals demand"
+
+  - category: trade
+    queries:
+      - "US tariffs trade war China Canada Mexico"
+      - "USMCA trade policy supply chain"
+      - "Section 232 steel aluminum tariffs"
+
+  - category: treasury
+    queries:
+      - "Treasury Secretary buyback long bonds"
+      - "Treasury auction demand yield curve"
+      - "US fiscal policy government spending"
+
+  - category: corporate
+    queries:
+      - "NVDA AAPL MSFT earnings results guidance"
+      - "tech earnings AI semiconductor revenue"
+      - "mega cap earnings outlook forward guidance"
+
+  - category: energy
+    queries:
+      - "oil refining capacity crack spreads"
+      - "natural gas LNG exports storage"
+      - "energy infrastructure pipelines bottlenecks"
 
   - category: sector
     queries:
@@ -43,15 +75,25 @@ buckets:
   - category: ecb
     queries:
       - "ECB interest rate Lagarde euro area inflation"
+      - "ECB Governing Council Schnabel de Guindos"
 
   - category: boe
     queries:
       - "Bank of England interest rate UK inflation"
+      - "BoE Monetary Policy Committee Bailey"
 
   - category: boj
     queries:
       - "Bank of Japan interest rate yen"
+      - "BOJ Ueda monetary policy YCC intervention"
+
+  - category: pboc
+    queries:
+      - "PBOC China monetary policy yuan CNY"
+      - "China central bank liquidity injection"
 
   - category: geo
     queries:
-      - "geopolitics tariffs oil supply US markets"
+      - "geopolitics oil supply energy security"
+      - "Middle East conflict shipping trade routes"
+      - "US China Russia geopolitical risk markets"
