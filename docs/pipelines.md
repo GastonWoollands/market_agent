@@ -167,9 +167,22 @@ Intended times if you automate later. Until then, run the same commands by hand.
 6. `python -m jobs.ingest_fed_rss`
 7. `python -m jobs.ingest_calendar` — Finnhub ~07:00
 8. `python -m jobs.build_pack`
-9. `python -m jobs.generate_outlook` — ~07:45
+9. `python -m jobs.generate_outlook` — ~07:45 (Gemini, automated)
 
 Open Outlook: the sources table must match `/health` job rows. Hover the header status dot for latest `job_run`.
+
+**Manual override (optional):** If automated Gemini output needs better reasoning, use the Cursor skill:
+
+```
+# In Cursor Chat
+/generate-outlook-manual
+```
+
+Use manual generation when:
+- High-severity anomalies detected (>0.7 severity)
+- Regime classification changed
+- Complex cross-asset narratives
+- Testing prompt changes
 
 ### During the session
 
@@ -232,6 +245,39 @@ python -m jobs.backfill fred --series DGS10
 `--resume` skips names that already have rows. Omit it to re-fetch everything (still idempotent).
 
 Timeouts and HTTP 5xx retry up to 3 times inside the adapters. **Yahoo 429 still fails fast** — stop and resume later.
+
+### Outlook generation strategy
+
+Two approaches: **automated (default)** and **manual override (Cursor skill)**.
+
+#### Automated (Gemini - 80% of days)
+
+```bash
+python -m jobs.generate_outlook
+```
+
+- **Model:** `gemini-2.5-flash` (default) or `claude-sonnet-4-5` (if `ANTHROPIC_API_KEY` set)
+- **Speed:** 5-10 seconds
+- **Cost:** ~$0.01 per run (Gemini) or ~$0.50 per run (Claude API)
+- **Use when:** Normal market day, routine updates, running unattended
+
+Template fallback if API unavailable: `python -m jobs.generate_outlook --template`
+
+#### Manual (Cursor skill - 20% of days)
+
+In Cursor Chat: `/generate-outlook-manual`
+
+- **Model:** `claude-sonnet-4` (via Cursor subscription)
+- **Speed:** 15-30 seconds (with streaming)
+- **Cost:** Included in Cursor subscription
+- **Use when:**
+  - High-severity anomalies (>0.7 severity)
+  - Regime classification changed
+  - Complex cross-asset narratives require nuance
+  - Testing prompt changes before deployment
+  - Gemini output was too generic
+
+Both write to `outlook_report` table. UI displays latest for the date.
 
 ---
 

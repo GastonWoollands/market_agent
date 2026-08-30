@@ -17,18 +17,28 @@ MIN_OBS = 20
 Z_FLOOR = 1.5
 MAX_OUTLIERS = 5
 MIN_OUTLIERS = 3
-HINTS = frozenset({"duration", "credit", "fx_jpy", "breadth", "vol"})
+HINTS = frozenset({"duration", "credit", "fx_jpy", "breadth", "vol", "front_long"})
 
 Series = Sequence[tuple[date, float]]
 
-MACRO_IDS = ("DGS10", "T10Y2Y", "VIXCLS", "DTWEXBGS", "DEXJPUS", "BAMLH0A0HYM2")
+MACRO_IDS = (
+    "DGS2",
+    "DGS10",
+    "DGS30",
+    "T10Y2Y",
+    "VIXCLS",
+    "DTWEXBGS",
+    "DEXJPUS",
+    "BAMLH0A0HYM2",
+)
 TAPE_IDS = ("^VIX", "UUP", "HYG", "LQD", "RSP", "SPY", "SMH", "IWM", "XLK", "XLU", "TLT")
-YIELD_IDS = frozenset({"DGS10", "T10Y2Y", "BAMLH0A0HYM2"})
+YIELD_IDS = frozenset({"DGS2", "DGS10", "DGS30", "T10Y2Y", "BAMLH0A0HYM2"})
 
 _THEMES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("fx_jpy", ("DEXJPUS", "SMH", "IWM", "^VIX", "VIXCLS")),
     ("vol", ("^VIX", "VIXCLS", "SMH", "IWM", "HYG")),
     ("duration", ("DGS10", "XLK", "XLU", "TLT")),
+    ("front_long", ("DGS2", "DGS30", "T10Y2Y", "TLT")),
     ("credit", ("BAMLH0A0HYM2", "HYG", "IWM", "SMH", "^VIX", "VIXCLS")),
     ("breadth", ("IWM", "RSP", "SPY", "XLK")),
 )

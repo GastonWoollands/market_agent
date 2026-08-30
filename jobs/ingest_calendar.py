@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from ingest.finnhub import FinnhubClient
@@ -28,8 +28,14 @@ YAML_KINDS = {
     "jolts",
     "election",
     "central_bank",
+    "speech",
+    "minutes",
+    "beige_book",
+    "ism",
+    "treasury",
     "other",
 }
+TITLE_SLUG_KINDS = frozenset({"speech", "ism", "treasury", "central_bank"})
 
 
 def _slug_title(title: str) -> str:
@@ -37,51 +43,46 @@ def _slug_title(title: str) -> str:
     return "-".join(part for part in raw.split("-") if part)[:48]
 
 
+def _event(
+    *,
+    day: date,
+    title: str,
+    kind: str,
+    extra: dict | None = None,
+) -> CalendarEvent:
+    slug_kind = f"{kind}:{_slug_title(title)}" if kind in TITLE_SLUG_KINDS else kind
+    return CalendarEvent(
+        slug=f"yaml:{day.isoformat()}:{slug_kind}",
+        date=day,
+        title=title,
+        kind=kind,
+        source="yaml",
+        extra=extra,
+    )
+
+
 def events_from_yaml(catalog: CatalystsFile) -> list[CalendarEvent]:
     out: list[CalendarEvent] = []
     for item in catalog.fomc:
         extra = {"sep": True} if item.sep else None
-        out.append(
-            CalendarEvent(
-                slug=f"yaml:{item.date.isoformat()}:fomc",
-                date=item.date,
-                title=item.title,
-                kind="fomc",
-                source="yaml",
-                extra=extra,
-            )
-        )
+        out.append(_event(day=item.date, title=item.title, kind="fomc", extra=extra))
     for kind, items in (
         ("cpi", catalog.cpi),
         ("pce", catalog.pce),
         ("nfp", catalog.nfp),
         ("gdp", catalog.gdp),
         ("jolts", catalog.jolts),
+        ("speech", catalog.speech),
+        ("minutes", catalog.minutes),
+        ("beige_book", catalog.beige_book),
+        ("ism", catalog.ism),
+        ("treasury", catalog.treasury),
     ):
         for item in items:
-            out.append(
-                CalendarEvent(
-                    slug=f"yaml:{item.date.isoformat()}:{kind}",
-                    date=item.date,
-                    title=item.title,
-                    kind=kind,
-                    source="yaml",
-                )
-            )
+            out.append(_event(day=item.date, title=item.title, kind=kind))
     for item in catalog.other:
         kind = item.type if item.type in YAML_KINDS else "other"
-        slug_kind = kind
-        if kind == "central_bank":
-            slug_kind = f"{kind}:{_slug_title(item.title)}"
-        out.append(
-            CalendarEvent(
-                slug=f"yaml:{item.date.isoformat()}:{slug_kind}",
-                date=item.date,
-                title=item.title,
-                kind=kind,
-                source="yaml",
-            )
-        )
+        out.append(_event(day=item.date, title=item.title, kind=kind))
     return out
 
 

@@ -92,6 +92,19 @@ def test_named_facts_fed_vs_2y_and_curve_bp() -> None:
     assert facts["dgs10_w1_bp"] == 6.0
 
 
+def test_named_facts_front_end_and_long_end_d1() -> None:
+    facts = named_facts(
+        [
+            {"series_id": "DGS2", "value": 4.31, "d1_bp": 7.0, "w1_bp": 5.0},
+            {"series_id": "DGS30", "value": 5.18, "d1_bp": -8.0, "w1_bp": -12.0},
+            {"series_id": "DGS10", "value": 4.68, "w1_bp": 1.0},
+        ]
+    )
+    assert facts["dgs2_d1_bp"] == 7.0
+    assert facts["dgs30_d1_bp"] == -8.0
+    assert facts["dgs30_w1_bp"] == -12.0
+
+
 def test_judgment_names_be_vs_cpi_and_watch_print() -> None:
     judgment = build_judgment(
         facts={"breakeven_10y": 2.32, "dgs10": 4.64, "curve_2s10s": 0.47},
@@ -113,6 +126,88 @@ def test_judgment_names_be_vs_cpi_and_watch_print() -> None:
     assert judgment["regime"]["policy"] == "hold_base"
     assert any("3.3" in item for item in judgment["takeaways"])
     assert judgment["watch"][0]["last_print"] == "PAYEMS print_change -23.0"
+
+
+def test_judgment_ranks_fomc_above_ism_and_speech_attaches_dgs2() -> None:
+    judgment = build_judgment(
+        facts={"dgs2": 4.31},
+        macro=[{"series_id": "DGS2", "value": 4.31}],
+        odds=[],
+        events=[
+            {"date": "2026-09-01", "title": "ISM Manufacturing (August)", "kind": "ism"},
+            {"date": "2026-09-16", "title": "FOMC decision + SEP", "kind": "fomc"},
+            {
+                "date": "2026-08-28",
+                "title": "Jackson Hole Chair keynote",
+                "kind": "speech",
+            },
+        ],
+        risk_on=None,
+        as_of=date(2026, 8, 29),
+    )
+    kinds = [item["kind"] for item in judgment["watch"]]
+    assert kinds[:3] == ["speech", "fomc", "ism"]
+    speech = next(item for item in judgment["watch"] if item["kind"] == "speech")
+    assert speech["last_print"] == "DGS2 value 4.31"
+
+
+def test_judgment_policy_comms_front_vs_long() -> None:
+    judgment = build_judgment(
+        facts={"dgs2": 4.31, "dgs2_d1_bp": 7.0, "dgs30_d1_bp": -8.0},
+        macro=[],
+        odds=[
+            {
+                "label": "Sep FOMC",
+                "top_outcome": "Hike",
+                "top_implied_yes": 0.574,
+            }
+        ],
+        events=[],
+        risk_on=None,
+        policy_items=[
+            {
+                "kind": "speech",
+                "speaker": "Chairman Warsh",
+                "title": "Keynote remarks by Chairman Warsh at Jackson Hole",
+                "published_at": "2026-08-28T14:00:00+00:00",
+                "excerpt": "The 2 percent PCE target is firm, fixed. We have work to do.",
+            }
+        ],
+    )
+    comms = judgment["policy_comms"]
+    assert comms["kind"] == "speech"
+    assert comms["stance"] == "hawkish"
+    notes = {item["note"] for item in comms["tensions"]}
+    assert "front_vs_long" in notes
+    assert "odds_vs_front_end" in notes
+    assert "Jackson Hole" in judgment["takeaways"][0]
+    assert "unavailable" not in judgment["takeaways"][0]
+    assert judgment["tensions"][0]["note"] == "front_vs_long"
+
+
+def test_judgment_skips_same_way_1bp_as_front_long() -> None:
+    judgment = build_judgment(
+        facts={"dgs2": 4.2, "dgs2_d1_bp": 1.0, "dgs30_d1_bp": 1.0},
+        macro=[],
+        odds=[],
+        events=[],
+        risk_on=None,
+        policy_items=[
+            {
+                "kind": "speech",
+                "title": "Warsh, In Our Time",
+                "published_at": "2026-08-28T14:00:00+00:00",
+                "excerpt": "Speech At Jackson Hole, Wyoming",
+            }
+        ],
+        as_of=date(2026, 8, 30),
+    )
+    comms = judgment["policy_comms"]
+    assert comms["speaker"] == "Warsh"
+    assert comms["event"] == "Warsh: In Our Time"
+    assert comms["stance"] is None
+    assert all(item["note"] != "front_vs_long" for item in comms["tensions"])
+    assert "stance" not in judgment["takeaways"][0]
 
 
 def test_judgment_maps_boj_to_yen_and_ecb_to_deposit() -> None:
@@ -137,6 +232,7 @@ def test_judgment_maps_boj_to_yen_and_ecb_to_deposit() -> None:
             }
         ],
     )
-    assert judgment["watch"][0]["last_print"] == "DEXJPUS value 148.2"
-    assert judgment["watch"][1]["last_print"] == "ECBDFR value 2.0"
+    by_title = {item["title"]: item for item in judgment["watch"]}
+    assert by_title["BoJ decision"]["last_print"] == "DEXJPUS value 148.2"
+    assert by_title["ECB decision"]["last_print"] == "ECBDFR value 2.0"
     assert judgment["co_moves"][0]["hint"] == "fx_jpy"

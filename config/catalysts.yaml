@@ -51,6 +51,43 @@ jolts:
   - { date: 2026-11-03, title: JOLTS (September) }
   - { date: 2026-12-01, title: JOLTS (October) }
 
+speech:
+  # Chair appearances that reprice the front end. Do not list every Governor slot.
+  # Source: Board calendar / Kansas City Fed Jackson Hole symposium.
+  - { date: 2026-08-28, title: Jackson Hole Chair keynote }
+
+minutes:
+  # FOMC minutes ~14:00 ET, three weeks after the decision day.
+  # Source: federalreserve.gov/monetarypolicy/fomccalendars.htm
+  - { date: 2026-10-07, title: FOMC minutes (September) }
+  - { date: 2026-11-18, title: FOMC minutes (October) }
+  - { date: 2026-12-30, title: FOMC minutes (December) }
+
+beige_book:
+  # Source: federalreserve.gov/monetarypolicy/beige-book-default.htm
+  - { date: 2026-09-02, title: Beige Book }
+  - { date: 2026-10-14, title: Beige Book }
+  - { date: 2026-11-25, title: Beige Book }
+
+ism:
+  # Manufacturing = first business day; services = third. 10:00 ET.
+  # Source: ismworld.org/supply-management-news-and-reports/reports/rob-report-calendar/
+  - { date: 2026-09-01, title: ISM Manufacturing (August) }
+  - { date: 2026-09-03, title: ISM Services (August) }
+  - { date: 2026-10-01, title: ISM Manufacturing (September) }
+  - { date: 2026-10-05, title: ISM Services (September) }
+  - { date: 2026-11-02, title: ISM Manufacturing (October) }
+  - { date: 2026-11-04, title: ISM Services (October) }
+  - { date: 2026-12-01, title: ISM Manufacturing (November) }
+  - { date: 2026-12-03, title: ISM Services (November) }
+
+treasury:
+  # Refunding announcements only, plus named cash-management buybacks on the
+  # official tentative schedule. Not every bill auction.
+  # Sources: home.treasury.gov quarterly refunding; Tentative-Buyback-Schedule.pdf (5 Aug 2026).
+  - { date: 2026-09-09, title: Treasury cash-management buybacks }
+  - { date: 2026-11-04, title: Treasury quarterly refunding }
+
 other:
   - { date: 2026-11-03, title: US midterm elections, type: election }
   - { date: 2026-09-10, title: ECB decision, type: central_bank }

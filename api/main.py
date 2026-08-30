@@ -7,7 +7,13 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from agent.pack import EVENTS_AHEAD_DAYS, partition_events
+from agent.pack import (
+    EVENTS_AHEAD_DAYS,
+    EVENTS_LOOKBACK_DAYS,
+    LIVE_NEAR_CATALYST_KINDS,
+    LIVE_NEAR_DAYS,
+    partition_events,
+)
 from analytics.corr import DEFAULT_LAG, DEFAULT_LEAD
 from analytics.drivers import MACRO_IDS as DRIVER_MACRO_IDS
 from analytics.drivers import TAPE_IDS as DRIVER_TAPE_IDS
@@ -164,10 +170,17 @@ def live(lever: str = "DGS10", db: Session = Depends(get_db)) -> LiveResponse | 
                 "source": item.source,
             }
             for item in upcoming_events(
-                db, start=today, end=today + timedelta(days=EVENTS_AHEAD_DAYS)
+                db,
+                start=today - timedelta(days=EVENTS_LOOKBACK_DAYS),
+                end=today + timedelta(days=EVENTS_AHEAD_DAYS),
             )
         ]
-        near, _later = partition_events(event_rows, today, near_days=0)
+        near, _later = partition_events(
+            event_rows,
+            today,
+            near_days=LIVE_NEAR_DAYS,
+            near_kinds=LIVE_NEAR_CATALYST_KINDS,
+        )
         driver_series: dict[str, list[tuple[date, float]]] = {}
         for ticker, points in closes_for_tickers(db, DRIVER_TAPE_IDS, start=start).items():
             driver_series[ticker] = [(day, float(value)) for day, value in points]

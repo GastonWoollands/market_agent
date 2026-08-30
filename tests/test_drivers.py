@@ -53,6 +53,33 @@ def test_rank_drivers_yen_smh_vix_co_move_has_numbers_no_verbs() -> None:
         assert verb not in blob.lower()
 
 
+def test_rank_drivers_front_long_uses_bp_and_hint() -> None:
+    start = date(2026, 1, 1)
+    dgs2 = [4.20] * 80
+    dgs2[-1] = 4.40
+    dgs30 = [5.20] * 80
+    dgs30[-1] = 5.00
+    tlt = _quiet(90.0)
+    tlt[-1] = 94.0
+    series = {
+        "DGS2": _series(start, dgs2),
+        "DGS30": _series(start, dgs30),
+        "T10Y2Y": _series(start, _quiet(0.40)),
+        "TLT": _series(start, tlt),
+        "XLK": _series(start, _quiet(80.0)),
+    }
+    outliers, co_moves = rank_drivers(series)
+    ids = {item.id for item in outliers}
+    assert {"DGS2", "DGS30"} <= ids
+    move = next(item for item in co_moves if item.hint == "front_long")
+    assert set(move.ids) >= {"DGS2", "DGS30"}
+    assert move.changes["DGS2"] > 0
+    assert move.changes["DGS30"] < 0
+    blob = str(as_dicts(outliers, co_moves))
+    for verb in ("caused", "unwind", "triggered", "because"):
+        assert verb not in blob.lower()
+
+
 def test_rank_drivers_yields_use_bp_change() -> None:
     start = date(2026, 1, 1)
     values = [4.20] * 80

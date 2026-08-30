@@ -141,6 +141,11 @@ class CatalystsFile(BaseModel):
     nfp: list[CatalystItem] = Field(default_factory=list)
     gdp: list[CatalystItem] = Field(default_factory=list)
     jolts: list[CatalystItem] = Field(default_factory=list)
+    speech: list[CatalystItem] = Field(default_factory=list)
+    minutes: list[CatalystItem] = Field(default_factory=list)
+    beige_book: list[CatalystItem] = Field(default_factory=list)
+    ism: list[CatalystItem] = Field(default_factory=list)
+    treasury: list[CatalystItem] = Field(default_factory=list)
     other: list[CatalystItem] = Field(default_factory=list)
 
 

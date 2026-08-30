@@ -338,6 +338,22 @@ def test_build_live_attaches_events_brief_and_watchlist_outliers() -> None:
     assert [item.ticker for item in tape.watchlist_outliers] == ["NVDA", "AAPL"]
 
 
+def test_live_event_models_keep_yesterday_speech() -> None:
+    events = live_event_models(
+        [
+            {
+                "date": "2026-08-28",
+                "title": "Jackson Hole Chair keynote",
+                "kind": "speech",
+                "source": "yaml",
+            }
+        ]
+    )
+    assert events[0].kind == "speech"
+    assert events[0].date == date(2026, 8, 28)
+    assert events[0].title == "Jackson Hole Chair keynote"
+
+
 def test_live_brief_empty_without_fields() -> None:
     class _Report:
         as_of = date(2026, 8, 18)

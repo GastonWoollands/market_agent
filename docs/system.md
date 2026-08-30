@@ -24,7 +24,7 @@ Add types + fetchers in `web/lib/api.ts` to match `api/schemas.py` before new UI
 |---------|---------|--------|-----|----|
 | Live | `seed_tape`, `ingest_yahoo`, `ingest_fred`, `ingest_polymarket` (read-time: calendar + stored outlook slice + drivers) | `instrument`, `universe_member`, `bar_daily`, `quote_latest`, `macro_observation`, `odds_snapshot`, `event_item`, `outlook_report` | `GET /live`, `GET /health` | `web/app/page.tsx` → `LiveTape.tsx` |
 | Dynamics | `compute_dynamics` | `rrg_point`, `return_stats` | `GET /dynamics` | `web/app/dynamics/page.tsx` → `DynamicsView.tsx` |
-| Outlook | `ingest_news`, `ingest_calendar`, `build_pack`, `generate_outlook` | `news_item`, `event_item`, `evidence_pack`, `outlook_report` | `GET /outlook` | `web/app/outlook/page.tsx` → `OutlookView.tsx` (macro / market / near-term + snapshot) |
+| Outlook | `ingest_news`, `ingest_fed_rss`, `ingest_calendar`, `build_pack`, `generate_outlook` (automated: Gemini) or Cursor skill (manual: Claude) | `news_item`, `event_item`, `policy_item`, `evidence_pack`, `outlook_report` | `GET /outlook` | `web/app/outlook/page.tsx` → `OutlookView.tsx` (macro / market / near-term + snapshot) |
 | Valuation | `ingest_sec`, `ingest_yahoo --universe valuation`, `compute_valuation` | `metric_ttm`, `valuation_daily`, `universe_member` (valuation) | `GET /valuation` | `web/app/valuation/page.tsx` → `ValuationView.tsx` |
 | Opportunities | `compute_scores`, `generate_memos` | `opportunity_score`, `opportunity_memo` | `GET /opportunities` | `web/app/opportunities/page.tsx` → `OpportunitiesView.tsx` |
 | Watchlist | `ingest_yahoo --universe watchlist`, `ingest_intraday`, `jobs/watchlist_add.py` (from `POST /watchlist`) | `universe_member` (watchlist), `quote_latest`, `bar_daily`, `bar_intraday` | `GET/POST /watchlist`, `DELETE /watchlist/{ticker}`, `GET /search` | `web/app/watchlist/page.tsx` → `WatchlistView.tsx` |
@@ -47,7 +47,7 @@ Edit yaml, not code, for lists:
 | `config/fred_series.yaml` | FRED ingest + Live insight templates + Outlook pack views |
 | `config/polymarket_slugs.yaml` | odds (edit when a contract expires) |
 | `config/news_queries.yaml` | news ingest |
-| `config/catalysts.yaml` | FOMC / CPI / PCE / NFP / GDP / JOLTS / central banks / elections |
+| `config/catalysts.yaml` | FOMC / CPI / PCE / NFP / GDP / JOLTS / speeches / minutes / Beige Book / ISM / Treasury / central banks / elections |
 
 ---
 
