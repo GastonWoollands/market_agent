@@ -1,15 +1,24 @@
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from agent.pack import EVENTS_AHEAD_DAYS, partition_events, sources_from_counts, store_counts
+from agent.pack import (
+    EVENTS_AHEAD_DAYS,
+    EVENTS_LOOKBACK_DAYS,
+    partition_events,
+    sources_from_counts,
+    store_counts,
+)
 from api.schemas import (
+    OutlookCalendarItem,
     OutlookEvent,
     OutlookJudgment,
     OutlookMacro,
     OutlookNews,
     OutlookOdds,
+    OutlookPolicyItem,
     OutlookResponse,
     OutlookSource,
+    OutlookWatchScenario,
 )
 from store.models import EventItem, EvidencePack, NewsItem, OutlookReport
 from store.repos import (
@@ -49,7 +58,23 @@ def build_outlook(
         brief=report.body_md if report else None,
         brief_status=report.status if report else None,
         brief_model=report.model if report else None,
+        # Core fields
         headline=_str(body, "headline"),
+        tldr=_str(body, "tldr"),
+        what_happened=_str(body, "what_happened"),
+        current_positioning=_str(body, "current_positioning"),
+        drivers=_str(body, "drivers"),
+        # Scenario planning
+        watch_today=_watch_scenarios(body.get("watch_today")),
+        invalidation=_str(body, "invalidation"),
+        # Deep sections
+        macro_deep=_str(body, "macro_deep"),
+        market_deep=_str(body, "market_deep"),
+        policy_deep=_str(body, "policy_deep"),
+        geopolitical_deep=_str(body, "geopolitical_deep"),
+        # Calendar
+        calendar=_calendar_items(body.get("calendar")),
+        # Legacy fields
         abstract=_str(body, "abstract"),
         conclusions=_str_list(body, "conclusions"),
         expect=_str(body, "expect"),
@@ -73,6 +98,7 @@ def build_outlook(
         ],
         events=near,
         events_later=later,
+        policy_items=_policy_items(payload.get("policy_items")),
         sources=sources,
     )
 
@@ -125,6 +151,17 @@ def _macro_snapshot(raw: object) -> list[OutlookMacro]:
     return out
 
 
+def _policy_items(raw: object) -> list[OutlookPolicyItem]:
+    if not isinstance(raw, list):
+        return []
+    out: list[OutlookPolicyItem] = []
+    for item in raw:
+        if not isinstance(item, dict) or not item.get("title") or not item.get("kind"):
+            continue
+        out.append(OutlookPolicyItem.model_validate(item))
+    return out[:3]
+
+
 def _odds(raw: object) -> list[OutlookOdds]:
     if not isinstance(raw, list):
         return []
@@ -133,6 +170,36 @@ def _odds(raw: object) -> list[OutlookOdds]:
         if not isinstance(item, dict) or not item.get("slug"):
             continue
         out.append(OutlookOdds.model_validate(item))
+    return out
+
+
+def _watch_scenarios(raw: object) -> list[OutlookWatchScenario]:
+    """Parse watch_today scenarios from body JSON."""
+    if not isinstance(raw, list):
+        return []
+    out: list[OutlookWatchScenario] = []
+    for item in raw:
+        if not isinstance(item, dict) or not item.get("catalyst"):
+            continue
+        try:
+            out.append(OutlookWatchScenario.model_validate(item))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def _calendar_items(raw: object) -> list[OutlookCalendarItem]:
+    """Parse calendar from body JSON."""
+    if not isinstance(raw, list):
+        return []
+    out: list[OutlookCalendarItem] = []
+    for item in raw:
+        if not isinstance(item, dict) or not item.get("date") or not item.get("event"):
+            continue
+        try:
+            out.append(OutlookCalendarItem.model_validate(item))
+        except (TypeError, ValueError):
+            continue
     return out
 
 
@@ -193,7 +260,11 @@ def outlook_from_store(
         as_of=day,
         now=clock,
         news=latest_news(session, since=clock - NEWS_SINCE, limit=NEWS_LIMIT),
-        events=upcoming_events(session, start=day, end=day + timedelta(days=EVENTS_AHEAD_DAYS)),
+        events=upcoming_events(
+            session,
+            start=day - timedelta(days=EVENTS_LOOKBACK_DAYS),
+            end=day + timedelta(days=EVENTS_AHEAD_DAYS),
+        ),
         sources=sources,
         pack=pack,
         report=report,

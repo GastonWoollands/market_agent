@@ -63,6 +63,7 @@ STOP = frozenset(
 
 
 def citation_issues(pack: dict[str, Any], text: str) -> list[str]:
+    """Check that all tickers, percents, and yields in the text appear in the pack."""
     haystack = json.dumps(pack, default=str)
     numbers = _numbers(pack)
     issues: list[str] = []
@@ -79,6 +80,7 @@ def citation_issues(pack: dict[str, Any], text: str) -> list[str]:
 
 
 def coverage_issues(pack: dict[str, Any], text: str) -> list[str]:
+    """Check that required series are mentioned when present in the pack."""
     issues: list[str] = []
     blob = text.lower()
     for row in pack.get("macro") or []:
@@ -94,6 +96,56 @@ def coverage_issues(pack: dict[str, Any], text: str) -> list[str]:
             mentions = "icsa" in blob or "claims" in blob
             if mentions and "weekly" not in blob:
                 issues.append("coverage:ICSA_weekly")
+    return issues
+
+
+def validate_brief_fields(brief_json: dict[str, Any]) -> list[str]:
+    """Validate that new narrative fields meet minimum quality standards."""
+    issues: list[str] = []
+    
+    # Check tldr is not generic
+    tldr = brief_json.get("tldr", "").lower()
+    if any(phrase in tldr for phrase in ["mixed", "uncertain", "waiting", "unclear"]):
+        if len(tldr) < 100:  # Allow these words in longer, detailed tldr
+            issues.append("tldr:too_generic")
+    
+    # Check what_happened explains mechanism
+    what_happened = brief_json.get("what_happened", "")
+    if what_happened and len(what_happened) < 100:
+        issues.append("what_happened:too_short")
+    if "template fallback" not in what_happened.lower():
+        # Only check if not template
+        if not any(word in what_happened.lower() for word in ["led", "followed", "first", "then", "after"]):
+            issues.append("what_happened:no_sequence")
+    
+    # Check current_positioning has specific levels
+    positioning = brief_json.get("current_positioning", "")
+    if positioning and "unavailable" not in positioning.lower():
+        # Should mention at least one spread or level
+        has_level = any(term in positioning.lower() for term in ["2s10s", "10y", "fed_vs_2y", "breakeven", "hyg", "lqd", "dxy"])
+        if not has_level:
+            issues.append("positioning:no_levels")
+    
+    # Check drivers distinguishes events from forces
+    drivers = brief_json.get("drivers", "")
+    if drivers and len(drivers) < 80:
+        issues.append("drivers:too_short")
+    
+    # Check watch_today has scenarios
+    watch = brief_json.get("watch_today", [])
+    if isinstance(watch, list) and watch:
+        for scenario in watch:
+            if isinstance(scenario, dict):
+                if not scenario.get("outcome_bullish") or not scenario.get("outcome_bearish"):
+                    issues.append("watch_today:missing_outcomes")
+                    break
+                if "template" not in scenario.get("outcome_bullish", "").lower():
+                    # Check for specific market impacts (not generic)
+                    bullish = scenario.get("outcome_bullish", "").lower()
+                    if not any(market in bullish for market in ["2y", "10y", "equities", "equity", "bp", "odds", "hy", "ig", "vix"]):
+                        issues.append("watch_today:generic_outcome")
+                        break
+    
     return issues
 
 

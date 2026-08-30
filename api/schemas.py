@@ -302,6 +302,7 @@ class OutlookWatch(BaseModel):
     kind: str | None = None
     last_print: str | None = None
     why: str | None = None
+    role: str | None = None
 
 
 class OutlookOutlier(BaseModel):
@@ -318,6 +319,23 @@ class OutlookCoMove(BaseModel):
     hint: str | None = None
 
 
+class OutlookPolicyComms(BaseModel):
+    event: str | None = None
+    kind: str | None = None
+    speaker: str | None = None
+    stance: str | None = None
+    tensions: list[OutlookTension] = Field(default_factory=list)
+
+
+class OutlookPolicyItem(BaseModel):
+    published_at: str | None = None
+    kind: str
+    speaker: str | None = None
+    title: str
+    url: str | None = None
+    excerpt: str | None = None
+
+
 class OutlookJudgment(BaseModel):
     takeaways: list[str] = Field(default_factory=list)
     tensions: list[OutlookTension] = Field(default_factory=list)
@@ -328,6 +346,27 @@ class OutlookJudgment(BaseModel):
     abstract: str | None = None
     outliers: list[OutlookOutlier] = Field(default_factory=list)
     co_moves: list[OutlookCoMove] = Field(default_factory=list)
+    policy_comms: OutlookPolicyComms | None = None
+
+
+class OutlookWatchScenario(BaseModel):
+    """Structured scenario for a watch item with branching outcomes."""
+    catalyst: str
+    date: str | None = None
+    time: str | None = None
+    outcome_bullish: str
+    outcome_bearish: str
+    threshold: str | None = None
+
+
+class OutlookCalendarItem(BaseModel):
+    """Structured calendar entry with consensus/prior."""
+    date: str
+    time: str | None = None
+    event: str
+    consensus: str | None = None
+    prior: str | None = None
+    source: str | None = None
 
 
 class OutlookResponse(BaseModel):
@@ -338,7 +377,28 @@ class OutlookResponse(BaseModel):
     brief: str | None = None
     brief_status: str | None = None
     brief_model: str | None = None
+    
+    # Core fields
     headline: str | None = None
+    tldr: str | None = None
+    what_happened: str | None = None
+    current_positioning: str | None = None
+    drivers: str | None = None
+    
+    # Scenario planning
+    watch_today: list[OutlookWatchScenario] = Field(default_factory=list)
+    invalidation: str | None = None
+    
+    # Deep sections
+    macro_deep: str | None = None
+    market_deep: str | None = None
+    policy_deep: str | None = None
+    geopolitical_deep: str | None = None
+    
+    # Calendar
+    calendar: list[OutlookCalendarItem] = Field(default_factory=list)
+    
+    # Legacy fields (kept for backward compat)
     abstract: str | None = None
     conclusions: list[str] = Field(default_factory=list)
     expect: str | None = None
@@ -346,6 +406,8 @@ class OutlookResponse(BaseModel):
     macro_md: str | None = None
     market_md: str | None = None
     near_term_md: str | None = None
+    
+    # Pack data
     facts: dict[str, float | None] = Field(default_factory=dict)
     judgment: OutlookJudgment | None = None
     macro_snapshot: list[OutlookMacro] = Field(default_factory=list)
@@ -353,6 +415,7 @@ class OutlookResponse(BaseModel):
     news: list[OutlookNews] = Field(default_factory=list)
     events: list[OutlookEvent] = Field(default_factory=list)
     events_later: list[OutlookEvent] = Field(default_factory=list)
+    policy_items: list[OutlookPolicyItem] = Field(default_factory=list)
     sources: list[OutlookSource] = Field(default_factory=list)
 
 

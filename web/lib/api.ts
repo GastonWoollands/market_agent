@@ -351,6 +351,24 @@ export type OutlookWatch = {
   kind: string | null;
   last_print: string | null;
   why: string | null;
+  role?: string | null;
+};
+
+export type OutlookPolicyComms = {
+  event: string | null;
+  kind: string | null;
+  speaker: string | null;
+  stance: string | null;
+  tensions: OutlookTension[];
+};
+
+export type OutlookPolicyItem = {
+  published_at: string | null;
+  kind: string;
+  speaker: string | null;
+  title: string;
+  url: string | null;
+  excerpt: string | null;
 };
 
 export type OutlookJudgment = {
@@ -361,6 +379,25 @@ export type OutlookJudgment = {
   invalidation: string | null;
   odds_read: string | null;
   abstract: string | null;
+  policy_comms?: OutlookPolicyComms | null;
+};
+
+export type OutlookWatchScenario = {
+  catalyst: string;
+  date: string | null;
+  time: string | null;
+  outcome_bullish: string;
+  outcome_bearish: string;
+  threshold: string | null;
+};
+
+export type OutlookCalendarItem = {
+  date: string;
+  time: string | null;
+  event: string;
+  consensus: string | null;
+  prior: string | null;
+  source: string | null;
 };
 
 export type OutlookTape = {
@@ -371,7 +408,23 @@ export type OutlookTape = {
   brief: string | null;
   brief_status: string | null;
   brief_model: string | null;
+  // Core fields
   headline: string | null;
+  tldr: string | null;
+  what_happened: string | null;
+  current_positioning: string | null;
+  drivers: string | null;
+  // Scenario planning
+  watch_today: OutlookWatchScenario[];
+  invalidation: string | null;
+  // Deep sections
+  macro_deep: string | null;
+  market_deep: string | null;
+  policy_deep: string | null;
+  geopolitical_deep: string | null;
+  // Calendar
+  calendar: OutlookCalendarItem[];
+  // Legacy fields
   abstract: string | null;
   conclusions: string[];
   expect: string | null;
@@ -386,6 +439,7 @@ export type OutlookTape = {
   news: OutlookNews[];
   events: OutlookEvent[];
   events_later: OutlookEvent[];
+  policy_items?: OutlookPolicyItem[];
   sources: OutlookSource[];
 };
 
