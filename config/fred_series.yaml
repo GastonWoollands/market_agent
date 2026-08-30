@@ -152,7 +152,7 @@ series:
     region: us
     pack_view: level
     spine: false
-    insight: London gold fixing. Structural hedge against fiscal risk; EM central banks accumulate during dollar strength cycles. Note: If this series fails, consider GOLDPMGBD228NLBM (PM fixing) as alternative.
+    insight: London gold fixing. Structural hedge against fiscal risk; EM central banks accumulate during dollar strength cycles. Fallback GOLDPMGBD228NLBM (PM fixing) if this series fails.
     watch: [GLD]
 
   - id: DCOILBRENTEU

@@ -1,4 +1,19 @@
-from store.catalog import load_fred_series, load_polymarket, load_universes
+from store.catalog import (
+    load_catalysts,
+    load_fred_series,
+    load_news_queries,
+    load_polymarket,
+    load_universes,
+)
+
+
+def test_all_catalog_yaml_files_parse() -> None:
+    """Fail fast on any malformed catalog YAML (syntax, unquoted colons, etc.)."""
+    assert load_universes().tape.instruments
+    assert load_fred_series().series
+    assert load_polymarket().events
+    assert load_news_queries().buckets
+    assert load_catalysts().fomc
 
 
 def test_universes_yaml_loads() -> None:
