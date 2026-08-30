@@ -46,7 +46,7 @@ def render_markdown(brief: OutlookBrief) -> str:
     if brief.watch_today:
         watch_items = []
         for scenario in brief.watch_today:
-            date_str = f"{scenario.date} " if scenario.date else ""
+            date_str = f" {scenario.date}" if scenario.date else ""
             time_str = f" at {scenario.time}" if scenario.time else ""
             threshold_str = f" ({scenario.threshold})" if scenario.threshold else ""
             watch_items.append(
