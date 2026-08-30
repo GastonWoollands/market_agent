@@ -145,8 +145,10 @@ Adding a ticker in the UI hydrates that name on demand. This job is the batch pa
 Make equivalent of A–F:
 
 ```bash
-make db migrate seed yahoo fred poly dynamics news fed-rss calendar pack outlook \
+make db migrate seed yahoo fred regime poly dynamics news fed-rss calendar pack outlook \
   sec yahoo-val valuation scores memos yahoo-watch intraday
+
+make yahoo fred regime poly dynamics news fed-rss calendar pack outlook
 ```
 
 ---
@@ -159,12 +161,13 @@ Intended times if you automate later. Until then, run the same commands by hand.
 
 1. `python -m jobs.ingest_yahoo` — delayed tape quotes
 2. `python -m jobs.ingest_fred` — 06:00 cadence
-3. `python -m jobs.ingest_intraday` — pre/post 5m gaps
-4. `python -m jobs.ingest_news`
-5. `python -m jobs.ingest_fed_rss`
-6. `python -m jobs.ingest_calendar` — Finnhub ~07:00
-7. `python -m jobs.build_pack`
-8. `python -m jobs.generate_outlook` — ~07:45
+3. `python -m jobs.compute_regime` — classify macro regime from FRED
+4. `python -m jobs.ingest_intraday` — pre/post 5m gaps
+5. `python -m jobs.ingest_news`
+6. `python -m jobs.ingest_fed_rss`
+7. `python -m jobs.ingest_calendar` — Finnhub ~07:00
+8. `python -m jobs.build_pack`
+9. `python -m jobs.generate_outlook` — ~07:45
 
 Open Outlook: the sources table must match `/health` job rows. Hover the header status dot for latest `job_run`.
 
@@ -191,6 +194,7 @@ python -m jobs.ingest_fed_rss
 python -m jobs.ingest_news
 python -m jobs.ingest_yahoo
 python -m jobs.ingest_fred
+python -m jobs.compute_regime
 python -m jobs.ingest_polymarket
 python -m jobs.build_pack
 python -m jobs.generate_outlook

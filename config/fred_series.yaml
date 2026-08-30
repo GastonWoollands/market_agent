@@ -296,6 +296,44 @@ series:
     insight: Gross federal debt as a percent of GDP. Quarterly; lag_days will be large — say so.
     frequency: quarterly
 
+  - id: WALCL
+    name: Fed total assets
+    unit: millions_usd
+    category: liquidity
+    region: us
+    pack_view: level
+    spine: true
+    insight: Federal Reserve balance sheet. QE expands (liquidity injection), QT contracts (tightening). Net liquidity = WALCL - (RRP + TGA).
+    frequency: weekly
+
+  - id: RRPONTSYD
+    name: Reverse repo operations
+    unit: millions_usd
+    category: liquidity
+    region: us
+    pack_view: level
+    insight: Overnight RRP facility usage. High RRP = excess reserves parked at Fed (liquidity not flowing to markets).
+    frequency: daily
+
+  - id: WTREGEN
+    name: Treasury General Account
+    unit: millions_usd
+    category: liquidity
+    region: us
+    pack_view: level
+    insight: Treasury's operating cash at the Fed. Rising TGA drains liquidity; falling TGA injects as Treasury spends.
+    frequency: daily
+
+  - id: TOTRESNS
+    name: Bank reserves
+    unit: millions_usd
+    category: liquidity
+    region: us
+    pack_view: level
+    show_on_live: false
+    insight: Bank reserves held at the Fed. Tracks QE/QT effects; low reserves signal liquidity stress.
+    frequency: weekly
+
   - id: ECBDFR
     name: ECB deposit rate
     unit: percent

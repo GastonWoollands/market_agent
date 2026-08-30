@@ -189,6 +189,12 @@ Sleeves in `analytics/scores.py`: Cheap 0.30, Quality 0.25, Change 0.20, Setup 0
 
 **Outliers / co-moves:** trailing z of 1-day changes across a small stored universe (2Y/10Y/30Y yields, VIX, dollar, yen, credit, SMH, IWM, XLK/XLU). Ranked chips plus jointly extreme sets with numbers and an optional writer-only `hint` (including `front_long` for 2s vs 30s). No causal verbs. `analytics/drivers.py`. The writer never computes these z-scores. Pack facts include `dgs2_d1_bp` and `dgs30_d1_bp`.
 
+**Regime classification:** Structured macro environment detection stored in `regime_snapshot` table. Classifies growth (expansion/slowdown/recession/recovery), inflation (accelerating/stable/decelerating), policy (tightening/neutral/easing), and volatility (suppressed/normal/elevated) with confidence scores. `analytics/regime_detect.py`. Job: `jobs/compute_regime.py`. Run after `ingest_fred` and before `build_pack`.
+
+**Liquidity conditions:** Net liquidity = Fed Balance Sheet (WALCL) - (Reverse Repo + TGA). Rising net liquidity historically correlates with risk asset strength. WoW change flags material shifts. `analytics/macro_pack.compute_net_liquidity`. Packed in `evidence_pack.liquidity`.
+
+**Anomaly detection:** Identifies unusual cross-asset behavior — correlation breakdowns (SPY/10Y moving same direction vs historical negative correlation), z-score extremes (>2σ moves), breadth divergences (SPY up while RSP/IWM down). `analytics/anomaly_detect.py`. Packed in `evidence_pack.anomalies` with severity scores. Top 3 anomalies by severity included for writer context.
+
 ---
 
 ## 10. AI layer

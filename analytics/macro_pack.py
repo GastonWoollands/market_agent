@@ -136,6 +136,56 @@ def series_row(
     return row
 
 
+def compute_net_liquidity(rows: Sequence[dict[str, Any]]) -> dict[str, Any] | None:
+    """
+    Calculate net liquidity: Fed Balance Sheet - (RRP + TGA).
+
+    Net liquidity represents unencumbered liquidity available to markets.
+    Rising net liquidity historically correlates with risk asset strength.
+
+    Args:
+        rows: Macro series rows with WALCL, RRPONTSYD, WTREGEN
+
+    Returns:
+        Dict with net_liquidity_bn, wow_change_bn, components or None if data missing
+    """
+    by_id = {row["series_id"]: row for row in rows}
+
+    walcl_row = by_id.get("WALCL")
+    rrp_row = by_id.get("RRPONTSYD")
+    tga_row = by_id.get("WTREGEN")
+
+    if not walcl_row or not rrp_row or not tga_row:
+        return None
+
+    fed_bs = walcl_row.get("value")
+    rrp_level = rrp_row.get("value")
+    tga_level = tga_row.get("value")
+
+    if fed_bs is None or rrp_level is None or tga_level is None:
+        return None
+
+    net_liq_mn = fed_bs - rrp_level - tga_level
+    net_liq_bn = net_liq_mn / 1000
+
+    wow_change_bn = None
+    if walcl_row.get("w1") and rrp_row.get("w1") and tga_row.get("w1"):
+        prior_net_liq = (fed_bs - walcl_row["w1"]) - (rrp_level - rrp_row["w1"]) - (
+            tga_level - tga_row["w1"]
+        )
+        wow_change_bn = (net_liq_mn - prior_net_liq) / 1000
+
+    return {
+        "net_liquidity_bn": round(net_liq_bn, 1),
+        "wow_change_bn": round(wow_change_bn, 1) if wow_change_bn else None,
+        "components": {
+            "fed_bs_bn": round(fed_bs / 1000, 1),
+            "rrp_bn": round(rrp_level / 1000, 1),
+            "tga_bn": round(tga_level / 1000, 1),
+        },
+    }
+
+
 def named_facts(rows: Sequence[dict[str, Any]]) -> dict[str, float | None]:
     by_id = {row["series_id"]: row for row in rows}
 
@@ -162,8 +212,11 @@ def named_facts(rows: Sequence[dict[str, Any]]) -> dict[str, float | None]:
         "forward_5y5y": field("T5YIFR"),
         "fed_vs_2y_bp": fed_vs_2y,
         "dgs2": dgs2,
+        "dgs2_d1_bp": field("DGS2", "d1_bp"),
         "dgs2_w1_bp": field("DGS2", "w1_bp"),
         "dgs10": field("DGS10"),
         "dgs10_w1_bp": field("DGS10", "w1_bp"),
         "dgs30": field("DGS30"),
+        "dgs30_d1_bp": field("DGS30", "d1_bp"),
+        "dgs30_w1_bp": field("DGS30", "w1_bp"),
     }

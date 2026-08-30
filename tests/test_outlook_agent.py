@@ -7,7 +7,9 @@ from agent.citations import citation_issues, coverage_issues
 from agent.errors import CitationError
 from agent.outlook import narrate, render_markdown, template_brief
 from agent.pack import assemble_pack
+from agent.prompts import PROMPT_VERSION
 from agent.providers import brief_from_text, make_client
+from analytics.outlook_judgment import build_judgment
 from store.settings import Settings
 
 
@@ -46,6 +48,16 @@ def _cited_brief() -> OutlookBrief:
         macro_md="DGS10 4.68. CPIAUCSL yoy_pct 2.7. ICSA weekly print_change -4.0.",
         market_md="^GSPC 5600.0 (-0.12%). Risk-On 0.4. XLK leading.",
         near_term_md="FOMC decision + SEP on 2026-09-16.",
+        tldr="Market consolidating ahead of FOMC decision.",
+        what_happened="Tape steady with DGS10 at 4.68%.",
+        current_positioning="Rates positioning neutral ahead of FOMC.",
+        drivers="FOMC decision and SEP on 2026-09-16.",
+        invalidation="Break below support invalidates consolidation.",
+        macro_deep="DGS10 4.68%. CPIAUCSL yoy_pct 2.7%. ICSA weekly print_change -4.0.",
+        market_deep="^GSPC 5600.0 (-0.12%). Risk-On 0.4. XLK leading.",
+        policy_deep="FOMC decision + SEP on 2026-09-16.",
+        geopolitical_deep=None,
+        calendar=[],
     )
 
 
@@ -117,7 +129,8 @@ def test_narrate_keeps_cited_agent_output() -> None:
     written = narrate(pack, client=_Client())
     assert written.status == "ok"
     assert written.model == "gemini/gemini-2.5-flash"
-    assert written.prompt_version == "outlook-v7"
+    assert written.prompt_version == PROMPT_VERSION
+    assert PROMPT_VERSION == "outlook-v9"
     assert "## Abstract" in written.body_md
     assert written.body_json["abstract"]
 
@@ -172,6 +185,60 @@ def test_narrate_drops_uncited_agent_output(caplog: pytest.LogCaptureFixture) ->
     assert "ticker:TSLA" in caught.value.issues
     assert "pct:99.9%" in caught.value.issues
     assert "Buy TSLA into 99.9%." in caplog.text
+
+
+def test_template_live_md_leads_with_policy_title() -> None:
+    pack = _pack()
+    pack["policy_items"] = [
+        {
+            "kind": "speech",
+            "speaker": "Chairman Warsh",
+            "title": "Keynote remarks by Chairman Warsh at Jackson Hole",
+            "published_at": "2026-08-28T14:00:00+00:00",
+            "excerpt": "price stability",
+        }
+    ]
+    facts = dict(pack.get("facts") or {})
+    facts["dgs2_d1_bp"] = 7.0
+    facts["dgs30_d1_bp"] = -8.0
+    pack["facts"] = facts
+    pack["judgment"] = build_judgment(
+        facts=facts,
+        macro=pack.get("macro") or [],
+        odds=pack.get("odds") or [],
+        events=pack.get("events") or [],
+        risk_on=pack.get("risk_on"),
+        policy_items=pack["policy_items"],
+        as_of=date(2026, 8, 29),
+    )
+    brief = template_brief(pack)
+    assert "Keynote remarks by Chairman Warsh at Jackson Hole" in brief.headline
+    assert "hawkish" in brief.headline
+    assert "Keynote remarks by Chairman Warsh at Jackson Hole" in brief.live_md
+    assert "stance hawkish" in brief.live_md
+    assert "2026-08-28" in brief.live_md
+    assert brief.expect.startswith("Next:")
+    assert "Events:" not in brief.expect
+    assert "ISM Services" not in brief.expect
+    assert "stance unavailable" not in brief.headline
+    assert "stance unavailable" not in brief.live_md
+    assert citation_issues(pack, render_markdown(brief)) == []
+
+
+def test_citation_rejects_speech_percent_absent_from_pack() -> None:
+    pack = _pack()
+    pack["policy_items"] = [
+        {
+            "kind": "speech",
+            "title": "Keynote remarks by Chairman Warsh at Jackson Hole",
+            "published_at": "2026-08-28T14:00:00+00:00",
+            "excerpt": "The PCE target is firm, fixed.",
+        }
+    ]
+    text = "Keynote remarks by Chairman Warsh at Jackson Hole. PCE ran 3.7%."
+    assert "pct:3.7%" in citation_issues(pack, text)
+    ok = "Keynote remarks by Chairman Warsh at Jackson Hole. DGS10 4.68."
+    assert citation_issues(pack, ok) == []
 
 
 def test_narrate_falls_back_to_template_without_client() -> None:

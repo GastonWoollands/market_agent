@@ -3,11 +3,14 @@ from decimal import Decimal
 
 import httpx
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import delete, func, select, text
 
 from ingest.retry import http_get, retry_call, retryable_status
 from ingest.yahoo.errors import YahooHttpError
 from ingest.yahoo.rate_limit import TokenBucket
+from jobs.runtime import MIGRATE_HINT, schema_behind_error
 from store.canonical import DailyBar, IntradayBar
 from store.catalog import CatalogInstrument
 from store.engine import session_scope
@@ -17,6 +20,24 @@ from store.repos import (
     upsert_instrument,
     upsert_intraday_bars,
 )
+
+
+def test_alembic_has_one_head() -> None:
+    script = ScriptDirectory.from_config(Config("alembic.ini"))
+    heads = script.get_heads()
+    assert heads == ["0015_create_regime_snapshot"], heads
+
+
+def test_schema_behind_error_maps_missing_table() -> None:
+    class UndefinedTable(Exception):
+        pass
+
+    wrapped = Exception("wrapper")
+    wrapped.orig = UndefinedTable('relation "policy_item" does not exist')
+    err = schema_behind_error(wrapped)
+    assert err is not None
+    assert str(err) == MIGRATE_HINT
+    assert schema_behind_error(RuntimeError("yahoo 429")) is None
 
 
 def test_retryable_status_never_retries_429() -> None:

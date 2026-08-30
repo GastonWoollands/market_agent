@@ -252,8 +252,31 @@ class EventItem(Base):
     __table_args__ = (
         CheckConstraint(
             "kind IN ('fomc', 'cpi', 'pce', 'nfp', 'gdp', 'jolts', 'earnings', "
-            "'election', 'central_bank', 'other')",
+            "'election', 'central_bank', 'speech', 'minutes', 'beige_book', "
+            "'ism', 'treasury', 'other')",
             name="ck_event_item_kind",
+        ),
+    )
+
+
+class PolicyItem(Base):
+    __tablename__ = "policy_item"
+
+    guid: Mapped[str] = mapped_column(String(512), primary_key=True)
+    published_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    speaker: Mapped[str | None] = mapped_column(String(128))
+    excerpt: Mapped[str | None] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(String(16), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('speech', 'statement', 'minutes', 'testimony')",
+            name="ck_policy_item_kind",
         ),
     )
 
@@ -345,6 +368,27 @@ class OpportunityScore(Base):
     ret_3m: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
 
     instrument: Mapped[Instrument] = relationship()
+
+
+class RegimeSnapshot(Base):
+    """Macro regime classification snapshot."""
+
+    __tablename__ = "regime_snapshot"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    as_of: Mapped[date] = mapped_column(Date, nullable=False, unique=True, index=True)
+    growth_regime: Mapped[str] = mapped_column(String(20), nullable=False)
+    inflation_regime: Mapped[str] = mapped_column(String(20), nullable=False)
+    policy_regime: Mapped[str] = mapped_column(String(20), nullable=False)
+    volatility_regime: Mapped[str] = mapped_column(String(20), nullable=False)
+    growth_confidence: Mapped[Decimal] = mapped_column(Numeric(4, 3), nullable=False)
+    inflation_confidence: Mapped[Decimal] = mapped_column(Numeric(4, 3), nullable=False)
+    policy_confidence: Mapped[Decimal] = mapped_column(Numeric(4, 3), nullable=False)
+    volatility_confidence: Mapped[Decimal] = mapped_column(Numeric(4, 3), nullable=False)
+    metrics: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
 
 class OpportunityMemoRow(Base):
