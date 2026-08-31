@@ -5,12 +5,15 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
 from sqlalchemy.orm import Session
 
+from analytics.drivers import MACRO_IDS as DRIVER_MACRO_IDS
+from analytics.drivers import TAPE_IDS as DRIVER_TAPE_IDS
+from analytics.drivers import as_dicts, rank_drivers
 from analytics.macro_pack import named_facts, series_row
 from analytics.outlook_judgment import build_judgment
 from analytics.risk_on import (
@@ -22,13 +25,22 @@ from analytics.risk_on import (
     compute_risk_on,
 )
 from store.catalog import load_fred_series, load_polymarket
-from store.models import BarDaily, MacroObservation, NewsItem, OddsSnapshot, QuoteLatest, RrgPoint
+from store.models import (
+    BarDaily,
+    MacroObservation,
+    NewsItem,
+    OddsSnapshot,
+    PolicyItem,
+    QuoteLatest,
+    RrgPoint,
+)
 from store.repos import (
     closes_for_tickers,
     event_count_for_source,
     latest_jobs,
     latest_news,
     latest_odds,
+    latest_policy_items,
     latest_return_stats,
     latest_rrg_points,
     live_tape_rows,
@@ -43,15 +55,23 @@ SOURCE_KEYS = (
     ("fred", "ingest_fred", "macro_observations"),
     ("polymarket", "ingest_polymarket", "odds_snapshots"),
     ("google_news", "ingest_news", "news_items"),
+    ("fed_rss", "ingest_fed_rss", "policy_items"),
     ("finnhub", "ingest_calendar", "earnings_events"),
     ("catalysts", "ingest_calendar", "yaml_events"),
     ("dynamics", "compute_dynamics", "rrg_points"),
+    ("regime", "compute_regime", "regime_snapshots"),
 )
 EVENTS_AHEAD_DAYS = 90
 EVENTS_NEAR_DAYS = 10
-NEAR_CATALYST_KINDS = frozenset({"fomc", "cpi", "pce", "nfp", "central_bank"})
+EVENTS_LOOKBACK_DAYS = 2
+LIVE_NEAR_DAYS = 2
+NEAR_CATALYST_KINDS = frozenset({"fomc", "cpi", "pce", "nfp", "central_bank", "speech"})
+LIVE_NEAR_CATALYST_KINDS = frozenset({"fomc", "cpi", "pce", "nfp", "speech"})
 NEWS_LIMIT = 80
 NEWS_PER_CATEGORY = 3
+POLICY_WINDOW_HOURS = 72
+POLICY_PACK_CAP = 8
+WRITER_POLICY_CAP = 3
 MACRO_HISTORY_DAYS = 450
 HEADER_TICKERS = ("^GSPC", "QQQ", "^RUT")
 
@@ -64,6 +84,12 @@ class SourceRow:
     status: str | None
     rows: int
     error: str | None = None
+
+
+def policy_cutoff(as_of: date) -> datetime:
+    return datetime(as_of.year, as_of.month, as_of.day, tzinfo=UTC) - timedelta(
+        hours=POLICY_WINDOW_HOURS
+    )
 
 
 def pack_hash(payload: dict[str, Any]) -> str:
@@ -111,9 +137,16 @@ def source_dicts(rows: list[SourceRow]) -> list[dict[str, Any]]:
 
 
 def partition_events(
-    rows: list[dict[str, Any]], as_of: date, *, near_days: int = EVENTS_NEAR_DAYS
+    rows: list[dict[str, Any]],
+    as_of: date,
+    *,
+    near_days: int = EVENTS_NEAR_DAYS,
+    near_kinds: frozenset[str] = NEAR_CATALYST_KINDS,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """10-day window plus the next FOMC/CPI/PCE/NFP/central_bank if later."""
+    """Near window plus the next packed catalyst kind if later.
+
+    Rows may include the lookback window (yesterday's speech still counts as near).
+    """
     near_end = as_of + timedelta(days=near_days)
     near: list[dict[str, Any]] = []
     later: list[dict[str, Any]] = []
@@ -129,7 +162,7 @@ def partition_events(
         if day <= near_end:
             near.append(row)
             have_kind.add(kind)
-        elif kind in NEAR_CATALYST_KINDS and kind not in have_kind:
+        elif kind in near_kinds and kind not in have_kind:
             near.append(row)
             have_kind.add(kind)
         else:
@@ -150,8 +183,10 @@ def assemble_pack(
     watchlist: list[dict[str, Any]],
     sources: list[dict[str, Any]],
     facts: dict[str, Any] | None = None,
+    policy_items: list[dict[str, Any]] | None = None,
     events_later: list[dict[str, Any]] | None = None,
     judgment: dict[str, Any] | None = None,
+    drivers: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     return {
         "as_of": as_of.isoformat(),
@@ -166,21 +201,27 @@ def assemble_pack(
         "news": news,
         "events": events,
         "events_later": events_later or [],
+        "policy_items": policy_items or [],
         "watchlist": watchlist,
+        "drivers": drivers or [],
         "opportunities": [],
         "sources": sources,
     }
 
 
 def store_counts(session: Session) -> dict[str, int]:
+    from store.models import RegimeSnapshot
+    
     return {
         "daily_bars": table_count(session, BarDaily),
         "macro_observations": table_count(session, MacroObservation),
         "odds_snapshots": table_count(session, OddsSnapshot),
         "news_items": table_count(session, NewsItem),
+        "policy_items": table_count(session, PolicyItem),
         "earnings_events": event_count_for_source(session, "finnhub"),
         "yaml_events": event_count_for_source(session, "yaml"),
         "rrg_points": table_count(session, RrgPoint),
+        "regime_snapshots": table_count(session, RegimeSnapshot),
         "quotes": table_count(session, QuoteLatest),
         "tape_instruments": universe_size(session, "tape"),
         "watchlist_instruments": universe_size(session, "watchlist"),
@@ -211,8 +252,16 @@ def pack_from_store(session: Session, *, as_of: date) -> dict[str, Any]:
         )
         for item in load_fred_series().series
     ]
+    
+    # Compute net liquidity from FRED series
+    from analytics.macro_pack import compute_net_liquidity
+    liquidity = compute_net_liquidity(macro)
+    
     odds = _odds_dicts(latest_odds(session))
     news = _news_dicts(latest_news(session, limit=NEWS_LIMIT))
+    policy_items = _policy_dicts(
+        latest_policy_items(session, since=policy_cutoff(as_of), limit=POLICY_PACK_CAP)
+    )
     rows = [
         {
             "date": item.date.isoformat(),
@@ -222,7 +271,9 @@ def pack_from_store(session: Session, *, as_of: date) -> dict[str, Any]:
             "source": item.source,
         }
         for item in upcoming_events(
-            session, start=as_of, end=as_of + timedelta(days=EVENTS_AHEAD_DAYS)
+            session,
+            start=as_of - timedelta(days=EVENTS_LOOKBACK_DAYS),
+            end=as_of + timedelta(days=EVENTS_AHEAD_DAYS),
         )
     ]
     events, events_later = partition_events(rows, as_of)
@@ -237,7 +288,43 @@ def pack_from_store(session: Session, *, as_of: date) -> dict[str, Any]:
     sources = source_dicts(sources_from_counts(latest_jobs(session), store_counts(session)))
     risk_on = _risk_on(session, as_of)
     facts = named_facts(macro)
-    return assemble_pack(
+    outliers, co_moves = as_dicts(*rank_drivers(_driver_series(session, as_of)))
+    drivers = [_quote_dict(tape[ticker]) for ticker in DRIVER_TAPE_IDS if ticker in tape]
+    
+    # Load regime classification
+    from store.models import RegimeSnapshot
+    regime_row = session.query(RegimeSnapshot).filter_by(as_of=as_of).first()
+    regime_data = None
+    if regime_row:
+        regime_data = {
+            "growth": regime_row.growth_regime,
+            "inflation": regime_row.inflation_regime,
+            "policy": regime_row.policy_regime,
+            "volatility": regime_row.volatility_regime,
+            "confidence": {
+                "growth": float(regime_row.growth_confidence),
+                "inflation": float(regime_row.inflation_confidence),
+                "policy": float(regime_row.policy_confidence),
+                "volatility": float(regime_row.volatility_confidence),
+            },
+            "metrics": regime_row.metrics,
+        }
+    
+    # Detect anomalies from recent tape and macro series
+    from analytics.anomaly_detect import detect_anomalies
+    anomaly_series = _driver_series(session, as_of)
+    anomalies_detected = detect_anomalies(anomaly_series, as_of)
+    anomalies_data = [
+        {
+            "type": a.type,
+            "description": a.description,
+            "severity": round(a.severity, 2),
+            "components": a.components,
+        }
+        for a in anomalies_detected
+    ] if anomalies_detected else []
+    
+    pack = assemble_pack(
         as_of=as_of,
         header=header,
         movers=movers,
@@ -246,18 +333,44 @@ def pack_from_store(session: Session, *, as_of: date) -> dict[str, Any]:
         odds=odds,
         news=news,
         events=events,
+        policy_items=policy_items,
         watchlist=watchlist,
         sources=sources,
         facts=facts,
         events_later=events_later,
+        drivers=drivers,
         judgment=build_judgment(
             facts=facts,
             macro=macro,
             odds=odds,
             events=events,
+            policy_items=policy_items,
+            as_of=as_of,
             risk_on=risk_on,
+            outliers=outliers,
+            co_moves=co_moves,
         ),
     )
+    
+    # Add new pack components
+    if regime_data:
+        pack["regime"] = regime_data
+    if liquidity:
+        pack["liquidity"] = liquidity
+    if anomalies_data:
+        pack["anomalies"] = anomalies_data
+    
+    return pack
+
+
+def _driver_series(session: Session, as_of: date) -> dict[str, list[tuple[date, float]]]:
+    start = as_of - timedelta(days=MACRO_HISTORY_DAYS)
+    out: dict[str, list[tuple[date, float]]] = {}
+    for ticker, points in closes_for_tickers(session, DRIVER_TAPE_IDS, start=start).items():
+        out[ticker] = [(day, float(value)) for day, value in points]
+    for series_id in DRIVER_MACRO_IDS:
+        out[series_id] = _macro_floats(session, series_id, start)
+    return out
 
 
 def _quote_dict(row: Any) -> dict[str, Any]:
@@ -341,16 +454,21 @@ WRITER_SERIES = frozenset(
         "GFDEGDQ188S",
         "BAMLH0A0HYM2",
         "BAMLC0A0CM",
+        "DEXJPUS",
+        "VIXCLS",
+        "DTWEXBGS",
     }
 )
+STALE_FOREIGN_LAG = 60
 
 
 def writer_pack(pack: dict[str, Any]) -> dict[str, Any]:
     macro = [row for row in pack.get("macro") or [] if isinstance(row, dict)]
+    extra = _writer_extra_ids(pack)
     spine = [
         row
         for row in macro
-        if row.get("spine") or row.get("series_id") in WRITER_SERIES
+        if _keep_writer_macro(row, extra)
     ]
     return {
         "as_of": pack.get("as_of"),
@@ -359,11 +477,37 @@ def writer_pack(pack: dict[str, Any]) -> dict[str, Any]:
         "macro": spine or macro,
         "odds": pack.get("odds") or [],
         "events": pack.get("events") or [],
+        "policy_items": (pack.get("policy_items") or [])[:WRITER_POLICY_CAP],
         "risk_on": pack.get("risk_on"),
         "rrg": pack.get("rrg") or [],
         "header": pack.get("header") or [],
+        "drivers": pack.get("drivers") or [],
         "news": (pack.get("news") or [])[:5],
     }
+
+
+def _writer_extra_ids(pack: dict[str, Any]) -> set[str]:
+    extra: set[str] = set()
+    judgment = pack.get("judgment") if isinstance(pack.get("judgment"), dict) else {}
+    for item in judgment.get("outliers") or []:
+        if isinstance(item, dict) and item.get("id"):
+            extra.add(str(item["id"]))
+    for item in judgment.get("co_moves") or []:
+        if not isinstance(item, dict):
+            continue
+        extra.update(str(name) for name in (item.get("ids") or []) if name)
+    return extra
+
+
+def _keep_writer_macro(row: dict[str, Any], extra: set[str]) -> bool:
+    series_id = str(row.get("series_id") or "")
+    if row.get("spine") or series_id in WRITER_SERIES or series_id in extra:
+        lag = row.get("lag_days")
+        foreign = row.get("region") not in (None, "us")
+        if foreign and isinstance(lag, int) and lag > STALE_FOREIGN_LAG:
+            return False
+        return True
+    return False
 
 
 def _odds_outcomes(raw: dict[str, Any] | None, fallback: str) -> list[dict[str, Any]]:
@@ -441,6 +585,24 @@ def _odds_dicts(rows: list[Any]) -> list[dict[str, Any]]:
                 "top_implied_yes": top["implied_yes"] if top else None,
             }
         )
+    return out
+
+
+def _policy_dicts(items: list[Any]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for item in items:
+        published = item.published_at.isoformat() if item.published_at else None
+        out.append(
+            {
+                "published_at": published,
+                "kind": item.kind,
+                "speaker": item.speaker,
+                "title": item.title,
+                "url": item.url,
+                "excerpt": item.excerpt,
+            }
+        )
+    out.sort(key=lambda row: 0 if row.get("kind") == "speech" else 1)
     return out
 
 

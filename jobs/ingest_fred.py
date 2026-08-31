@@ -49,7 +49,10 @@ def ingest(*, series_ids: set[str] | None = None) -> dict[str, int | list[str]]:
             try:
                 points = client.fetch_observations(item.id, observation_start=observation_start)
             except FredHttpError as exc:
-                log.warning("%s fetch failed: %s", item.id, exc)
+                msg = f"{item.id} fetch failed: {exc}"
+                if exc.status_code == 400:
+                    msg += f" (series may be discontinued or invalid; check https://fred.stlouisfed.org/series/{item.id})"
+                log.warning(msg)
                 failures.append(f"{item.id}: {exc}")
                 if exc.status_code == 429:
                     rate_limited = True

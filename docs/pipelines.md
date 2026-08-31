@@ -61,6 +61,7 @@ Fast path once the DB is already loaded:
 python -m jobs.ingest_yahoo
 python -m jobs.ingest_fred
 python -m jobs.ingest_news
+python -m jobs.ingest_fed_rss
 python -m jobs.ingest_calendar
 python -m jobs.build_pack
 python -m jobs.generate_outlook
@@ -76,12 +77,12 @@ Each step needs the ones above it. Skip a block only if you do not care about th
 
 | # | Command | Why |
 |---|---------|-----|
-| 1 | `python -m jobs.seed_tape` | Instruments + `tape` / `watchlist` from `config/universes.yaml` |
-| 2 | `python -m jobs.ingest_yahoo` | 5y daily bars + delayed quotes for the tape (~25 names) |
-| 3 | `python -m jobs.ingest_fred` | FRED catalog (US spine + global context; needs `FRED_API_KEY`) |
+| 1 | `python -m jobs.seed_tape` | Instruments + `tape` / `watchlist` from `config/universes.yaml` (includes US indices/ETFs + international indices: Nikkei/DAX/FTSE/HSI/CSI 300 + EEM) |
+| 2 | `python -m jobs.ingest_yahoo` | 5y daily bars + delayed quotes for the tape (~36 names: US + intl indices) |
+| 3 | `python -m jobs.ingest_fred` | FRED catalog (US spine: rates/inflation/growth/employment + FX: DXY/EUR/JPY/MXN/BRL/CNY + commodities: gold/copper/oil/gas + global: ECB/BOJ/PBOC; needs `FRED_API_KEY`) |
 | 4 | `python -m jobs.ingest_polymarket` | Fed / inflation / recession odds |
 
-Live tab works after this. Required tape names: **SPY**, **XLK**. Required FRED series: **DGS10**.
+Live tab works after this. Required tape names: **SPY**, **XLK**, **EEM**. Required FRED series: **DGS10**, **DTWEXBGS**, **GOLDAMGBD228NLBM**.
 
 ### B — Dynamics
 
@@ -95,12 +96,13 @@ No vendor call. Re-run after a fresh Yahoo daily ingest.
 
 | # | Command | Why |
 |---|---------|-----|
-| 6 | `python -m jobs.ingest_news` | Google News RSS (`config/news_queries.yaml`) |
-| 7 | `python -m jobs.ingest_calendar` | YAML catalysts (FOMC/CPI/PCE/NFP/GDP/JOLTS/CBs) + Finnhub watchlist earnings |
-| 8 | `python -m jobs.build_pack` | JSON evidence pack from **Postgres only** |
-| 9 | `python -m jobs.generate_outlook` | Brief from that pack |
+| 6 | `python -m jobs.ingest_news` | Google News RSS (`config/news_queries.yaml`: rates/inflation/growth/fx/commodities/trade/treasury/corporate/energy/central banks/geopolitics) |
+| 7 | `python -m jobs.ingest_fed_rss` | Fed Board RSS (statements, speeches, testimony) |
+| 8 | `python -m jobs.ingest_calendar` | YAML catalysts (FOMC/CPI/PCE/NFP/GDP/JOLTS/speeches/minutes/Beige Book/ISM/Treasury/CBs) + Finnhub watchlist earnings |
+| 9 | `python -m jobs.build_pack` | JSON evidence pack from **Postgres only** |
+| 10 | `python -m jobs.generate_outlook` | Brief from that pack |
 
-Use `--template` on step 9 to skip the LLM. Without a key, the job falls back to the template on its own.
+Use `--template` on step 10 to skip the LLM. Without a key, the job falls back to the template on its own.
 
 Calendar still writes FOMC/CPI dates if Finnhub is unset; earnings just stay empty.
 
@@ -143,8 +145,10 @@ Adding a ticker in the UI hydrates that name on demand. This job is the batch pa
 Make equivalent of A–F:
 
 ```bash
-make db migrate seed yahoo fred poly dynamics news calendar pack outlook \
+make db migrate seed yahoo fred regime poly dynamics news fed-rss calendar pack outlook \
   sec yahoo-val valuation scores memos yahoo-watch intraday
+
+make yahoo fred regime poly dynamics news fed-rss calendar pack outlook
 ```
 
 ---
@@ -157,19 +161,35 @@ Intended times if you automate later. Until then, run the same commands by hand.
 
 1. `python -m jobs.ingest_yahoo` — delayed tape quotes
 2. `python -m jobs.ingest_fred` — 06:00 cadence
-3. `python -m jobs.ingest_intraday` — pre/post 5m gaps
-4. `python -m jobs.ingest_news`
-5. `python -m jobs.ingest_calendar` — Finnhub ~07:00
-6. `python -m jobs.build_pack`
-7. `python -m jobs.generate_outlook` — ~07:45
+3. `python -m jobs.compute_regime` — classify macro regime from FRED
+4. `python -m jobs.ingest_intraday` — pre/post 5m gaps
+5. `python -m jobs.ingest_news`
+6. `python -m jobs.ingest_fed_rss`
+7. `python -m jobs.ingest_calendar` — Finnhub ~07:00
+8. `python -m jobs.build_pack`
+9. `python -m jobs.generate_outlook` — ~07:45 (Gemini, automated)
 
 Open Outlook: the sources table must match `/health` job rows. Hover the header status dot for latest `job_run`.
+
+**Manual override (optional):** If automated Gemini output needs better reasoning, use the Cursor skill:
+
+```
+# In Cursor Chat
+/generate-outlook-manual
+```
+
+Use manual generation when:
+- High-severity anomalies detected (>0.7 severity)
+- Regime classification changed
+- Complex cross-asset narratives
+- Testing prompt changes
 
 ### During the session
 
 ```bash
 python -m jobs.ingest_polymarket     # every 15–60 min
 python -m jobs.ingest_news           # every ~30 min
+python -m jobs.ingest_fed_rss        # every ~30 min with news
 python -m jobs.ingest_yahoo          # quotes when you want a fresher tape
 ```
 
@@ -178,6 +198,19 @@ python -m jobs.ingest_yahoo          # quotes when you want a fresher tape
 ```bash
 python -m jobs.ingest_yahoo
 python -m jobs.compute_dynamics
+```
+
+After a Chair speech (same stored Outlook slice; no Live-time LLM):
+
+```bash
+python -m jobs.ingest_fed_rss
+python -m jobs.ingest_news
+python -m jobs.ingest_yahoo
+python -m jobs.ingest_fred
+python -m jobs.compute_regime
+python -m jobs.ingest_polymarket
+python -m jobs.build_pack
+python -m jobs.generate_outlook
 ```
 
 ### Nightly / monthly (Valuation + Opportunities)
@@ -213,6 +246,39 @@ python -m jobs.backfill fred --series DGS10
 
 Timeouts and HTTP 5xx retry up to 3 times inside the adapters. **Yahoo 429 still fails fast** — stop and resume later.
 
+### Outlook generation strategy
+
+Two approaches: **automated (default)** and **manual override (Cursor skill)**.
+
+#### Automated (Gemini - 80% of days)
+
+```bash
+python -m jobs.generate_outlook
+```
+
+- **Model:** `gemini-2.5-flash` (default) or `claude-sonnet-4-5` (if `ANTHROPIC_API_KEY` set)
+- **Speed:** 5-10 seconds
+- **Cost:** ~$0.01 per run (Gemini) or ~$0.50 per run (Claude API)
+- **Use when:** Normal market day, routine updates, running unattended
+
+Template fallback if API unavailable: `python -m jobs.generate_outlook --template`
+
+#### Manual (Cursor skill - 20% of days)
+
+In Cursor Chat: `/generate-outlook-manual`
+
+- **Model:** `claude-sonnet-4` (via Cursor subscription)
+- **Speed:** 15-30 seconds (with streaming)
+- **Cost:** Included in Cursor subscription
+- **Use when:**
+  - High-severity anomalies (>0.7 severity)
+  - Regime classification changed
+  - Complex cross-asset narratives require nuance
+  - Testing prompt changes before deployment
+  - Gemini output was too generic
+
+Both write to `outlook_report` table. UI displays latest for the date.
+
 ---
 
 ## 5. Job reference
@@ -225,6 +291,7 @@ Timeouts and HTTP 5xx retry up to 3 times inside the adapters. **Yahoo 429 still
 | `jobs.ingest_polymarket` | `odds_snapshot` | `--slugs slug-a,slug-b` |
 | `jobs.compute_dynamics` | `rrg_point`, `return_stats` | — |
 | `jobs.ingest_news` | `news_item` | `--categories macro,fed` |
+| `jobs.ingest_fed_rss` | `policy_item` | `--kinds speech,statement` |
 | `jobs.ingest_calendar` | `event_item` | `--skip-finnhub` |
 | `jobs.build_pack` | `evidence_pack` | `--as-of YYYY-MM-DD` |
 | `jobs.generate_outlook` | `outlook_report` | `--template`, `--as-of`, `--provider`, `--model` |
@@ -245,7 +312,7 @@ Catalogs you may edit without code:
 | `config/fred_series.yaml` | FRED ingest + Live insight templates + Outlook pack views |
 | `config/polymarket_slugs.yaml` | odds (edit when a contract expires) |
 | `config/news_queries.yaml` | news ingest |
-| `config/catalysts.yaml` | FOMC / CPI / PCE / NFP / GDP / JOLTS / CBs / elections (hand-maintained) |
+| `config/catalysts.yaml` | FOMC / CPI / PCE / NFP / GDP / JOLTS / speeches / minutes / Beige Book / ISM / Treasury / CBs / elections (hand-maintained) |
 
 ---
 

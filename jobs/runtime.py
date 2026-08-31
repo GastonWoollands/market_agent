@@ -6,6 +6,18 @@ from typing import Any
 from store.engine import session_scope
 from store.models import JobRun
 
+MIGRATE_HINT = "Postgres schema is behind the code. Run `make migrate` (alembic upgrade head)."
+
+
+def schema_behind_error(exc: BaseException) -> RuntimeError | None:
+    """Map a missing-table ProgrammingError to an operator migrate hint."""
+    orig = getattr(exc, "orig", None)
+    name = type(orig).__name__ if orig is not None else type(exc).__name__
+    text = str(orig or exc).lower()
+    if "undefinedtable" in name.lower() or "does not exist" in text:
+        return RuntimeError(MIGRATE_HINT)
+    return None
+
 
 def record_job(
     job_name: str,

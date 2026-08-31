@@ -1,4 +1,19 @@
-from store.catalog import load_fred_series, load_polymarket, load_universes
+from store.catalog import (
+    load_catalysts,
+    load_fred_series,
+    load_news_queries,
+    load_polymarket,
+    load_universes,
+)
+
+
+def test_all_catalog_yaml_files_parse() -> None:
+    """Fail fast on any malformed catalog YAML (syntax, unquoted colons, etc.)."""
+    assert load_universes().tape.instruments
+    assert load_fred_series().series
+    assert load_polymarket().events
+    assert load_news_queries().buckets
+    assert load_catalysts().fomc
 
 
 def test_universes_yaml_loads() -> None:
@@ -9,7 +24,7 @@ def test_universes_yaml_loads() -> None:
     assert catalog.watchlist.instruments
     assert {item.ticker for item in catalog.watchlist.instruments} >= {"NVDA", "SPY"}
     header = [item.ticker for item in catalog.live.header]
-    assert header == ["^GSPC", "QQQ", "^RUT", "^DJI", "USO", "GLD"]
+    assert header == ["^GSPC", "IWM", "^VIX", "TLT", "UUP", "HYG"]
     assert "SPY" not in header
     assert catalog.live.header[0].label == "S&P 500"
 
@@ -33,6 +48,8 @@ def test_fred_series_yaml_has_ten_year() -> None:
     icsa = next(item for item in catalog.series if item.id == "ICSA")
     assert icsa.scale == 0.001
     assert icsa.spine is True
+    yen = next(item for item in catalog.series if item.id == "DEXJPUS")
+    assert yen.show_on_live is True
     assert any(item.id == "IRLTLT01JPM156N" and not item.show_on_live for item in catalog.series)
 
 

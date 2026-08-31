@@ -55,7 +55,7 @@ Do not implement a non-goal because it appeared in an older plan. Change this se
 
 | Tab | Job |
 |-----|-----|
-| **Live** | Indices, sector tape, macro levers, Polymarket odds, Risk-On pill, drill-down chart |
+| **Live** | The read (stored Outlook `headline` / `live_md` / `expect`), regime & conditions band (growth/inflation/policy/volatility from `regime_snapshot`, Risk-On score, net liquidity), regime header (index, breadth, vol, duration, dollar, credit), global markets (`intl_section`), breakpoints (anomalies), outlier/co-move chips, Risk-On factors, today and the last two sessions’ catalysts, watchlist outliers, sector tape, Polymarket odds, existing FRED drill-down chart |
 | **Outlook** | Structured brief (macro / market / near-term), numeric snapshot from the pack, news tape, near calendar, **sources freshness table** |
 | **Dynamics** | RRG, indexed relative performance, sector table, correlation, lead-lag |
 | **Valuation** | EV/EBITDA vs own 5y range, industry, growth × re-rating |
@@ -118,11 +118,12 @@ Frozen for v1. A new vendor is a contract change: update this section first. Cat
 | Daily OHLCV, sector ETFs, proxy levers | Yahoo via `yfinance` behind `YahooClient` | 16:30 ET |
 | Quote tape (delayed) | Same yfinance session | 60s in session when you re-run |
 | Pre/post 5m gaps | Yahoo 5m | ~07:30 ET, **tape + watchlist only** |
-| Yields, VIX, CPI/PCE (as indexes; pack computes YoY/MoM), OAS, DXY, WTI, real yield, breakevens, payrolls, claims, debt/GDP, ECB policy, dollar crosses, lag-stamped foreign 10Ys | FRED (`config/fred_series.yaml`) | 06:00 ET |
+| Yields, VIX, CPI/PCE (as indexes; pack computes YoY/MoM), OAS, DXY (spine), WTI/Brent/gold/copper, real yield, breakevens, payrolls, claims, durable goods, debt/GDP, ECB/BOJ/PBOC policy, dollar crosses (EUR/JPY/GBP/MXN/BRL/CNY), lag-stamped foreign 10Ys | FRED (`config/fred_series.yaml`) | 06:00 ET |
 | Fed / inflation / recession / geo odds | Polymarket Gamma API (`config/polymarket_slugs.yaml`) | 15–60 min in session |
 | Headlines | Google News RSS (`config/news_queries.yaml`) | 30 min |
+| FOMC statements, minutes, Chair speeches, testimony | Fed Board RSS (`press_monetary`, `speeches`, `testimony`) via `ingest/fed_rss` | 30–60 min in session |
 | Earnings calendar + EPS/rev est. | Finnhub free | 07:00 ET |
-| FOMC, CPI, PCE, NFP, GDP, JOLTS, ECB/BoE/BoJ, elections | curated `config/catalysts.yaml` | hand, yearly |
+| FOMC, CPI, PCE, NFP, GDP, JOLTS, Chair/Jackson Hole speeches, FOMC minutes, Beige Book, ISM, Treasury refunding, ECB/BoE/BoJ, elections | curated `config/catalysts.yaml` | hand, yearly |
 | TTM metrics + valuation membership | SEC EDGAR companyfacts (bulk zip, then incremental) | nightly / monthly |
 | Charts | TradingView widget | client-side, no ingest |
 
@@ -130,7 +131,7 @@ Frozen for v1. A new vendor is a contract change: update this section first. Cat
 
 **Yahoo:** ≤2 req/s, `auto_adjust=False`, HTTP 429 fails fast. Timeouts/5xx retry ≤3.
 
-Do not add scraping, unofficial APIs, or non-US listings. Expanding the FRED catalog is not a new vendor. International **listings** stay out.
+Do not add scraping, unofficial APIs, or non-US listings. Expanding the FRED catalog is not a new vendor. International **listings** stay out, but international **indices** (Nikkei, DAX, FTSE, HSI, CSI 300) and **EM ETFs** (EEM) via Yahoo are permitted for context.
 
 ---
 
@@ -138,7 +139,7 @@ Do not add scraping, unofficial APIs, or non-US listings. Expanding the FRED cat
 
 | Tier | Contents | Stored history |
 |------|----------|----------------|
-| **A Tape** | Indices/ETFs in `config/universes.yaml` | daily + quotes + 5m extended |
+| **A Tape** | US indices/ETFs + international indices (Nikkei, DAX, FTSE, HSI, CSI 300) + EEM in `config/universes.yaml` | daily + quotes + 5m extended |
 | **B Valuation / Opportunity** | US NYSE/Nasdaq, TTM revenue ≥ $1B, usable XBRL, Yahoo history | daily bars + SEC TTM + valuation |
 | **C Watchlist** | user-defined | daily + 5m + TV chart |
 
@@ -159,7 +160,7 @@ Keep vendor payloads out of hot tables. Polymarket `raw` JSONB is the exception.
 | Macro | `macro_series`, `macro_observation`, `odds_snapshot` | FRED prints; Polymarket implied yes |
 | Fundamentals | `metric_ttm` | Point-in-time TTM from SEC companyfacts (no `filing` / `financial_fact` tables) |
 | Derived | `valuation_daily`, `rrg_point`, `return_stats`, `opportunity_score` | Python → Postgres; the writer never computes these |
-| News / calendar | `news_item`, `event_item` | RSS headlines; YAML catalysts (FOMC/CPI/PCE/NFP/GDP/JOLTS/central banks) + Finnhub earnings |
+| News / calendar | `news_item`, `event_item`, `policy_item` | RSS headlines; YAML catalysts (FOMC/CPI/PCE/NFP/GDP/JOLTS/speeches/minutes/Beige Book/ISM/Treasury/central banks) + Finnhub earnings; official Fed Board RSS (speech/statement/minutes/testimony excerpts) |
 | Agent | `evidence_pack`, `outlook_report`, `opportunity_memo`, `job_run` | Pack JSONB, briefs, memos, run log |
 
 ---
@@ -186,23 +187,70 @@ Sleeves in `analytics/scores.py`: Cheap 0.30, Quality 0.25, Change 0.20, Setup 0
 
 **Macro pack:** Python turns stored FRED history into writer-facing rows (bp changes, CPI/PCE YoY/MoM, payrolls change, named facts such as 2s10s and funds-vs-2Y). `analytics/macro_pack.py`. The writer never computes these.
 
+**Outliers / co-moves:** trailing z of 1-day changes across a small stored universe (2Y/10Y/30Y yields, VIX, dollar, yen, credit, SMH, IWM, XLK/XLU). Ranked chips plus jointly extreme sets with numbers and an optional writer-only `hint` (including `front_long` for 2s vs 30s). No causal verbs. `analytics/drivers.py`. The writer never computes these z-scores. Pack facts include `dgs2_d1_bp` and `dgs30_d1_bp`.
+
+**Regime classification:** Structured macro environment detection stored in `regime_snapshot` table. Classifies growth (expansion/slowdown/recession/recovery), inflation (accelerating/stable/decelerating), policy (tightening/neutral/easing), and volatility (suppressed/normal/elevated) with confidence scores. `analytics/regime_detect.py`. Job: `jobs/compute_regime.py`. Run after `ingest_fred` and before `build_pack`. Surfaced on Live (latest snapshot) and packed for Outlook.
+
+**Liquidity conditions:** Net liquidity = Fed Balance Sheet (WALCL) - (Reverse Repo + TGA). Rising net liquidity historically correlates with risk asset strength. WoW change flags material shifts. `analytics/macro_pack.compute_net_liquidity`. Packed in `evidence_pack.liquidity` and computed read-time for `GET /live`.
+
+**Anomaly detection:** Identifies unusual cross-asset behavior — correlation breakdowns (SPY/10Y moving same direction vs historical negative correlation), z-score extremes (>2σ moves), breadth divergences (SPY up while RSP/IWM down). `analytics/anomaly_detect.py`. Packed in `evidence_pack.anomalies` with severity scores (top 3 by severity for writer context) and surfaced read-time on Live as "Breakpoints".
+
 ---
 
 ## 10. AI layer
 
 Unattended local = `cron` / `launchd` → Python job → Anthropic or Gemini (official SDKs). Template fallback when the API is down. No in-process scheduler. Ollama can wait.
 
-**Evidence pack** (Python, stored JSONB) includes index/sector returns, a precomputed macro snapshot (levels, bp/YoY deltas, `lag_days`, named facts), a `judgment` object (takeaways, tensions, watch, invalidation), Risk-On, RRG, labeled Polymarket odds, stored headlines (capped per bucket), near vs later events, watchlist outliers, top opportunity rows, and a `sources[]` freshness table. `agent/pack.py`.
+**Evidence pack** (Python, stored JSONB) includes index/sector returns, a precomputed macro snapshot (levels, bp/YoY deltas, `lag_days`, named facts), a `judgment` object (takeaways, tensions, watch, invalidation, outliers, co_moves, `policy_comms`), Risk-On, RRG, labeled Polymarket odds, stored headlines (capped per bucket), last-72h official Fed `policy_items[]`, near vs later events, watchlist outliers, top opportunity rows, and a `sources[]` freshness table. `agent/pack.py`. Writer may quote packed policy excerpts only.
 
 **Generation rules**
 
-- Temperature low; structured JSON out: `{headline, abstract, conclusions, expect, macro_md, market_md, near_term_md}`
-- System prompt: *only narrate pack fields; prefer judgment; if a field is missing, say unavailable; not a trading signal; use pack YoY/bp, never raw CPI/PCE indexes as percents*
+- Temperature low; structured JSON out: `{headline, abstract, conclusions, expect, live_md, macro_md, market_md, near_term_md}`
+- `live_md` is the short Live slice (2–4 sentences). Outlook keeps the long sections. No second writer job and no Live-time LLM.
+- System prompt: *only narrate pack fields; prefer judgment (including co_moves / outliers / watch / policy_comms) and policy_items; if a field is missing, say unavailable; not a trading signal; use pack YoY/bp, never raw CPI/PCE indexes as percents; do not invent a hike date or a mechanism those fields do not support*
 - Post-check: every ticker and every `%` / yield in the output must appear in the pack; CPI YoY and weekly claims must be covered when present — otherwise fail the job and keep yesterday’s report (`agent/citations.py`)
 - Prompt version stored on the row
 - Opportunities: one memo schema `{why_scored, what_10q_changed, invalidation, caveats}` per top name
 
 **Do not** give the model tools to fetch live prices. Do not wrap LangChain. Call `anthropic` / `google-genai`, not raw HTTP.
+
+### 10.1 Outlook narrative structure
+
+The Outlook brief must provide structured, actionable analysis — not merely event narration. The following sections are required in the JSON output and markdown rendering:
+
+**Core sections (required):**
+
+- `tldr`: 1-2 sentence synthesis of regime + primary catalyst + market direction. Not a summary, a takeaway.
+- `what_happened`: 3-5 sentences explaining yesterday's cross-asset move as a mechanism. Which asset led? What followed? Use packed `co_moves` and `outliers` to identify rotation/deleveraging/carry stories. Numbers are evidence for causality.
+- `current_positioning`: 3-4 sentences on where key spreads (2s10s, HY-IG, DXY, breakevens, fed_vs_2y_bp, gold, EM FX if present) sit relative to recent ranges. Use `judgment.tensions` to frame fragility. Include specific levels and cross-asset signals (e.g., gold rallying with equities = fiscal hedge, not flight-to-quality).
+- `drivers`: 3-5 sentences distinguishing scheduled events (`watch.role=printed`) from ongoing forces (odds shifts, geopolitical premium, liquidity conditions, curve dynamics). If the move preceded the catalyst, say so.
+
+**Scenario planning (required):**
+
+- `watch_today`: Array of structured scenarios for each `watch.role=next` catalyst. Each includes `{catalyst, outcome_bullish, outcome_bearish, threshold}`. Branching logic: if CPI > consensus, what happens to 2Y vs 10Y? To equities? Use `judgment.invalidation` to bound scenarios.
+- `invalidation`: Explicit triggers that would break the current read. Include thresholds (e.g., "10Y breaking 4.80% sustained" or "payrolls < 150k with rising claims"). Use packed `judgment.invalidation` + extend with market-structure triggers.
+
+**Deep sections (required, 4-6 sentences each):**
+
+- `macro_deep`: Curve (2s10s, real_10y, fed_vs_2y_bp), inflation gap (breakeven_10y vs CPI/PCE YoY), employment (PAYEMS print_change, UNRATE, ICSA weekly), FX & commodities (DXY direction, gold vs real yields, oil for inflation/geopolitics, copper for industrial demand), fiscal (GFDEGDQ188S), global context (ECB/BOJ/PBOC rates, major international indices if diverging). Narrate regime, not just levels.
+- `market_deep`: Risk-On score + factors, HY vs IG (OAS), odds top_outcome with implied_yes, cross-asset positioning (DXY transmission to EM/commodities/carry), RRG quadrant shifts, international divergence (EEM, Nikkei, DAX, HSI vs SPY). Contrast front-end (DGS2/Fed odds) with long-end (DGS10/DGS30/breakevens). Explain what the market is pricing.
+- `policy_deep`: Synthesize `policy_comms` (stance, speaker, tensions) and `policy_items` excerpts. What is the Fed/ECB/BOJ watching? Where is the next inflection? Use packed odds to quantify market expectations.
+- `geopolitical_deep`: (optional, only if relevant) Energy infrastructure (oil supply/demand, refining capacity, natural gas/LNG), trade policy (active tariff disputes, supply chain shifts), geopolitical risk premium (conflicts affecting shipping/commodities/safe havens). Systematic approach: use news items, Fed/Treasury commentary, cross-asset correlations. Distinguished structural vs transient risk. Omit if not market-relevant.
+
+**Meta (required for backward compat):**
+
+- `conclusions`: Three bullets (Printed / Tape / Next) for audit trail. Keep existing logic.
+- `calendar`: Structured array with `{date, time, event, consensus, prior, source}` for next sessions' tests.
+
+**Rendering principles:**
+
+1. Synthesis over narration: explain mechanisms, not just report numbers
+2. Cross-asset connections: how does policy affect markets affect economy?
+3. Forward scenarios: give the reader branching outcomes with explicit thresholds
+4. Hierarchical structure: TL;DR → What Happened → Drivers → Watch Today → Deep Dive → Invalidation
+5. Actionability: every section answers "so what?" for a market professional
+
+**Citation rules remain:** every ticker, `%`, and yield must appear in the pack. New fields (`tldr`, `what_happened`, `current_positioning`, `drivers`, `watch_today`) must pass the same citation checks as existing fields.
 
 ---
 

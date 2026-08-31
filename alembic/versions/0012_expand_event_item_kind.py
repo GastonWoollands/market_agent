@@ -21,11 +21,17 @@ NEW_KINDS = (
 OLD_KINDS = "kind IN ('fomc', 'cpi', 'earnings', 'election', 'other')"
 
 
+def _replace_kind_check(sql: str) -> None:
+    op.execute("ALTER TABLE event_item DROP CONSTRAINT IF EXISTS ck_event_item_kind")
+    op.execute(
+        "ALTER TABLE event_item DROP CONSTRAINT IF EXISTS ck_event_item_ck_event_item_kind"
+    )
+    op.execute(f"ALTER TABLE event_item ADD CONSTRAINT ck_event_item_kind CHECK ({sql})")
+
+
 def upgrade() -> None:
-    op.drop_constraint("ck_event_item_kind", "event_item", type_="check")
-    op.create_check_constraint("ck_event_item_kind", "event_item", NEW_KINDS)
+    _replace_kind_check(NEW_KINDS)
 
 
 def downgrade() -> None:
-    op.drop_constraint("ck_event_item_kind", "event_item", type_="check")
-    op.create_check_constraint("ck_event_item_kind", "event_item", OLD_KINDS)
+    _replace_kind_check(OLD_KINDS)

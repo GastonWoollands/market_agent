@@ -134,7 +134,8 @@ series:
     category: fx
     region: us
     pack_view: level
-    insight: Trade-weighted USD. A strong dollar tightens global financial conditions.
+    spine: true
+    insight: Trade-weighted USD (DXY). A strong dollar tightens global financial conditions and pressures EM assets.
 
   - id: DCOILWTICO
     name: WTI Crude
@@ -143,6 +144,42 @@ series:
     region: us
     pack_view: level
     insight: Spot WTI. Energy equities (XLE) and inflation prints track this with a lag.
+
+  - id: GOLDAMGBD228NLBM
+    name: Gold spot
+    unit: usd_per_oz
+    category: commodities
+    region: us
+    pack_view: level
+    spine: false
+    insight: London gold fixing. Structural hedge against fiscal risk; EM central banks accumulate during dollar strength cycles. Fallback GOLDPMGBD228NLBM (PM fixing) if this series fails.
+    watch: [GLD]
+
+  - id: DCOILBRENTEU
+    name: Brent Crude
+    unit: usd_per_barrel
+    category: commodities
+    region: intl
+    pack_view: level
+    show_on_live: false
+    insight: Global oil benchmark. Tracks geopolitical premium and OPEC+ supply dynamics vs WTI.
+
+  - id: DHHNGSP
+    name: Henry Hub Natural Gas
+    unit: usd_per_mmbtu
+    category: commodities
+    region: us
+    pack_view: level
+    show_on_live: false
+    insight: US natural gas spot. Winter heating demand and LNG export capacity drive seasonal volatility.
+
+  - id: PCOPPUSDM
+    name: Copper spot
+    unit: usd_per_mt
+    category: commodities
+    region: intl
+    pack_view: level
+    insight: Dr. Copper signals global industrial demand. China infrastructure and EV battery production are primary drivers.
 
   - id: CPIAUCSL
     name: CPI all items
@@ -212,6 +249,44 @@ series:
     insight: Weekly initial jobless claims (FRED persons, scaled to thousands). Narrate print_change.
     frequency: weekly
 
+  - id: DGORDER
+    name: Durable goods orders
+    unit: millions_usd
+    category: growth
+    region: us
+    pack_view: mom_pct
+    insight: Monthly new orders for durable manufactured goods. Capital spending proxy; ex-transportation removes aircraft volatility.
+    frequency: monthly
+
+  - id: NEWORDER
+    name: Durable goods ex-transportation
+    unit: millions_usd
+    category: growth
+    region: us
+    pack_view: mom_pct
+    insight: Core durable goods orders stripping aircraft. Better signal for sustained manufacturing demand.
+    frequency: monthly
+
+  - id: INDPRO
+    name: Industrial production
+    unit: index
+    category: growth
+    region: us
+    pack_view: mom_pct
+    show_on_live: false
+    insight: Manufacturing, mining, utilities output. Tracks capacity utilization and factory bottlenecks.
+    frequency: monthly
+
+  - id: UMCSENT
+    name: Michigan consumer sentiment
+    unit: index
+    category: growth
+    region: us
+    pack_view: level
+    show_on_live: false
+    insight: Consumer confidence survey. Forward-looking spending proxy; inflation expectations component is Fed-watched.
+    frequency: monthly
+
   - id: GFDEGDQ188S
     name: Federal debt / GDP
     unit: percent
@@ -220,6 +295,44 @@ series:
     pack_view: level
     insight: Gross federal debt as a percent of GDP. Quarterly; lag_days will be large — say so.
     frequency: quarterly
+
+  - id: WALCL
+    name: Fed total assets
+    unit: millions_usd
+    category: liquidity
+    region: us
+    pack_view: level
+    spine: true
+    insight: Federal Reserve balance sheet. QE expands (liquidity injection), QT contracts (tightening). Net liquidity = WALCL - (RRP + TGA).
+    frequency: weekly
+
+  - id: RRPONTSYD
+    name: Reverse repo operations
+    unit: millions_usd
+    category: liquidity
+    region: us
+    pack_view: level
+    insight: Overnight RRP facility usage. High RRP = excess reserves parked at Fed (liquidity not flowing to markets).
+    frequency: daily
+
+  - id: WTREGEN
+    name: Treasury General Account
+    unit: millions_usd
+    category: liquidity
+    region: us
+    pack_view: level
+    insight: Treasury's operating cash at the Fed. Rising TGA drains liquidity; falling TGA injects as Treasury spends.
+    frequency: daily
+
+  - id: TOTRESNS
+    name: Bank reserves
+    unit: millions_usd
+    category: liquidity
+    region: us
+    pack_view: level
+    show_on_live: false
+    insight: Bank reserves held at the Fed. Tracks QE/QT effects; low reserves signal liquidity stress.
+    frequency: weekly
 
   - id: ECBDFR
     name: ECB deposit rate
@@ -244,8 +357,7 @@ series:
     category: fx
     region: jp
     pack_view: fx
-    show_on_live: false
-    insight: Yen per dollar. A weak yen often tracks US-Japan rate differentials.
+    insight: "Yen per dollar (JPY per USD; a rise is a weaker yen). A weak yen often tracks US-Japan rate differentials."
 
   - id: DEXUSUK
     name: USD per GBP
@@ -255,6 +367,30 @@ series:
     pack_view: fx
     show_on_live: false
     insight: Dollar vs sterling spot.
+
+  - id: DEXMXUS
+    name: MXN per USD
+    unit: mxn_per_usd
+    category: fx
+    region: mx
+    pack_view: fx
+    insight: Peso per dollar. Mexico is the top US trade partner; peso strength signals USMCA stability and remittance flows.
+
+  - id: DEXBZUS
+    name: BRL per USD
+    unit: brl_per_usd
+    category: fx
+    region: br
+    pack_view: fx
+    insight: Real per dollar. Brazil's commodity exports and domestic policy drive EM sentiment; tracks oil and iron ore.
+
+  - id: DEXCHUS
+    name: CNY per USD
+    unit: cny_per_usd
+    category: fx
+    region: cn
+    pack_view: fx
+    insight: Official yuan per dollar. PBOC manages this band; divergence from offshore CNH signals capital flow pressure.
 
   - id: IRLTLT01DEM156N
     name: Germany 10Y

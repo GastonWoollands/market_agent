@@ -7,7 +7,7 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from agent.pack import pack_from_store, pack_hash
-from jobs.runtime import record_job
+from jobs.runtime import record_job, schema_behind_error
 from store.engine import session_scope
 from store.repos import upsert_evidence_pack
 
@@ -41,7 +41,12 @@ def main() -> None:
     try:
         result = build(as_of=chosen)
     except Exception as exc:
-        record_job(JOB_NAME, status="error", rows_written=0, error=str(exc))
+        behind = schema_behind_error(exc)
+        error = str(behind or exc)
+        record_job(JOB_NAME, status="error", rows_written=0, error=error)
+        if behind is not None:
+            log.error("%s", behind)
+            raise SystemExit(1) from behind
         log.exception("build_pack failed")
         raise SystemExit(1) from exc
 

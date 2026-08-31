@@ -41,7 +41,21 @@ def test_catalysts_yaml_has_remaining_2026_fomc_and_cpi() -> None:
     catalog = load_catalysts()
     events = events_from_yaml(catalog)
     kinds = {item.kind for item in events}
-    assert {"fomc", "cpi", "pce", "nfp", "gdp", "jolts", "election", "central_bank"} <= kinds
+    assert {
+        "fomc",
+        "cpi",
+        "pce",
+        "nfp",
+        "gdp",
+        "jolts",
+        "election",
+        "central_bank",
+        "speech",
+        "minutes",
+        "beige_book",
+        "ism",
+        "treasury",
+    } <= kinds
     assert all(item.source == "yaml" for item in events)
     fomc_dates = {item.date for item in events if item.kind == "fomc"}
     assert date(2026, 9, 16) in fomc_dates
@@ -55,6 +69,12 @@ def test_catalysts_yaml_has_remaining_2026_fomc_and_cpi() -> None:
     assert "BoE decision" in cb_titles
     slugs = [item.slug for item in events]
     assert len(slugs) == len(set(slugs))
+    speech_dates = {item.date for item in events if item.kind == "speech"}
+    assert date(2026, 8, 28) in speech_dates
+    minutes_dates = {item.date for item in events if item.kind == "minutes"}
+    assert date(2026, 10, 7) in minutes_dates
+    jackson = next(item for item in events if item.kind == "speech")
+    assert "jackson-hole" in jackson.slug
 
 
 def test_finnhub_earnings_filter_to_watchlist() -> None:

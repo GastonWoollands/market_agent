@@ -15,6 +15,7 @@ from store.canonical import (
     MacroPoint,
     NewsHeadline,
     OddsPoint,
+    PolicyDoc,
     QuoteSnapshot,
 )
 from store.canonical import (
@@ -36,7 +37,9 @@ from store.models import (
     OpportunityMemoRow,
     OpportunityScore,
     OutlookReport,
+    PolicyItem,
     QuoteLatest,
+    RegimeSnapshot,
     ReturnStats,
     RrgPoint,
     Universe,
@@ -558,6 +561,25 @@ def macro_observations(
     return [(day, value) for day, value in session.execute(stmt)]
 
 
+def load_macro_points(
+    session: Session,
+    series_id: str,
+    start: date,
+    end: date,
+) -> list[tuple[date, Decimal]]:
+    """Load macro series points for regime classification and analytics."""
+    stmt = (
+        select(MacroObservation.date, MacroObservation.value)
+        .where(
+            MacroObservation.series_id == series_id,
+            MacroObservation.date >= start,
+            MacroObservation.date <= end,
+        )
+        .order_by(MacroObservation.date)
+    )
+    return [(day, value) for day, value in session.execute(stmt)]
+
+
 def closes_for_tickers(
     session: Session,
     tickers: Sequence[str],
@@ -753,6 +775,57 @@ def latest_news(
     return list(session.execute(stmt).scalars())
 
 
+_POLICY_UPSERT_CHUNK = 25
+
+
+def upsert_policy_items(session: Session, docs: Sequence[PolicyDoc]) -> int:
+    if not docs:
+        return 0
+    rows = [
+        {
+            "guid": item.guid,
+            "published_at": item.published_at,
+            "title": item.title,
+            "url": item.url,
+            "kind": item.kind,
+            "speaker": item.speaker,
+            "excerpt": item.excerpt,
+            "source": item.source,
+        }
+        for item in docs
+    ]
+    for start in range(0, len(rows), _POLICY_UPSERT_CHUNK):
+        chunk = rows[start : start + _POLICY_UPSERT_CHUNK]
+        stmt = insert(PolicyItem).values(chunk)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["guid"],
+            set_={
+                "published_at": stmt.excluded.published_at,
+                "title": stmt.excluded.title,
+                "url": stmt.excluded.url,
+                "kind": stmt.excluded.kind,
+                "speaker": stmt.excluded.speaker,
+                "excerpt": stmt.excluded.excerpt,
+                "source": stmt.excluded.source,
+            },
+        )
+        session.execute(stmt)
+    return len(rows)
+
+
+def latest_policy_items(
+    session: Session,
+    *,
+    since: datetime | None = None,
+    limit: int = 8,
+) -> list[PolicyItem]:
+    stmt = select(PolicyItem)
+    if since is not None:
+        stmt = stmt.where(PolicyItem.published_at >= since)
+    stmt = stmt.order_by(PolicyItem.published_at.desc()).limit(limit)
+    return list(session.execute(stmt).scalars())
+
+
 def upsert_events(session: Session, events: Sequence[CalendarEvent]) -> int:
     if not events:
         return 0
@@ -875,6 +948,14 @@ def latest_outlook_report(session: Session, as_of: date | None = None) -> Outloo
     if as_of is not None:
         stmt = stmt.where(OutlookReport.as_of == as_of)
     stmt = stmt.order_by(OutlookReport.as_of.desc())
+    return session.execute(stmt).scalars().first()
+
+
+def latest_regime(session: Session, as_of: date | None = None) -> RegimeSnapshot | None:
+    stmt = select(RegimeSnapshot)
+    if as_of is not None:
+        stmt = stmt.where(RegimeSnapshot.as_of <= as_of)
+    stmt = stmt.order_by(RegimeSnapshot.as_of.desc())
     return session.execute(stmt).scalars().first()
 
 

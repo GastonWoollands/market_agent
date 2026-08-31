@@ -43,6 +43,8 @@ class LiveQuote(BaseModel):
     role: str | None = None
     price: float | None = None
     change_pct: float | None = None
+    change_kind: str | None = None
+    gap_pct: float | None = None
     market_state: str | None = None
     as_of: datetime | None = None
 
@@ -56,6 +58,7 @@ class LiveMacro(BaseModel):
     value: float | None = None
     change: float | None = None
     as_of: date | None = None
+    spine: bool = False
 
 
 class LiveDeltas(BaseModel):
@@ -112,16 +115,85 @@ class LiveOdds(BaseModel):
     outcomes: list[LiveOddsOutcome] = Field(default_factory=list)
 
 
+class LiveEvent(BaseModel):
+    date: date
+    title: str
+    kind: str
+    ticker: str | None = None
+    source: str
+
+
+class LiveBrief(BaseModel):
+    headline: str | None = None
+    live_md: str | None = None
+    expect: str | None = None
+    as_of: date | None = None
+    status: str | None = None
+
+
+class LiveOutlier(BaseModel):
+    id: str
+    window: str = "1d"
+    change: float | None = None
+    z: float | None = None
+
+
+class LiveCoMove(BaseModel):
+    ids: list[str] = Field(default_factory=list)
+    window: str = "1d"
+    changes: dict[str, float] = Field(default_factory=dict)
+    hint: str | None = None
+
+
+class LiveRegime(BaseModel):
+    """Macro regime read (growth / inflation / policy / volatility) with confidence 0..1."""
+
+    as_of: date | None = None
+    growth: str | None = None
+    inflation: str | None = None
+    policy: str | None = None
+    volatility: str | None = None
+    growth_confidence: float | None = None
+    inflation_confidence: float | None = None
+    policy_confidence: float | None = None
+    volatility_confidence: float | None = None
+
+
+class LiveLiquidity(BaseModel):
+    """Net liquidity = Fed balance sheet − (reverse repo + Treasury general account)."""
+
+    net_liquidity_bn: float | None = None
+    wow_change_bn: float | None = None
+    fed_bs_bn: float | None = None
+    rrp_bn: float | None = None
+    tga_bn: float | None = None
+
+
+class LiveAnomaly(BaseModel):
+    type: str
+    description: str
+    severity: float
+
+
 class LiveResponse(BaseModel):
     as_of: datetime | None = None
     market_state: str | None = None
     stale: bool = True
     header: list[LiveQuote] = []
+    intl: list[LiveQuote] = Field(default_factory=list)
     movers: list[LiveQuote] = []
     macro: list[LiveMacro] = []
     drilldown: LiveDrilldown | None = None
     risk_on: LiveRiskOn | None = None
+    regime: LiveRegime | None = None
+    liquidity: LiveLiquidity | None = None
+    anomalies: list[LiveAnomaly] = Field(default_factory=list)
     odds: list[LiveOdds] = Field(default_factory=list)
+    events: list[LiveEvent] = Field(default_factory=list)
+    brief: LiveBrief | None = None
+    outliers: list[LiveOutlier] = Field(default_factory=list)
+    co_moves: list[LiveCoMove] = Field(default_factory=list)
+    watchlist_outliers: list[LiveQuote] = Field(default_factory=list)
 
 
 class DynamicsTrailPoint(BaseModel):
@@ -265,6 +337,38 @@ class OutlookWatch(BaseModel):
     kind: str | None = None
     last_print: str | None = None
     why: str | None = None
+    role: str | None = None
+
+
+class OutlookOutlier(BaseModel):
+    id: str
+    window: str = "1d"
+    change: float | None = None
+    z: float | None = None
+
+
+class OutlookCoMove(BaseModel):
+    ids: list[str] = Field(default_factory=list)
+    window: str = "1d"
+    changes: dict[str, float] = Field(default_factory=dict)
+    hint: str | None = None
+
+
+class OutlookPolicyComms(BaseModel):
+    event: str | None = None
+    kind: str | None = None
+    speaker: str | None = None
+    stance: str | None = None
+    tensions: list[OutlookTension] = Field(default_factory=list)
+
+
+class OutlookPolicyItem(BaseModel):
+    published_at: str | None = None
+    kind: str
+    speaker: str | None = None
+    title: str
+    url: str | None = None
+    excerpt: str | None = None
 
 
 class OutlookJudgment(BaseModel):
@@ -275,6 +379,29 @@ class OutlookJudgment(BaseModel):
     invalidation: str | None = None
     odds_read: str | None = None
     abstract: str | None = None
+    outliers: list[OutlookOutlier] = Field(default_factory=list)
+    co_moves: list[OutlookCoMove] = Field(default_factory=list)
+    policy_comms: OutlookPolicyComms | None = None
+
+
+class OutlookWatchScenario(BaseModel):
+    """Structured scenario for a watch item with branching outcomes."""
+    catalyst: str
+    date: str | None = None
+    time: str | None = None
+    outcome_bullish: str
+    outcome_bearish: str
+    threshold: str | None = None
+
+
+class OutlookCalendarItem(BaseModel):
+    """Structured calendar entry with consensus/prior."""
+    date: str
+    time: str | None = None
+    event: str
+    consensus: str | None = None
+    prior: str | None = None
+    source: str | None = None
 
 
 class OutlookResponse(BaseModel):
@@ -285,13 +412,37 @@ class OutlookResponse(BaseModel):
     brief: str | None = None
     brief_status: str | None = None
     brief_model: str | None = None
+    
+    # Core fields
     headline: str | None = None
+    tldr: str | None = None
+    what_happened: str | None = None
+    current_positioning: str | None = None
+    drivers: str | None = None
+    
+    # Scenario planning
+    watch_today: list[OutlookWatchScenario] = Field(default_factory=list)
+    invalidation: str | None = None
+    
+    # Deep sections
+    macro_deep: str | None = None
+    market_deep: str | None = None
+    policy_deep: str | None = None
+    geopolitical_deep: str | None = None
+    
+    # Calendar
+    calendar: list[OutlookCalendarItem] = Field(default_factory=list)
+    
+    # Legacy fields (kept for backward compat)
     abstract: str | None = None
     conclusions: list[str] = Field(default_factory=list)
     expect: str | None = None
+    live_md: str | None = None
     macro_md: str | None = None
     market_md: str | None = None
     near_term_md: str | None = None
+    
+    # Pack data
     facts: dict[str, float | None] = Field(default_factory=dict)
     judgment: OutlookJudgment | None = None
     macro_snapshot: list[OutlookMacro] = Field(default_factory=list)
@@ -299,6 +450,7 @@ class OutlookResponse(BaseModel):
     news: list[OutlookNews] = Field(default_factory=list)
     events: list[OutlookEvent] = Field(default_factory=list)
     events_later: list[OutlookEvent] = Field(default_factory=list)
+    policy_items: list[OutlookPolicyItem] = Field(default_factory=list)
     sources: list[OutlookSource] = Field(default_factory=list)
 
 

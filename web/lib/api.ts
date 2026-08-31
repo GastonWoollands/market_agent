@@ -43,6 +43,8 @@ export type LiveQuote = {
   role: string | null;
   price: number | null;
   change_pct: number | null;
+  change_kind?: string | null;
+  gap_pct?: number | null;
   market_state: string | null;
   as_of: string | null;
 };
@@ -56,6 +58,7 @@ export type LiveMacro = {
   value: number | null;
   change: number | null;
   as_of: string | null;
+  spine?: boolean;
 };
 
 export type LiveDeltas = {
@@ -112,16 +115,81 @@ export type LiveOdds = {
   outcomes: LiveOddsOutcome[];
 };
 
+export type LiveEvent = {
+  date: string;
+  title: string;
+  kind: string;
+  ticker: string | null;
+  source: string;
+};
+
+export type LiveBrief = {
+  headline: string | null;
+  live_md: string | null;
+  expect: string | null;
+  as_of: string | null;
+  status: string | null;
+};
+
+export type LiveOutlier = {
+  id: string;
+  window: string;
+  change: number | null;
+  z: number | null;
+};
+
+export type LiveCoMove = {
+  ids: string[];
+  window: string;
+  changes: Record<string, number>;
+  hint: string | null;
+};
+
+export type LiveRegime = {
+  as_of: string | null;
+  growth: string | null;
+  inflation: string | null;
+  policy: string | null;
+  volatility: string | null;
+  growth_confidence: number | null;
+  inflation_confidence: number | null;
+  policy_confidence: number | null;
+  volatility_confidence: number | null;
+};
+
+export type LiveLiquidity = {
+  net_liquidity_bn: number | null;
+  wow_change_bn: number | null;
+  fed_bs_bn: number | null;
+  rrp_bn: number | null;
+  tga_bn: number | null;
+};
+
+export type LiveAnomaly = {
+  type: string;
+  description: string;
+  severity: number;
+};
+
 export type LiveTape = {
   as_of: string | null;
   market_state: string | null;
   stale: boolean;
   header: LiveQuote[];
+  intl?: LiveQuote[];
   movers: LiveQuote[];
   macro: LiveMacro[];
   drilldown: LiveDrilldown | null;
   risk_on: LiveRiskOn | null;
+  regime?: LiveRegime | null;
+  liquidity?: LiveLiquidity | null;
+  anomalies?: LiveAnomaly[];
   odds: LiveOdds[];
+  events?: LiveEvent[];
+  brief?: LiveBrief | null;
+  outliers?: LiveOutlier[];
+  co_moves?: LiveCoMove[];
+  watchlist_outliers?: LiveQuote[];
 };
 
 export async function fetchHealth(): Promise<Health | null> {
@@ -314,6 +382,24 @@ export type OutlookWatch = {
   kind: string | null;
   last_print: string | null;
   why: string | null;
+  role?: string | null;
+};
+
+export type OutlookPolicyComms = {
+  event: string | null;
+  kind: string | null;
+  speaker: string | null;
+  stance: string | null;
+  tensions: OutlookTension[];
+};
+
+export type OutlookPolicyItem = {
+  published_at: string | null;
+  kind: string;
+  speaker: string | null;
+  title: string;
+  url: string | null;
+  excerpt: string | null;
 };
 
 export type OutlookJudgment = {
@@ -324,6 +410,25 @@ export type OutlookJudgment = {
   invalidation: string | null;
   odds_read: string | null;
   abstract: string | null;
+  policy_comms?: OutlookPolicyComms | null;
+};
+
+export type OutlookWatchScenario = {
+  catalyst: string;
+  date: string | null;
+  time: string | null;
+  outcome_bullish: string;
+  outcome_bearish: string;
+  threshold: string | null;
+};
+
+export type OutlookCalendarItem = {
+  date: string;
+  time: string | null;
+  event: string;
+  consensus: string | null;
+  prior: string | null;
+  source: string | null;
 };
 
 export type OutlookTape = {
@@ -334,10 +439,27 @@ export type OutlookTape = {
   brief: string | null;
   brief_status: string | null;
   brief_model: string | null;
+  // Core fields
   headline: string | null;
+  tldr: string | null;
+  what_happened: string | null;
+  current_positioning: string | null;
+  drivers: string | null;
+  // Scenario planning
+  watch_today: OutlookWatchScenario[];
+  invalidation: string | null;
+  // Deep sections
+  macro_deep: string | null;
+  market_deep: string | null;
+  policy_deep: string | null;
+  geopolitical_deep: string | null;
+  // Calendar
+  calendar: OutlookCalendarItem[];
+  // Legacy fields
   abstract: string | null;
   conclusions: string[];
   expect: string | null;
+  live_md?: string | null;
   macro_md: string | null;
   market_md: string | null;
   near_term_md: string | null;
@@ -348,6 +470,7 @@ export type OutlookTape = {
   news: OutlookNews[];
   events: OutlookEvent[];
   events_later: OutlookEvent[];
+  policy_items?: OutlookPolicyItem[];
   sources: OutlookSource[];
 };
 

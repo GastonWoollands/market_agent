@@ -86,6 +86,19 @@ class CalendarEvent(BaseModel):
     extra: dict | None = None
 
 
+class PolicyDoc(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    guid: str
+    published_at: datetime
+    title: str
+    url: str
+    kind: str
+    speaker: str | None = None
+    excerpt: str | None = None
+    source: str = "fed_rss"
+
+
 class SecTicker(BaseModel):
     model_config = ConfigDict(frozen=True)
 

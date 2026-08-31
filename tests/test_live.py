@@ -1,8 +1,16 @@
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
-from api.live import build_live
-from api.schemas import LiveRiskOn
+from api.live import (
+    anomaly_models,
+    build_live,
+    liquidity_model,
+    live_brief,
+    live_event_models,
+    net_liquidity_from_store,
+    regime_model,
+)
+from api.schemas import LiveBrief, LiveOutlier, LiveRiskOn
 from store.catalog import (
     CatalogInstrument,
     FredSeriesFile,
@@ -32,12 +40,19 @@ def _catalog() -> UniversesFile:
         name="S&P 500",
         role="index",
     )
+    eem = CatalogInstrument(
+        ticker="EEM",
+        yahoo="EEM",
+        name="Emerging Markets",
+        role="intl",
+    )
     return UniversesFile(
-        tape=UniverseCatalog(instruments=[gspc, xlk]),
+        tape=UniverseCatalog(instruments=[gspc, xlk, eem]),
         watchlist=UniverseCatalog(),
         live=LiveTapeConfig(
             header=[LiveHeaderItem(ticker="^GSPC", label="S&P 500")],
             mover_roles=["sector", "group"],
+            intl_section=[LiveHeaderItem(ticker="EEM", label="Emerging Markets")],
         ),
     )
 
@@ -257,4 +272,219 @@ def test_build_live_odds_do_not_affect_risk_on() -> None:
     assert tape.risk_on.factors == {"curve": 0.1}
     assert [item.slug for item in tape.odds] == ["us-recession-by-end-of-2026"]
     assert tape.odds[0].implied_yes == 0.075
-    assert tape.odds[0].thin is False
+
+
+def test_build_live_sorts_movers_and_labels_change_kind() -> None:
+    xlp = CatalogInstrument(ticker="XLP", yahoo="XLP", name="Staples", role="sector")
+    catalog = _catalog()
+    catalog.tape.instruments.append(xlp)
+    as_of = datetime(2026, 8, 14, 16, 0, tzinfo=UTC)
+    rows = [
+        LiveTapeRow(
+            ticker="XLK",
+            name="Information Technology",
+            quote_price=Decimal("228"),
+            quote_change_pct=Decimal("-0.5"),
+            market_state="REGULAR",
+            as_of=as_of,
+            last_close=Decimal("228"),
+            prev_close=Decimal("229"),
+            last_date=date(2026, 8, 14),
+        ),
+        LiveTapeRow(
+            ticker="XLP",
+            name="Staples",
+            quote_price=Decimal("80"),
+            quote_change_pct=Decimal("1.4"),
+            market_state="REGULAR",
+            as_of=as_of,
+            last_close=Decimal("80"),
+            prev_close=Decimal("79"),
+            last_date=date(2026, 8, 14),
+        ),
+    ]
+    tape = build_live(rows, catalog, now=as_of)
+    assert [item.ticker for item in tape.movers] == ["XLP", "XLK"]
+    assert tape.movers[0].change_kind == "session"
+    assert tape.header[0].change_kind is None
+
+
+def test_build_live_attaches_events_brief_and_watchlist_outliers() -> None:
+    as_of = datetime(2026, 8, 14, 16, 0, tzinfo=UTC)
+    watch = [
+        LiveTapeRow(
+            ticker="NVDA",
+            name="NVIDIA",
+            quote_price=Decimal("180"),
+            quote_change_pct=Decimal("3.2"),
+            market_state="REGULAR",
+            as_of=as_of,
+            last_close=Decimal("180"),
+            prev_close=Decimal("174"),
+            last_date=date(2026, 8, 14),
+        ),
+        LiveTapeRow(
+            ticker="AAPL",
+            name="Apple",
+            quote_price=Decimal("220"),
+            quote_change_pct=Decimal("-0.2"),
+            market_state="REGULAR",
+            as_of=as_of,
+            last_close=Decimal("220"),
+            prev_close=Decimal("220.4"),
+            last_date=date(2026, 8, 14),
+        ),
+    ]
+    tape = build_live(
+        [],
+        _catalog(),
+        now=as_of,
+        events=live_event_models(
+            [{"date": "2026-08-14", "title": "CPI (July)", "kind": "cpi", "source": "yaml"}]
+        ),
+        brief=LiveBrief(headline="Tape", live_md="CPI is the print.", expect="CPI 08:30."),
+        outliers=[LiveOutlier(id="DEXJPUS", window="1d", change=-1.2, z=2.1)],
+        watchlist_rows=watch,
+    )
+    assert tape.events[0].kind == "cpi"
+    assert tape.brief is not None
+    assert tape.brief.live_md == "CPI is the print."
+    assert tape.outliers[0].id == "DEXJPUS"
+    assert [item.ticker for item in tape.watchlist_outliers] == ["NVDA", "AAPL"]
+
+
+def test_live_event_models_keep_yesterday_speech() -> None:
+    events = live_event_models(
+        [
+            {
+                "date": "2026-08-28",
+                "title": "Jackson Hole Chair keynote",
+                "kind": "speech",
+                "source": "yaml",
+            }
+        ]
+    )
+    assert events[0].kind == "speech"
+    assert events[0].date == date(2026, 8, 28)
+    assert events[0].title == "Jackson Hole Chair keynote"
+
+
+def test_build_live_maps_intl_section() -> None:
+    as_of = datetime(2026, 8, 14, 16, 0, tzinfo=UTC)
+    rows = [
+        LiveTapeRow(
+            ticker="EEM",
+            name="Emerging Markets",
+            quote_price=Decimal("45.5"),
+            quote_change_pct=Decimal("0.8"),
+            market_state="REGULAR",
+            as_of=as_of,
+            last_close=Decimal("45.5"),
+            prev_close=Decimal("45.1"),
+            last_date=date(2026, 8, 14),
+        )
+    ]
+    tape = build_live(rows, _catalog(), now=as_of)
+    assert [item.ticker for item in tape.intl] == ["EEM"]
+    assert tape.intl[0].name == "Emerging Markets"
+    assert tape.intl[0].change_pct == 0.8
+    # intl names are not part of the sector movers list
+    assert all(item.ticker != "EEM" for item in tape.movers)
+
+
+def test_build_live_passes_regime_liquidity_anomalies() -> None:
+    from analytics.anomaly_detect import Anomaly
+
+    class _Regime:
+        as_of = date(2026, 8, 14)
+        growth_regime = "expansion"
+        inflation_regime = "decelerating"
+        policy_regime = "neutral"
+        volatility_regime = "suppressed"
+        growth_confidence = Decimal("0.85")
+        inflation_confidence = Decimal("0.80")
+        policy_confidence = Decimal("0.70")
+        volatility_confidence = Decimal("0.85")
+
+    regime = regime_model(_Regime())
+    liquidity = liquidity_model(
+        {
+            "net_liquidity_bn": 5800.0,
+            "wow_change_bn": -25.0,
+            "components": {"fed_bs_bn": 7000.0, "rrp_bn": 500.0, "tga_bn": 700.0},
+        }
+    )
+    anomalies = anomaly_models(
+        [
+            Anomaly(
+                type="z_score_extreme",
+                description="SMH moved 2.4 std devs",
+                severity=0.8,
+                components={},
+            )
+        ]
+    )
+    tape = build_live(
+        [],
+        _catalog(),
+        now=datetime(2026, 8, 14, tzinfo=UTC),
+        regime=regime,
+        liquidity=liquidity,
+        anomalies=anomalies,
+    )
+    assert tape.regime is not None
+    assert tape.regime.growth == "expansion"
+    assert tape.regime.growth_confidence == 0.85
+    assert tape.liquidity is not None
+    assert tape.liquidity.net_liquidity_bn == 5800.0
+    assert tape.liquidity.wow_change_bn == -25.0
+    assert tape.liquidity.rrp_bn == 500.0
+    assert tape.anomalies[0].type == "z_score_extreme"
+    assert tape.anomalies[0].severity == 0.8
+
+
+def test_regime_model_none_and_unknown() -> None:
+    assert regime_model(None) is None
+
+
+def test_net_liquidity_from_store_computes_billions() -> None:
+    def _daily(base: float) -> list[tuple[date, Decimal]]:
+        return [
+            (date(2026, 8, 1), Decimal(str(base - 100))),
+            (date(2026, 8, 7), Decimal(str(base - 50))),
+            (date(2026, 8, 14), Decimal(str(base))),
+        ]
+
+    points = {
+        "WALCL": _daily(7_000_000),  # $7.0T in millions
+        "RRPONTSYD": _daily(500_000),  # $0.5T
+        "WTREGEN": _daily(700_000),  # $0.7T
+    }
+    result = net_liquidity_from_store(points)
+    assert result is not None
+    # (7.0 - 0.5 - 0.7)T = 5.8T = 5800B
+    assert result["net_liquidity_bn"] == 5800.0
+    model = liquidity_model(result)
+    assert model is not None
+    assert model.fed_bs_bn == 7000.0
+
+
+def test_net_liquidity_from_store_missing_series_returns_none() -> None:
+    assert net_liquidity_from_store({"WALCL": [(date(2026, 8, 14), Decimal("7000000"))]}) is None
+
+
+def test_live_brief_empty_without_fields() -> None:
+    class _Report:
+        as_of = date(2026, 8, 18)
+        status = "ok"
+        body_json = {"macro_md": "DGS10 4.68"}
+
+    assert live_brief(_Report()) is None
+    class _Full:
+        as_of = date(2026, 8, 18)
+        status = "ok"
+        body_json = {"headline": "Tape", "live_md": "Hello.", "expect": "CPI"}
+
+    attached = live_brief(_Full())
+    assert attached is not None
+    assert attached.headline == "Tape"

@@ -33,18 +33,32 @@ tape:
     - { ticker: GLD, yahoo: GLD, name: SPDR Gold Shares, asset_class: etf, role: commodity }
     - { ticker: USO, yahoo: USO, name: United States Oil Fund, asset_class: etf, role: commodity }
     - { ticker: UUP, yahoo: UUP, name: Invesco DB US Dollar Index Bullish, asset_class: etf, role: fx }
+    - { ticker: EEM, yahoo: EEM, name: iShares MSCI Emerging Markets, asset_class: etf, role: intl }
+    - { ticker: "^N225", yahoo: "^N225", name: Nikkei 225, asset_class: index, role: intl }
+    - { ticker: "^GDAXI", yahoo: "^GDAXI", name: DAX, asset_class: index, role: intl }
+    - { ticker: "^FTSE", yahoo: "^FTSE", name: FTSE 100, asset_class: index, role: intl }
+    - { ticker: "^STOXX50E", yahoo: "^STOXX50E", name: Euro Stoxx 50, asset_class: index, role: intl }
+    - { ticker: "^HSI", yahoo: "^HSI", name: Hang Seng, asset_class: index, role: intl }
+    - { ticker: "000300.SS", yahoo: "000300.SS", name: CSI 300, asset_class: index, role: intl }
 
 # Live header composition (Day 3). Movers are tape names with role sector or group.
 # Labels are display aliases only; ingest still uses ticker/yahoo from tape.
+# intl_section lists international indices shown in the global markets section.
 live:
   header:
     - { ticker: "^GSPC", label: S&P 500 }
-    - { ticker: QQQ, label: Nasdaq 100 }
-    - { ticker: "^RUT", label: Russell 2000 }
-    - { ticker: "^DJI", label: Dow }
-    - { ticker: USO, label: WTI }
-    - { ticker: GLD, label: Gold }
+    - { ticker: IWM, label: Russell 2000 }
+    - { ticker: "^VIX", label: VIX }
+    - { ticker: TLT, label: 20Y+ Treasury }
+    - { ticker: UUP, label: Dollar }
+    - { ticker: HYG, label: High yield }
   mover_roles: [sector, group]
+  intl_section:
+    - { ticker: EEM, label: Emerging Markets }
+    - { ticker: "^N225", label: Nikkei }
+    - { ticker: "^GDAXI", label: DAX }
+    - { ticker: "^FTSE", label: FTSE }
+    - { ticker: "^HSI", label: Hang Seng }
 
 valuation:
   description: Opportunity + Valuation screen. Built from SEC facts (Day 11+), not this static list.

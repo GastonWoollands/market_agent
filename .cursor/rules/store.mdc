@@ -11,5 +11,5 @@ Postgres is the system of record. Models in `store/models.py`; writes in `store/
 - `NUMERIC` / `Decimal` for money, yields, multiples. Never `float` on values you compare or rank.
 - `timestamptz` stored UTC. `bigserial` PKs. Unique constraints on natural keys (`instrument_id, date`, etc.).
 - Upserts: PostgreSQL `insert(...).on_conflict_do_update`. Jobs must be safe to re-run.
-- Schema change = Alembic revision (see `alembic/versions/`) + model. If the contract changes, update Northstar §8 first.
+- Schema change = Alembic revision (see `alembic/versions/`) + model. If the contract changes (new table, vendor, universe, page), update Northstar §8 first.
 - Canonical types for adapters: frozen Pydantic in `store/canonical.py`.

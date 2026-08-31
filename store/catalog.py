@@ -31,6 +31,7 @@ class LiveHeaderItem(BaseModel):
 class LiveTapeConfig(BaseModel):
     header: list[LiveHeaderItem] = Field(default_factory=list)
     mover_roles: list[str] = Field(default_factory=lambda: ["sector", "group"])
+    intl_section: list[LiveHeaderItem] = Field(default_factory=list)
 
 
 class ValuationConfig(BaseModel):
@@ -141,6 +142,11 @@ class CatalystsFile(BaseModel):
     nfp: list[CatalystItem] = Field(default_factory=list)
     gdp: list[CatalystItem] = Field(default_factory=list)
     jolts: list[CatalystItem] = Field(default_factory=list)
+    speech: list[CatalystItem] = Field(default_factory=list)
+    minutes: list[CatalystItem] = Field(default_factory=list)
+    beige_book: list[CatalystItem] = Field(default_factory=list)
+    ism: list[CatalystItem] = Field(default_factory=list)
+    treasury: list[CatalystItem] = Field(default_factory=list)
     other: list[CatalystItem] = Field(default_factory=list)
 
 
