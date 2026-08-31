@@ -24,7 +24,7 @@ export function MacroChart({
     return <p className="px-3 py-8 text-sm text-mute">Not enough stored history for a chart.</p>;
   }
 
-  const stroke = positive ? "#3dd68c" : "#ef5b5b";
+  const stroke = positive ? "#10b981" : "#ef4444";
   const data = points.map((point) => ({ date: point.date, value: point.value }));
 
   return (
@@ -35,7 +35,7 @@ export function MacroChart({
             dataKey="date"
             tickFormatter={formatTickDate}
             minTickGap={40}
-            tick={{ fill: "#8a8a8a", fontSize: 11 }}
+            tick={{ fill: "#64748b", fontSize: 11 }}
             axisLine={false}
             tickLine={false}
           />
@@ -44,14 +44,14 @@ export function MacroChart({
             domain={["auto", "auto"]}
             width={56}
             tickFormatter={(value: number) => formatAxis(unit, value)}
-            tick={{ fill: "#8a8a8a", fontSize: 11 }}
+            tick={{ fill: "#64748b", fontSize: 11 }}
             axisLine={false}
             tickLine={false}
           />
           <Tooltip
             contentStyle={{
-              background: "#101010",
-              border: "1px solid #222222",
+              background: "#0f1419",
+              border: "1px solid #262d38",
               fontSize: 12,
             }}
             labelFormatter={(label) => String(label)}

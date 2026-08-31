@@ -58,6 +58,7 @@ export type LiveMacro = {
   value: number | null;
   change: number | null;
   as_of: string | null;
+  spine?: boolean;
 };
 
 export type LiveDeltas = {
@@ -144,15 +145,45 @@ export type LiveCoMove = {
   hint: string | null;
 };
 
+export type LiveRegime = {
+  as_of: string | null;
+  growth: string | null;
+  inflation: string | null;
+  policy: string | null;
+  volatility: string | null;
+  growth_confidence: number | null;
+  inflation_confidence: number | null;
+  policy_confidence: number | null;
+  volatility_confidence: number | null;
+};
+
+export type LiveLiquidity = {
+  net_liquidity_bn: number | null;
+  wow_change_bn: number | null;
+  fed_bs_bn: number | null;
+  rrp_bn: number | null;
+  tga_bn: number | null;
+};
+
+export type LiveAnomaly = {
+  type: string;
+  description: string;
+  severity: number;
+};
+
 export type LiveTape = {
   as_of: string | null;
   market_state: string | null;
   stale: boolean;
   header: LiveQuote[];
+  intl?: LiveQuote[];
   movers: LiveQuote[];
   macro: LiveMacro[];
   drilldown: LiveDrilldown | null;
   risk_on: LiveRiskOn | null;
+  regime?: LiveRegime | null;
+  liquidity?: LiveLiquidity | null;
+  anomalies?: LiveAnomaly[];
   odds: LiveOdds[];
   events?: LiveEvent[];
   brief?: LiveBrief | null;

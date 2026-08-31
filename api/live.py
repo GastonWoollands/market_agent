@@ -4,17 +4,20 @@ from decimal import Decimal
 from analytics.lookback import chart_window, window_deltas
 from analytics.risk_on import CYCLICALS, DEFENSIVES, compute_risk_on
 from api.schemas import (
+    LiveAnomaly,
     LiveBrief,
     LiveCoMove,
     LiveDeltas,
     LiveDrilldown,
     LiveEvent,
+    LiveLiquidity,
     LiveMacro,
     LiveOdds,
     LiveOddsOutcome,
     LiveOutlier,
     LivePoint,
     LiveQuote,
+    LiveRegime,
     LiveResponse,
     LiveRiskOn,
     LiveWatch,
@@ -116,6 +119,9 @@ def build_live(
     lever: str = DEFAULT_LEVER,
     history: list[tuple[date, Decimal]] | None = None,
     risk_on: LiveRiskOn | None = None,
+    regime: LiveRegime | None = None,
+    liquidity: LiveLiquidity | None = None,
+    anomalies: list[LiveAnomaly] | None = None,
     odds_rows: list[OddsSnapshot] | None = None,
     polymarket: PolymarketFile | None = None,
     events: list[LiveEvent] | None = None,
@@ -128,13 +134,20 @@ def build_live(
     by_ticker = {row.ticker: row for row in rows}
     tape_meta = {item.ticker: item for item in catalog.tape.instruments}
 
-    header: list[LiveQuote] = []
-    for item in catalog.live.header:
-        row = by_ticker.get(item.ticker)
-        meta = tape_meta.get(item.ticker)
-        name = item.label or (row.name if row else None) or (meta.name if meta else item.ticker)
-        role = meta.role if meta else None
-        header.append(_quote_from_row(ticker=item.ticker, name=name, role=role, row=row))
+    def _quotes_for(items: list) -> list[LiveQuote]:
+        out: list[LiveQuote] = []
+        for item in items:
+            row = by_ticker.get(item.ticker)
+            meta = tape_meta.get(item.ticker)
+            name = (
+                item.label or (row.name if row else None) or (meta.name if meta else item.ticker)
+            )
+            role = meta.role if meta else None
+            out.append(_quote_from_row(ticker=item.ticker, name=name, role=role, row=row))
+        return out
+
+    header = _quotes_for(catalog.live.header)
+    intl = _quotes_for(catalog.live.intl_section)
 
     mover_roles = set(catalog.live.mover_roles)
     movers: list[LiveQuote] = []
@@ -159,10 +172,14 @@ def build_live(
         market_state=_session_state(header),
         stale=_is_stale(as_of, clock),
         header=header,
+        intl=intl,
         movers=movers,
         macro=_macro_items(macro_rows or [], fred),
         drilldown=_drilldown(lever, history or [], fred, rows) if fred is not None else None,
         risk_on=risk_on,
+        regime=regime,
+        liquidity=liquidity,
+        anomalies=list(anomalies or []),
         odds=_odds_items(odds_rows or [], polymarket),
         events=list(events or []),
         brief=brief,
@@ -236,6 +253,94 @@ def co_move_models(rows: list[dict[str, object]]) -> list[LiveCoMove]:
     return [LiveCoMove.model_validate(row) for row in rows if row.get("ids")]
 
 
+def regime_model(row: object | None) -> LiveRegime | None:
+    """Map a stored RegimeSnapshot ORM row to the Live schema."""
+    if row is None:
+        return None
+
+    def _conf(value: object) -> float | None:
+        return None if value is None else round(float(value), 2)  # type: ignore[arg-type]
+
+    return LiveRegime(
+        as_of=getattr(row, "as_of", None),
+        growth=getattr(row, "growth_regime", None),
+        inflation=getattr(row, "inflation_regime", None),
+        policy=getattr(row, "policy_regime", None),
+        volatility=getattr(row, "volatility_regime", None),
+        growth_confidence=_conf(getattr(row, "growth_confidence", None)),
+        inflation_confidence=_conf(getattr(row, "inflation_confidence", None)),
+        policy_confidence=_conf(getattr(row, "policy_confidence", None)),
+        volatility_confidence=_conf(getattr(row, "volatility_confidence", None)),
+    )
+
+
+def liquidity_model(data: dict[str, object] | None) -> LiveLiquidity | None:
+    """Map the compute_net_liquidity dict to the Live schema. Flattens components."""
+    if not data:
+        return None
+    components = data.get("components") or {}
+    if not isinstance(components, dict):
+        components = {}
+    return LiveLiquidity(
+        net_liquidity_bn=_maybe_float(data.get("net_liquidity_bn")),
+        wow_change_bn=_maybe_float(data.get("wow_change_bn")),
+        fed_bs_bn=_maybe_float(components.get("fed_bs_bn")),
+        rrp_bn=_maybe_float(components.get("rrp_bn")),
+        tga_bn=_maybe_float(components.get("tga_bn")),
+    )
+
+
+def anomaly_models(items: list[object] | None) -> list[LiveAnomaly]:
+    """Map analytics.anomaly_detect.Anomaly objects to the Live schema."""
+    out: list[LiveAnomaly] = []
+    for item in items or []:
+        desc = getattr(item, "description", None)
+        kind = getattr(item, "type", None)
+        if not desc or not kind:
+            continue
+        out.append(
+            LiveAnomaly(
+                type=str(kind),
+                description=str(desc),
+                severity=round(float(getattr(item, "severity", 0.0)), 2),
+            )
+        )
+    return out
+
+
+def _maybe_float(value: object) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, int | float | Decimal):
+        return float(value)
+    return None
+
+
+LIQUIDITY_SERIES = ("WALCL", "RRPONTSYD", "WTREGEN")
+
+
+def net_liquidity_from_store(
+    points_by_series: dict[str, list[tuple[date, Decimal]]],
+) -> dict[str, object] | None:
+    """Build compute_net_liquidity() rows from stored FRED points (value + 1w delta)."""
+    from analytics.macro_pack import compute_net_liquidity
+
+    rows: list[dict[str, object]] = []
+    for series_id in LIQUIDITY_SERIES:
+        points = points_by_series.get(series_id) or []
+        if not points:
+            return None
+        _d1, w1, _m1, _y1 = window_deltas([(day, value) for day, value in points])
+        rows.append(
+            {
+                "series_id": series_id,
+                "value": float(points[-1][1]),
+                "w1": float(w1) if w1 is not None else None,
+            }
+        )
+    return compute_net_liquidity(rows)
+
+
 def _macro_items(rows: list[LiveMacroRow], fred: FredSeriesFile | None) -> list[LiveMacro]:
     if fred is None:
         return []
@@ -257,6 +362,7 @@ def _macro_items(rows: list[LiveMacroRow], fred: FredSeriesFile | None) -> list[
                 value=_to_float(last),
                 change=_to_float(resolve_level_change(last, prev)),
                 as_of=row.last_date if row else None,
+                spine=item.spine,
             )
         )
     return items

@@ -39,6 +39,7 @@ from store.models import (
     OutlookReport,
     PolicyItem,
     QuoteLatest,
+    RegimeSnapshot,
     ReturnStats,
     RrgPoint,
     Universe,
@@ -947,6 +948,14 @@ def latest_outlook_report(session: Session, as_of: date | None = None) -> Outloo
     if as_of is not None:
         stmt = stmt.where(OutlookReport.as_of == as_of)
     stmt = stmt.order_by(OutlookReport.as_of.desc())
+    return session.execute(stmt).scalars().first()
+
+
+def latest_regime(session: Session, as_of: date | None = None) -> RegimeSnapshot | None:
+    stmt = select(RegimeSnapshot)
+    if as_of is not None:
+        stmt = stmt.where(RegimeSnapshot.as_of <= as_of)
+    stmt = stmt.order_by(RegimeSnapshot.as_of.desc())
     return session.execute(stmt).scalars().first()
 
 

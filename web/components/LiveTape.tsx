@@ -1,17 +1,21 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { StaleBadge } from "@/components/StaleBadge";
 import { MacroChart } from "@/components/MacroChart";
 import { cn } from "@/lib/cn";
 import type {
+  LiveAnomaly,
   LiveBrief,
   LiveCoMove,
   LiveDrilldown,
   LiveEvent,
+  LiveLiquidity,
   LiveMacro,
   LiveOdds,
   LiveOutlier,
   LiveQuote,
+  LiveRegime,
   LiveRiskOn,
   LiveTape,
   LiveWatch,
@@ -39,6 +43,19 @@ const FACTOR_LABEL: Record<string, string> = {
   rsp_spy: "RSP/SPY",
   curve: "2s10s",
   cyc_def: "Cyc/Def",
+};
+
+const REGIME_DIMENSIONS: { key: keyof LiveRegime; conf: keyof LiveRegime; label: string }[] = [
+  { key: "growth", conf: "growth_confidence", label: "Growth" },
+  { key: "inflation", conf: "inflation_confidence", label: "Inflation" },
+  { key: "policy", conf: "policy_confidence", label: "Policy" },
+  { key: "volatility", conf: "volatility_confidence", label: "Volatility" },
+];
+
+const ANOMALY_LABEL: Record<string, string> = {
+  correlation_break: "Correlation break",
+  z_score_extreme: "Extreme move",
+  breadth_divergence: "Breadth divergence",
 };
 
 export function LiveTapeView({ tape }: { tape: LiveTape | null }) {
@@ -86,7 +103,9 @@ export function LiveTapeView({ tape }: { tape: LiveTape | null }) {
           </p>
         </div>
 
-        <TodayStrip events={tape.events ?? []} odds={tape.odds ?? []} brief={tape.brief ?? null} />
+        <ReadBanner brief={tape.brief ?? null} />
+        <RegimeBand regime={tape.regime ?? null} riskOn={tape.risk_on} liquidity={tape.liquidity ?? null} />
+        <TodayStrip events={tape.events ?? []} odds={tape.odds ?? []} />
 
         <section className="grid gap-px overflow-hidden rounded border border-line bg-line sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6">
           {tape.header.map((item) => (
@@ -101,22 +120,23 @@ export function LiveTapeView({ tape }: { tape: LiveTape | null }) {
           </p>
         ) : null}
 
-        <RiskOnFactors riskOn={tape.risk_on} />
+        <GlobalMarkets items={tape.intl ?? []} />
+        <AnomaliesBoard items={tape.anomalies ?? []} />
         <DriverBoard outliers={tape.outliers ?? []} coMoves={tape.co_moves ?? []} />
-        <BriefSlice brief={tape.brief ?? null} />
+        <RiskOnFactors riskOn={tape.risk_on} />
 
         {tape.drilldown ? <Drilldown panel={tape.drilldown} /> : null}
 
+        <WatchlistOutliers items={tape.watchlist_outliers ?? []} />
+
         <section>
-          <h2 className="mb-2 text-[11px] uppercase tracking-wide text-mute">Sector movers</h2>
+          <SectionLabel>Sector movers</SectionLabel>
           <div className="overflow-hidden rounded border border-line">
             {tape.movers.map((item, index) => (
               <MoverRow key={item.ticker} item={item} last={index === tape.movers.length - 1} />
             ))}
           </div>
         </section>
-
-        <WatchlistOutliers items={tape.watchlist_outliers ?? []} />
       </div>
       <aside className="space-y-6">
         <MacroSidebar
@@ -127,6 +147,178 @@ export function LiveTapeView({ tape }: { tape: LiveTape | null }) {
         <OddsPanel items={tape.odds ?? []} />
       </aside>
     </div>
+  );
+}
+
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <h2 className="mb-2 text-[11px] uppercase tracking-wide text-mute">{children}</h2>
+  );
+}
+
+function ReadBanner({ brief }: { brief: LiveBrief | null }) {
+  if (!brief?.headline && !brief?.live_md) {
+    return (
+      <p className="text-[13px] text-mute">
+        Outlook unavailable. Run <code className="text-white">python -m jobs.generate_outlook</code> after{" "}
+        <code className="text-white">jobs.build_pack</code>.
+      </p>
+    );
+  }
+  return (
+    <section className="rounded border border-line-strong bg-panel-elevated px-4 py-3">
+      <div className="flex items-baseline gap-2">
+        <span className="text-[10px] uppercase tracking-wide text-accent">The read</span>
+        {brief.status && brief.status !== "ok" ? (
+          <span className="text-[10px] uppercase tracking-wide text-warning">{brief.status}</span>
+        ) : null}
+      </div>
+      {brief.headline ? (
+        <p className="mt-1 text-[15px] leading-6 text-text-primary">
+          <Link href="/outlook" className="hover:underline">
+            {brief.headline}
+          </Link>
+        </p>
+      ) : null}
+      {brief.live_md ? (
+        <p className="mt-1 text-[13px] leading-6 text-text-secondary">{brief.live_md}</p>
+      ) : null}
+      <div className="mt-2 flex items-baseline gap-3">
+        {brief.expect ? <span className="text-[12px] text-mute">{brief.expect}</span> : null}
+        <Link href="/outlook" className="text-[12px] text-mute hover:text-white">
+          Full Outlook →
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+function RegimeBand({
+  regime,
+  riskOn,
+  liquidity,
+}: {
+  regime: LiveRegime | null;
+  riskOn: LiveRiskOn | null;
+  liquidity: LiveLiquidity | null;
+}) {
+  const score = riskOn?.score ?? null;
+  const hasRegime = regime != null && REGIME_DIMENSIONS.some((dim) => regime[dim.key] != null);
+  if (!hasRegime && score == null && liquidity?.net_liquidity_bn == null) {
+    return null;
+  }
+  return (
+    <section className="overflow-hidden rounded border border-line-strong bg-panel-elevated">
+      <div className="flex items-baseline justify-between gap-2 border-b border-line px-3 py-2">
+        <h2 className="text-[11px] uppercase tracking-wide text-mute">Regime &amp; conditions</h2>
+        <span className="text-[11px] text-mute">
+          {regime?.as_of ? `as of ${formatDateOnly(regime.as_of)}` : "read-time"}
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-px bg-line sm:grid-cols-3 lg:grid-cols-6">
+        {REGIME_DIMENSIONS.map((dim) => (
+          <RegimeCell
+            key={dim.label}
+            label={dim.label}
+            value={(regime?.[dim.key] as string | null | undefined) ?? null}
+            confidence={(regime?.[dim.conf] as number | null | undefined) ?? null}
+          />
+        ))}
+        <div className="bg-panel px-3 py-2">
+          <div className="text-[11px] uppercase tracking-wide text-mute">Risk-On</div>
+          <div className={cn("mt-0.5 text-sm tabular-nums", riskToneClass(score))}>
+            {score == null ? "—" : score > 0 ? `+${score.toFixed(2)}` : score.toFixed(2)}
+          </div>
+        </div>
+        <div className="bg-panel px-3 py-2">
+          <div className="text-[11px] uppercase tracking-wide text-mute">Net liquidity</div>
+          <div className="mt-0.5 text-sm tabular-nums text-text-primary">
+            {liquidity?.net_liquidity_bn == null ? "—" : `$${formatTrillions(liquidity.net_liquidity_bn)}`}
+          </div>
+          {liquidity?.wow_change_bn != null ? (
+            <div className={cn("text-[11px] tabular-nums", changeClass(liquidity.wow_change_bn))}>
+              {formatSignedBn(liquidity.wow_change_bn)} w/w
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function RegimeCell({
+  label,
+  value,
+  confidence,
+}: {
+  label: string;
+  value: string | null;
+  confidence: number | null;
+}) {
+  const known = value != null && value !== "unknown";
+  return (
+    <div className="bg-panel px-3 py-2">
+      <div className="text-[11px] uppercase tracking-wide text-mute">{label}</div>
+      <div className={cn("mt-0.5 truncate text-sm", known ? "text-text-primary" : "text-mute")}>
+        {known ? titleCase(value as string) : "—"}
+      </div>
+      {known && confidence != null ? (
+        <div className="text-[11px] tabular-nums text-mute">{Math.round(confidence * 100)}% conf</div>
+      ) : null}
+    </div>
+  );
+}
+
+function GlobalMarkets({ items }: { items: LiveQuote[] }) {
+  if (items.length === 0) {
+    return null;
+  }
+  return (
+    <section>
+      <SectionLabel>Global markets</SectionLabel>
+      <div className="grid gap-px overflow-hidden rounded border border-line bg-line sm:grid-cols-3 lg:grid-cols-5">
+        {items.map((item) => (
+          <QuoteCell key={item.ticker} item={item} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function AnomaliesBoard({ items }: { items: LiveAnomaly[] }) {
+  if (items.length === 0) {
+    return null;
+  }
+  return (
+    <section className="overflow-hidden rounded border border-warning/30 bg-panel-elevated">
+      <div className="flex items-baseline justify-between gap-2 border-b border-line px-3 py-2">
+        <h2 className="text-[11px] uppercase tracking-wide text-warning">Breakpoints</h2>
+        <span className="text-[11px] text-mute">unusual cross-asset behavior</span>
+      </div>
+      <div>
+        {items.map((item, index) => (
+          <div
+            key={`${item.type}-${index}`}
+            className={cn(
+              "flex items-baseline gap-3 px-3 py-2.5",
+              index === items.length - 1 ? "" : "border-b border-line",
+            )}
+          >
+            <span
+              className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-warning"
+              style={{ opacity: 0.35 + Math.min(item.severity, 1) * 0.65 }}
+              aria-hidden
+            />
+            <div className="min-w-0 flex-1">
+              <div className="text-[11px] uppercase tracking-wide text-mute">
+                {ANOMALY_LABEL[item.type] ?? item.type}
+              </div>
+              <div className="text-[13px] text-text-primary">{item.description}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -160,50 +352,33 @@ function MoverRow({ item, last }: { item: LiveQuote; last: boolean }) {
   );
 }
 
-function TodayStrip({
-  events,
-  odds,
-  brief,
-}: {
-  events: LiveEvent[];
-  odds: LiveOdds[];
-  brief: LiveBrief | null;
-}) {
+function TodayStrip({ events, odds }: { events: LiveEvent[]; odds: LiveOdds[] }) {
   const topOdds = odds[0];
   const outcome = topOdds?.outcomes[0];
+  if (events.length === 0 && !topOdds) {
+    return null;
+  }
   return (
     <section className="overflow-hidden rounded border border-line">
       <div className="border-b border-line px-3 py-2 text-[11px] uppercase tracking-wide text-mute">
         Today
       </div>
-      {events.length === 0 && !brief?.headline && !topOdds ? (
-        <p className="px-3 py-3 text-[13px] text-mute">No stored events or brief yet.</p>
-      ) : (
-        <div className="space-y-2 px-3 py-3">
-          {events.slice(0, 4).map((item) => (
-            <div key={`${item.date}-${item.title}`} className="flex items-baseline gap-3 text-[13px]">
-              <span className="w-14 shrink-0 tabular-nums text-mute">{item.date.slice(5)}</span>
-              <span className="min-w-0 flex-1 truncate">{item.title}</span>
-              {item.ticker ? <span className="text-mute">{item.ticker}</span> : null}
-            </div>
-          ))}
-          {topOdds ? (
-            <p className="text-[13px] text-mute">
-              {topOdds.label}
-              {outcome ? ` · ${shortQuestion(outcome.label)} ${formatImplied(outcome.implied_yes)}` : null}
-              {!outcome && topOdds.implied_yes != null ? ` · ${formatImplied(topOdds.implied_yes)}` : null}
-            </p>
-          ) : null}
-          {brief?.headline ? (
-            <p className="text-[13px]">
-              <Link href="/outlook" className="text-white hover:underline">
-                {brief.headline}
-              </Link>
-              {brief.expect ? <span className="text-mute"> — {brief.expect}</span> : null}
-            </p>
-          ) : null}
-        </div>
-      )}
+      <div className="space-y-2 px-3 py-3">
+        {events.slice(0, 4).map((item) => (
+          <div key={`${item.date}-${item.title}`} className="flex items-baseline gap-3 text-[13px]">
+            <span className="w-14 shrink-0 tabular-nums text-mute">{item.date.slice(5)}</span>
+            <span className="min-w-0 flex-1 truncate">{item.title}</span>
+            {item.ticker ? <span className="text-mute">{item.ticker}</span> : null}
+          </div>
+        ))}
+        {topOdds ? (
+          <p className="text-[13px] text-mute">
+            {topOdds.label}
+            {outcome ? ` · ${shortQuestion(outcome.label)} ${formatImplied(outcome.implied_yes)}` : null}
+            {!outcome && topOdds.implied_yes != null ? ` · ${formatImplied(topOdds.implied_yes)}` : null}
+          </p>
+        ) : null}
+      </div>
     </section>
   );
 }
@@ -272,26 +447,6 @@ function DriverBoard({ outliers, coMoves }: { outliers: LiveOutlier[]; coMoves: 
   );
 }
 
-function BriefSlice({ brief }: { brief: LiveBrief | null }) {
-  if (brief?.live_md) {
-    return (
-      <section className="rounded border border-line bg-panel px-3 py-3">
-        <p className="text-[11px] uppercase tracking-wide text-mute">Outlook</p>
-        <p className="mt-2 text-sm leading-6">{brief.live_md}</p>
-        <Link href="/outlook" className="mt-2 inline-block text-[12px] text-mute hover:text-white">
-          Full Outlook
-        </Link>
-      </section>
-    );
-  }
-  return (
-    <p className="text-[13px] text-mute">
-      Outlook unavailable. Run <code className="text-white">python -m jobs.generate_outlook</code> after{" "}
-      <code className="text-white">jobs.build_pack</code>.
-    </p>
-  );
-}
-
 function WatchlistOutliers({ items }: { items: LiveQuote[] }) {
   if (items.length === 0) {
     return null;
@@ -332,6 +487,15 @@ function MacroSidebar({
 }) {
   const tenYear = items.find((item) => item.series_id === "DGS10");
   const hasValues = items.some((item) => item.value != null);
+  const spine = items.filter((item) => item.spine);
+  const context = items.filter((item) => !item.spine);
+  const groups: { label: string | null; rows: LiveMacro[] }[] =
+    spine.length > 0
+      ? [
+          { label: "Spine", rows: spine },
+          { label: "Context", rows: context },
+        ]
+      : [{ label: null, rows: items }];
   return (
     <div>
       <div className="mb-2 flex items-baseline justify-between gap-2">
@@ -340,16 +504,29 @@ function MacroSidebar({
           {tenYear?.as_of ? `10Y as of ${formatDateOnly(tenYear.as_of)}` : "FRED"}
         </span>
       </div>
-      <div className="overflow-hidden rounded border border-line">
-        {items.map((item, index) => (
-          <MacroRow
-            key={item.series_id}
-            item={item}
-            selected={item.series_id === selected}
-            printedToday={today != null && item.as_of === today}
-            last={index === items.length - 1}
-          />
-        ))}
+      <div className="space-y-3">
+        {groups.map((group) =>
+          group.rows.length === 0 ? null : (
+            <div key={group.label ?? "all"}>
+              {group.label ? (
+                <div className="mb-1 text-[10px] uppercase tracking-wide text-mute/70">
+                  {group.label}
+                </div>
+              ) : null}
+              <div className="overflow-hidden rounded border border-line">
+                {group.rows.map((item, index) => (
+                  <MacroRow
+                    key={item.series_id}
+                    item={item}
+                    selected={item.series_id === selected}
+                    printedToday={today != null && item.as_of === today}
+                    last={index === group.rows.length - 1}
+                  />
+                ))}
+              </div>
+            </div>
+          ),
+        )}
       </div>
       {!hasValues ? (
         <p className="mt-2 text-[12px] leading-5 text-mute">
@@ -558,6 +735,42 @@ function changeClass(value: number | null): string {
     return "text-mute";
   }
   return value > 0 ? "text-up" : "text-down";
+}
+
+function riskToneClass(value: number | null): string {
+  if (value == null) {
+    return "text-mute";
+  }
+  if (value > 0.15) {
+    return "text-up";
+  }
+  if (value < -0.15) {
+    return "text-down";
+  }
+  return "text-text-secondary";
+}
+
+function titleCase(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function formatTrillions(bn: number): string {
+  if (Math.abs(bn) >= 1000) {
+    return `${(bn / 1000).toFixed(2)}T`;
+  }
+  return `${bn.toFixed(0)}B`;
+}
+
+function formatSignedBn(bn: number): string {
+  const abs = Math.abs(bn);
+  const body = abs >= 1000 ? `$${(abs / 1000).toFixed(2)}T` : `$${abs.toFixed(0)}B`;
+  if (bn > 0) {
+    return `+${body}`;
+  }
+  if (bn < 0) {
+    return `-${body}`;
+  }
+  return body;
 }
 
 function formatAsOf(value: string): string {

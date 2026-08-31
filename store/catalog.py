@@ -31,6 +31,7 @@ class LiveHeaderItem(BaseModel):
 class LiveTapeConfig(BaseModel):
     header: list[LiveHeaderItem] = Field(default_factory=list)
     mover_roles: list[str] = Field(default_factory=lambda: ["sector", "group"])
+    intl_section: list[LiveHeaderItem] = Field(default_factory=list)
 
 
 class ValuationConfig(BaseModel):

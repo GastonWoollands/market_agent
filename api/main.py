@@ -14,6 +14,7 @@ from agent.pack import (
     LIVE_NEAR_DAYS,
     partition_events,
 )
+from analytics.anomaly_detect import detect_anomalies
 from analytics.corr import DEFAULT_LAG, DEFAULT_LEAD
 from analytics.drivers import MACRO_IDS as DRIVER_MACRO_IDS
 from analytics.drivers import TAPE_IDS as DRIVER_TAPE_IDS
@@ -24,11 +25,16 @@ from api.dynamics import HISTORY_DAYS as DYNAMICS_LOOKBACK
 from api.dynamics import build_dynamics, stored_from_rows
 from api.live import (
     HISTORY_DAYS,
+    LIQUIDITY_SERIES,
+    anomaly_models,
     build_live,
     co_move_models,
+    liquidity_model,
     live_brief,
     live_event_models,
+    net_liquidity_from_store,
     outlier_models,
+    regime_model,
     resolve_lever,
     risk_on_from_store,
 )
@@ -80,6 +86,7 @@ from store.repos import (
     latest_odds,
     latest_opportunity_rows,
     latest_outlook_report,
+    latest_regime,
     latest_return_stats,
     latest_rrg_points,
     latest_valuation_rows,
@@ -189,6 +196,10 @@ def live(lever: str = "DGS10", db: Session = Depends(get_db)) -> LiveResponse | 
                 (day, float(value)) for day, value in macro_observations(db, series_id, start=start)
             ]
         outliers, co_moves = as_dicts(*rank_drivers(driver_series))
+        liquidity_points = {
+            series_id: macro_observations(db, series_id, start=start)
+            for series_id in LIQUIDITY_SERIES
+        }
         return build_live(
             tape_rows,
             load_universes(),
@@ -203,6 +214,9 @@ def live(lever: str = "DGS10", db: Session = Depends(get_db)) -> LiveResponse | 
                 macro_observations(db, CURVE_SERIES, start=start),
                 now=today,
             ),
+            regime=regime_model(latest_regime(db, today)),
+            liquidity=liquidity_model(net_liquidity_from_store(liquidity_points)),
+            anomalies=anomaly_models(detect_anomalies(driver_series, today)),
             odds_rows=latest_odds(db),
             polymarket=load_polymarket(),
             events=live_event_models(near),

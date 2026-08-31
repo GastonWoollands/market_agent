@@ -58,6 +58,7 @@ class LiveMacro(BaseModel):
     value: float | None = None
     change: float | None = None
     as_of: date | None = None
+    spine: bool = False
 
 
 class LiveDeltas(BaseModel):
@@ -144,15 +145,49 @@ class LiveCoMove(BaseModel):
     hint: str | None = None
 
 
+class LiveRegime(BaseModel):
+    """Macro regime read (growth / inflation / policy / volatility) with confidence 0..1."""
+
+    as_of: date | None = None
+    growth: str | None = None
+    inflation: str | None = None
+    policy: str | None = None
+    volatility: str | None = None
+    growth_confidence: float | None = None
+    inflation_confidence: float | None = None
+    policy_confidence: float | None = None
+    volatility_confidence: float | None = None
+
+
+class LiveLiquidity(BaseModel):
+    """Net liquidity = Fed balance sheet − (reverse repo + Treasury general account)."""
+
+    net_liquidity_bn: float | None = None
+    wow_change_bn: float | None = None
+    fed_bs_bn: float | None = None
+    rrp_bn: float | None = None
+    tga_bn: float | None = None
+
+
+class LiveAnomaly(BaseModel):
+    type: str
+    description: str
+    severity: float
+
+
 class LiveResponse(BaseModel):
     as_of: datetime | None = None
     market_state: str | None = None
     stale: bool = True
     header: list[LiveQuote] = []
+    intl: list[LiveQuote] = Field(default_factory=list)
     movers: list[LiveQuote] = []
     macro: list[LiveMacro] = []
     drilldown: LiveDrilldown | None = None
     risk_on: LiveRiskOn | None = None
+    regime: LiveRegime | None = None
+    liquidity: LiveLiquidity | None = None
+    anomalies: list[LiveAnomaly] = Field(default_factory=list)
     odds: list[LiveOdds] = Field(default_factory=list)
     events: list[LiveEvent] = Field(default_factory=list)
     brief: LiveBrief | None = None
