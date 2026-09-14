@@ -110,9 +110,17 @@ Calendar still writes FOMC/CPI dates if Finnhub is unset; earnings just stay emp
 
 | # | Command | Why |
 |---|---------|-----|
-| 10 | `python -m jobs.ingest_sec` | SEC tickers + TTM; builds the ~700–1000 name universe |
+| 10 | `python -m jobs.ingest_sec` | SEC tickers + TTM + fiscal-year snapshots; builds the ~700–1000 name universe |
 | 11 | `python -m jobs.ingest_yahoo --universe valuation` | Daily bars for those names (≤2 req/s — long) |
 | 12 | `python -m jobs.compute_valuation` | EV/EBITDA, 5y percentile, growth × re-rating |
+| 12b | `python -m jobs.compute_quant` | Piotroski F-Score, Altman Z, gem-candidate flag (`quant_score`) |
+
+After a schema upgrade that adds `metric_fy`, backfill without rebuilding membership:
+
+```bash
+python -m jobs.ingest_sec --fy-only
+python -m jobs.compute_quant
+```
 
 First `ingest_sec` downloads `companyfacts.zip` into `data/sec/` (gitignored). Set `SEC_USER_AGENT` to a real email.
 
@@ -146,7 +154,7 @@ Make equivalent of A–F:
 
 ```bash
 make db migrate seed yahoo fred regime poly dynamics news fed-rss calendar pack outlook \
-  sec yahoo-val valuation scores memos yahoo-watch intraday
+  sec yahoo-val valuation quant scores memos yahoo-watch intraday
 
 make yahoo fred regime poly dynamics news fed-rss calendar pack outlook
 ```
@@ -219,6 +227,7 @@ python -m jobs.generate_outlook
 python -m jobs.ingest_sec            # monthly after the first zip; --refresh-zip when you want a new bulk file
 python -m jobs.ingest_yahoo --universe valuation --resume
 python -m jobs.compute_valuation
+python -m jobs.compute_quant
 python -m jobs.compute_scores
 python -m jobs.generate_memos
 ```
@@ -295,8 +304,9 @@ Both write to `outlook_report` table. UI displays latest for the date.
 | `jobs.ingest_calendar` | `event_item` | `--skip-finnhub` |
 | `jobs.build_pack` | `evidence_pack` | `--as-of YYYY-MM-DD` |
 | `jobs.generate_outlook` | `outlook_report` | `--template`, `--as-of`, `--provider`, `--model` |
-| `jobs.ingest_sec` | valuation membership, `metric_ttm` | `--refresh-zip`, `--zip PATH`, `--tickers`, `--limit` |
+| `jobs.ingest_sec` | valuation membership, `metric_ttm`, `metric_fy` | `--refresh-zip`, `--zip PATH`, `--tickers`, `--limit`, `--fy-only` |
 | `jobs.compute_valuation` | `valuation_daily` | — |
+| `jobs.compute_quant` | `quant_score` | — |
 | `jobs.compute_scores` | `opportunity_score` | — |
 | `jobs.generate_memos` | `opportunity_memo` | `--template`, `--provider`, `--model` |
 | `jobs.ingest_intraday` | `bar_intraday` (5m) | `--tickers`, `--resume` |
@@ -308,7 +318,7 @@ Catalogs you may edit without code:
 
 | File | Used by |
 |------|---------|
-| `config/universes.yaml` | seed, Yahoo universes, valuation floor |
+| `config/universes.yaml` | seed, Yahoo universes, valuation floor, gems thresholds |
 | `config/fred_series.yaml` | FRED ingest + Live insight templates + Outlook pack views |
 | `config/polymarket_slugs.yaml` | odds (edit when a contract expires) |
 | `config/news_queries.yaml` | news ingest |
@@ -344,13 +354,14 @@ Dumps are gitignored under `data/`. Restore needs `docker compose up -d db`.
 
 | Check | Expect |
 |-------|--------|
-| `GET /health` | Postgres ok; latest `job_run` rows `ok` |
+| `GET /health` | Postgres ok; latest `job_run` rows `ok`; `metric_fy` / `quant_score` counts after those jobs |
 | Header status dot | Tooltip matches those jobs |
 | Live | SPY/XLK quotes, 10Y from FRED, odds present |
 | Outlook sources table | Same vendors / as_of as `/health` |
 | Dynamics | Quadrants after `compute_dynamics` |
 | Valuation | “N of M with a comparable multiple” is a real count |
 | Opportunities | Rank #1 explainable from SQL without the memo |
+| Quant | `GET /health` `metric_fy` / `quant_score` > 0 after `ingest_sec --fy-only` and `compute_quant`. F-score is 0–9 or null, not a silent 0 |
 | Stale badges | Show when the backing job is old or missing |
 
 Yahoo mid-job kill: re-run with `--resume`; row counts in `bar_daily` must not grow as duplicates (same ticker+date).

@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from ingest.sec.parse import (
     fresh_ttm,
+    fy_history_from_facts,
     tickers_from_payload,
     ttm_from_facts,
     ttm_history_from_facts,
@@ -274,6 +275,34 @@ def test_ttm_history_keeps_complete_windows_only() -> None:
     assert ttm_from_facts(payload, require_quarters=True, through=date(2025, 3, 31)) is None
 
 
+def test_fy_history_reads_annuals_and_cogs_gross_profit() -> None:
+    payload = _fy_payload()
+    rows = fy_history_from_facts(payload, today=date(2026, 9, 14), years=6)
+    assert [item.as_of for item in rows] == [
+        date(2023, 9, 30),
+        date(2024, 9, 28),
+        date(2025, 9, 27),
+    ]
+    latest = rows[-1]
+    assert latest.fiscal_year == 2025
+    assert latest.revenue == Decimal("150000000000")
+    assert latest.net_income == Decimal("30000000000")
+    assert latest.cfo == Decimal("40000000000")
+    assert latest.gross_profit == Decimal("70000000000")
+    assert latest.total_assets == Decimal("350000000000")
+    assert latest.long_term_debt == Decimal("80000000000")
+    assert latest.shares == Decimal("15000000000")
+
+
+def test_fy_prefers_noncurrent_long_term_debt() -> None:
+    payload = _fy_payload()
+    payload["facts"]["us-gaap"]["LongTermDebt"] = {
+        "units": {"USD": [_instant("2025-09-27", 99_000_000_000, "10-K")]}
+    }
+    rows = fy_history_from_facts(payload, today=date(2026, 9, 14))
+    assert rows[-1].long_term_debt == Decimal("80000000000")
+
+
 def _q(start: str, end: str, val: int, form: str) -> dict[str, object]:
     return {"start": start, "end": end, "val": val, "form": form}
 
@@ -319,3 +348,82 @@ def _ev_payload(*, shares: int | None = 1_000_000_000, ebit: int = 10_000_000_00
             }
         }
     return {"cik": 320193, "facts": facts}
+
+
+def _annual(start: str, end: str, val: int) -> dict[str, object]:
+    return {"start": start, "end": end, "val": val, "form": "10-K"}
+
+
+def _fy_payload() -> dict:
+    years = [
+        ("2022-10-01", "2023-09-30", 100_000_000_000, 20_000_000_000, 25_000_000_000),
+        ("2023-10-01", "2024-09-28", 120_000_000_000, 24_000_000_000, 32_000_000_000),
+        ("2024-10-01", "2025-09-27", 150_000_000_000, 30_000_000_000, 40_000_000_000),
+    ]
+    revenue = [_annual(start, end, rev) for start, end, rev, _ni, _cfo in years]
+    ni = [_annual(start, end, ni) for start, end, _rev, ni, _cfo in years]
+    cfo = [_annual(start, end, cfo) for start, end, _rev, _ni, cfo in years]
+    cogs = [_annual(start, end, 80_000_000_000) for start, end, _rev, _ni, _cfo in years]
+    ebit = [_annual(start, end, 35_000_000_000) for start, end, _rev, _ni, _cfo in years]
+    instants = [
+        _instant("2023-09-30", 250_000_000_000, "10-K"),
+        _instant("2024-09-28", 300_000_000_000, "10-K"),
+        _instant("2025-09-27", 350_000_000_000, "10-K"),
+    ]
+    current = [
+        _instant("2023-09-30", 100_000_000_000, "10-K"),
+        _instant("2024-09-28", 120_000_000_000, "10-K"),
+        _instant("2025-09-27", 140_000_000_000, "10-K"),
+    ]
+    cl = [
+        _instant("2023-09-30", 50_000_000_000, "10-K"),
+        _instant("2024-09-28", 55_000_000_000, "10-K"),
+        _instant("2025-09-27", 60_000_000_000, "10-K"),
+    ]
+    ltd = [
+        _instant("2023-09-30", 90_000_000_000, "10-K"),
+        _instant("2024-09-28", 85_000_000_000, "10-K"),
+        _instant("2025-09-27", 80_000_000_000, "10-K"),
+    ]
+    liab = [
+        _instant("2023-09-30", 140_000_000_000, "10-K"),
+        _instant("2024-09-28", 140_000_000_000, "10-K"),
+        _instant("2025-09-27", 140_000_000_000, "10-K"),
+    ]
+    equity = [
+        _instant("2023-09-30", 110_000_000_000, "10-K"),
+        _instant("2024-09-28", 160_000_000_000, "10-K"),
+        _instant("2025-09-27", 210_000_000_000, "10-K"),
+    ]
+    re = [
+        _instant("2023-09-30", 80_000_000_000, "10-K"),
+        _instant("2024-09-28", 100_000_000_000, "10-K"),
+        _instant("2025-09-27", 130_000_000_000, "10-K"),
+    ]
+    shares = [
+        _instant("2023-09-30", 15_000_000_000, "10-K"),
+        _instant("2024-09-28", 15_000_000_000, "10-K"),
+        _instant("2025-09-27", 15_000_000_000, "10-K"),
+    ]
+    return {
+        "cik": 320193,
+        "facts": {
+            "us-gaap": {
+                "Revenues": {"units": {"USD": revenue}},
+                "NetIncomeLoss": {"units": {"USD": ni}},
+                "NetCashProvidedByUsedInOperatingActivities": {"units": {"USD": cfo}},
+                "CostOfGoodsSold": {"units": {"USD": cogs}},
+                "OperatingIncomeLoss": {"units": {"USD": ebit}},
+                "Assets": {"units": {"USD": instants}},
+                "AssetsCurrent": {"units": {"USD": current}},
+                "LiabilitiesCurrent": {"units": {"USD": cl}},
+                "LongTermDebtNoncurrent": {"units": {"USD": ltd}},
+                "Liabilities": {"units": {"USD": liab}},
+                "StockholdersEquity": {"units": {"USD": equity}},
+                "RetainedEarningsAccumulatedDeficit": {"units": {"USD": re}},
+            },
+            "dei": {
+                "EntityCommonStockSharesOutstanding": {"units": {"shares": shares}},
+            },
+        },
+    }

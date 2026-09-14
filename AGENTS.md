@@ -2,7 +2,8 @@
 
 Personal US research terminal. Delayed data, no trading. UI name: Sector Panel.
 
-v1 is shipped. Do not implement Northstar gaps (Form 4, Alpaca, scheduler, Pi host, `filing` tables) unless `docs/northstar.md` is updated first.
+v1 is shipped. Decision-layer Phase 1 (`metric_fy`, Piotroski/Altman, `quant_score`) is in the contract.
+Do not implement remaining Northstar gaps (Form 4, Book, gems membership, filing excerpts, recommendation UI, Alpaca, scheduler, Pi host, `financial_fact` warehouse) unless `docs/northstar.md` §12 is updated to pull that item into the current phase.
 
 Read `docs/northstar.md` before changing product intent, schema meaning, or source stack.
 Read `docs/system.md` for orientation (job → table → API → UI).

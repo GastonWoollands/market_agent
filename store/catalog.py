@@ -41,6 +41,16 @@ class ValuationConfig(BaseModel):
     rebuild: str = "monthly"
 
 
+class GemsConfig(BaseModel):
+    description: str | None = None
+    min_market_cap_usd: int = 300_000_000
+    max_market_cap_usd: int = 2_000_000_000
+    min_revenue_usd: int = 50_000_000
+    min_revenue_growth_yoy: float = 0.15
+    min_fcf_yield: float = 0.04
+    max_debt_to_equity: float = 0.5
+
+
 class UniversesFile(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -48,6 +58,7 @@ class UniversesFile(BaseModel):
     watchlist: UniverseCatalog
     live: LiveTapeConfig = Field(default_factory=LiveTapeConfig)
     valuation: ValuationConfig = Field(default_factory=ValuationConfig)
+    gems: GemsConfig = Field(default_factory=GemsConfig)
 
 
 def load_universes() -> UniversesFile:

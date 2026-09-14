@@ -30,9 +30,11 @@ class HealthResponse(BaseModel):
     outlook_reports: int = 0
     valuation_instruments: int = 0
     metric_ttm: int = 0
+    metric_fy: int = 0
     valuation_daily: int = 0
     opportunity_scores: int = 0
     opportunity_memos: int = 0
+    quant_score: int = 0
     intraday_bars: int = 0
     jobs: list[JobStatus] = []
 

@@ -18,9 +18,8 @@ from store.canonical import (
     PolicyDoc,
     QuoteSnapshot,
 )
-from store.canonical import (
-    MetricTtm as TtmSnapshot,
-)
+from store.canonical import MetricFy as FySnapshot
+from store.canonical import MetricTtm as TtmSnapshot
 from store.catalog import CatalogInstrument, FredSeriesItem
 from store.models import (
     BarDaily,
@@ -31,6 +30,7 @@ from store.models import (
     JobRun,
     MacroObservation,
     MacroSeries,
+    MetricFy,
     MetricTtm,
     NewsItem,
     OddsSnapshot,
@@ -38,6 +38,7 @@ from store.models import (
     OpportunityScore,
     OutlookReport,
     PolicyItem,
+    QuantScore,
     QuoteLatest,
     RegimeSnapshot,
     ReturnStats,
@@ -1001,6 +1002,65 @@ def upsert_metric_ttm(session: Session, instrument_id: int, item: TtmSnapshot) -
     session.execute(stmt)
 
 
+def upsert_metric_fy(session: Session, instrument_id: int, item: FySnapshot) -> None:
+    stmt = insert(MetricFy).values(
+        instrument_id=instrument_id,
+        as_of=item.as_of,
+        fiscal_year=item.fiscal_year,
+        revenue=item.revenue,
+        net_income=item.net_income,
+        cfo=item.cfo,
+        gross_profit=item.gross_profit,
+        ebit=item.ebit,
+        total_assets=item.total_assets,
+        current_assets=item.current_assets,
+        current_liabilities=item.current_liabilities,
+        long_term_debt=item.long_term_debt,
+        total_liabilities=item.total_liabilities,
+        retained_earnings=item.retained_earnings,
+        equity=item.equity,
+        shares=item.shares,
+        source="sec",
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["instrument_id", "as_of"],
+        set_={
+            "fiscal_year": stmt.excluded.fiscal_year,
+            "revenue": stmt.excluded.revenue,
+            "net_income": stmt.excluded.net_income,
+            "cfo": stmt.excluded.cfo,
+            "gross_profit": stmt.excluded.gross_profit,
+            "ebit": stmt.excluded.ebit,
+            "total_assets": stmt.excluded.total_assets,
+            "current_assets": stmt.excluded.current_assets,
+            "current_liabilities": stmt.excluded.current_liabilities,
+            "long_term_debt": stmt.excluded.long_term_debt,
+            "total_liabilities": stmt.excluded.total_liabilities,
+            "retained_earnings": stmt.excluded.retained_earnings,
+            "equity": stmt.excluded.equity,
+            "shares": stmt.excluded.shares,
+            "source": stmt.excluded.source,
+        },
+    )
+    session.execute(stmt)
+
+
+def metric_fy_history(
+    session: Session, instrument_ids: Sequence[int]
+) -> dict[int, list[MetricFy]]:
+    if not instrument_ids:
+        return {}
+    stmt = (
+        select(MetricFy)
+        .where(MetricFy.instrument_id.in_(list(instrument_ids)))
+        .order_by(MetricFy.instrument_id, MetricFy.as_of)
+    )
+    out: dict[int, list[MetricFy]] = {int(item): [] for item in instrument_ids}
+    for row in session.execute(stmt).scalars():
+        out.setdefault(row.instrument_id, []).append(row)
+    return out
+
+
 def latest_metric_ttm(
     session: Session, universe: str = "valuation"
 ) -> list[tuple[Instrument, MetricTtm]]:
@@ -1170,6 +1230,30 @@ def upsert_opportunity_scores(session: Session, rows: Sequence[dict[str, object]
             "trap": stmt.excluded.trap,
             "fcf_margin": stmt.excluded.fcf_margin,
             "ret_3m": stmt.excluded.ret_3m,
+        },
+    )
+    session.execute(stmt)
+    return len(rows)
+
+
+def upsert_quant_scores(session: Session, rows: Sequence[dict[str, object]]) -> int:
+    if not rows:
+        return 0
+    stmt = insert(QuantScore).values(list(rows))
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["instrument_id", "as_of"],
+        set_={
+            "fy_as_of": stmt.excluded.fy_as_of,
+            "f_score": stmt.excluded.f_score,
+            "z_score": stmt.excluded.z_score,
+            "z_inapplicable": stmt.excluded.z_inapplicable,
+            "market_cap": stmt.excluded.market_cap,
+            "revenue_growth_yoy": stmt.excluded.revenue_growth_yoy,
+            "fcf_yield": stmt.excluded.fcf_yield,
+            "debt_to_equity": stmt.excluded.debt_to_equity,
+            "is_gem_candidate": stmt.excluded.is_gem_candidate,
+            "f_tests": stmt.excluded.f_tests,
+            "z_components": stmt.excluded.z_components,
         },
     )
     session.execute(stmt)

@@ -25,7 +25,7 @@ from store.repos import (
 def test_alembic_has_one_head() -> None:
     script = ScriptDirectory.from_config(Config("alembic.ini"))
     heads = script.get_heads()
-    assert heads == ["0015_create_regime_snapshot"], heads
+    assert heads == ["0016_metric_fy_quant"], heads
 
 
 def test_schema_behind_error_maps_missing_table() -> None:

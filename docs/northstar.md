@@ -21,13 +21,15 @@ Column lists, job flags, and formulas live in code (`store/models.py`, `jobs/`, 
 
 ## 1. Goal
 
-Give a single operator a dense, honest view of US markets:
+Give a single operator a dense, honest view of US markets, then a **decision layer** on stored evidence:
 
 - What macro and sectors are doing (**Live**, **Dynamics**)
 - What is cheap vs history (**Valuation**)
 - What is worth reading today (**Opportunities**)
 - Names you track (**Watchlist**)
 - A weekday morning **Outlook** with three pack-grounded sections: US macro spine (rates, inflation, labor, fiscal, a short global context), what the tape and market-implied odds are pricing, and what is on the calendar in the next sessions
+- Fiscal-year health scores (Piotroski F-Score, Altman Z-Score) on the valuation universe, stored in Postgres, not computed by the writer
+- Later (not this phase): a sized **Book**, a **Gems** universe, pack-grounded recommendation fiches, and a constrained rebalance **plan**. Delayed data; **no orders**. Blueprints are research scenarios from packed numbers. Postgres holds derived screens; Redis is not in the stack.
 
 EA / UK / JP / globe appear as **FRED context series** (policy rate, FX, lag-stamped foreign 10Ys), not as non-US listings or a second terminal.
 
@@ -43,8 +45,11 @@ Every number on screen comes from Postgres. Vendors are never called from the UI
 - Non-US listings as first-class (no `.L`, `.T`, CEDEARs)
 - Scraping Finviz, Investing.com, TradingView unofficial APIs, Google Finance RPC
 - Letting the writer search the web or call Yahoo/SEC at generation time
-- Microcap “venture” names (revenue < $1B) — later as a second universe
-- Redis, Kafka, TimescaleDB, pgvector — not until a measured need
+- Microcap “venture” names without usable XBRL. A **Gems** universe ($300M–$2B market cap, revenue floor in `config/universes.yaml`) is contracted; membership is not built yet
+- Redis, Kafka, TimescaleDB, pgvector — not until a measured need. Derived Postgres tables (`quant_score`, later `portfolio_snapshot` / `portfolio_plan`) are the cache
+- GraphQL; FMP / Polygon as extra market vendors (Yahoo + SEC cover prices and fundamentals)
+- A full XBRL `financial_fact` warehouse or raw EDGAR HTML in hot tables
+- LLM-owned weights, entries, targets, or stops. Python fills numeric blueprints; the writer narrates the pack
 - In-process job scheduler (APScheduler). Unattended runs are `cron` / `launchd` calling CLIs when you want them; until then, operators run `make` / `python -m jobs…`
 
 Do not implement a non-goal because it appeared in an older plan. Change this section first.
@@ -59,10 +64,12 @@ Do not implement a non-goal because it appeared in an older plan. Change this se
 | **Outlook** | Structured brief (macro / market / near-term), numeric snapshot from the pack, news tape, near calendar, **sources freshness table** |
 | **Dynamics** | RRG, indexed relative performance, sector table, correlation, lead-lag |
 | **Valuation** | EV/EBITDA vs own 5y range, industry, growth × re-rating |
-| **Opportunities** | Quant scores + writer memos on top names (gems **inside** the $1B+ universe) |
+| **Opportunities** | Quant scores + writer memos on top names (gems **inside** the $1B+ universe until universe D ships) |
 | **Watchlist** | User tickers, quote cards, TradingView widget |
+| **Book** | Sized holdings + cash + risk snapshot + rebalance plan — **not shipped** |
+| **Gems** | Small/mid screen ($300M–$2B cap) — **not shipped** |
 
-**Honest constraint:** $1B+ TTM revenue is mid/large cap. “Early gems” here means *mispriced or improving quality names with full SEC history*, not seed-stage companies.
+**Honest constraint:** $1B+ TTM revenue is mid/large cap. “Early gems” here means *mispriced or improving quality names with full SEC history*, not seed-stage companies. Recommendation fiches and an explain drawer are contracted on Opportunities; they are not in the UI yet.
 
 ---
 
@@ -125,7 +132,10 @@ Frozen for v1. A new vendor is a contract change: update this section first. Cat
 | Earnings calendar + EPS/rev est. | Finnhub free | 07:00 ET |
 | FOMC, CPI, PCE, NFP, GDP, JOLTS, Chair/Jackson Hole speeches, FOMC minutes, Beige Book, ISM, Treasury refunding, ECB/BoE/BoJ, elections | curated `config/catalysts.yaml` | hand, yearly |
 | TTM metrics + valuation membership | SEC EDGAR companyfacts (bulk zip, then incremental) | nightly / monthly |
+| Fiscal-year snapshots (Piotroski / Altman inputs) | Same companyfacts zip; curated columns only | with `ingest_sec` |
 | Charts | TradingView widget | client-side, no ingest |
+
+**Contracted, not ingested yet:** SEC `submissions` JSON, official Form 4 XML, official 10-K/10-Q HTML for Item 1A and Item 7 excerpts only. Same `SEC_USER_AGENT` and rate limit. Not a third-party scrape. Not a `financial_fact` warehouse.
 
 **Polymarket:** store implied probability + liquidity. UI label: market-implied; thin books are noisy.
 
@@ -140,10 +150,11 @@ Do not add scraping, unofficial APIs, or non-US listings. Expanding the FRED cat
 | Tier | Contents | Stored history |
 |------|----------|----------------|
 | **A Tape** | US indices/ETFs + international indices (Nikkei, DAX, FTSE, HSI, CSI 300) + EEM in `config/universes.yaml` | daily + quotes + 5m extended |
-| **B Valuation / Opportunity** | US NYSE/Nasdaq, TTM revenue ≥ $1B, usable XBRL, Yahoo history | daily bars + SEC TTM + valuation |
+| **B Valuation / Opportunity** | US NYSE/Nasdaq, TTM revenue ≥ $1B, usable XBRL, Yahoo history | daily bars + SEC TTM + fiscal-year metrics + valuation + `quant_score` |
 | **C Watchlist** | user-defined | daily + 5m + TV chart |
+| **D Gems** | US listings, market cap $300M–$2B, TTM revenue floor in yaml, usable XBRL | **not built**; flags may appear on B via `quant_score.is_gem_candidate` |
 
-Build B from SEC tickers + `companyfacts` (prefer bulk zip once, then incremental). Rebuild membership monthly. Floor: `config/universes.yaml` `valuation.min_revenue_usd`.
+Build B from SEC tickers + `companyfacts` (prefer bulk zip once, then incremental). Rebuild membership monthly. Floor: `config/universes.yaml` `valuation.min_revenue_usd`. Gems thresholds live in the same file under `gems`; do not Yahoo-ingest D until a later phase screens SEC-first.
 
 ---
 
@@ -155,11 +166,11 @@ Keep vendor payloads out of hot tables. Polymarket `raw` JSONB is the exception.
 
 | Group | Tables | Purpose |
 |-------|--------|---------|
-| Identity | `instrument`, `universe`, `universe_member` | Tickers; `tape` / `valuation` / `watchlist` |
+| Identity | `instrument`, `universe`, `universe_member` | Tickers; `tape` / `valuation` / `watchlist` (later `gems`) |
 | Market | `bar_daily`, `quote_latest`, `bar_intraday` | Daily history, delayed last, 5m for tape ∪ watchlist only |
 | Macro | `macro_series`, `macro_observation`, `odds_snapshot` | FRED prints; Polymarket implied yes |
-| Fundamentals | `metric_ttm` | Point-in-time TTM from SEC companyfacts (no `filing` / `financial_fact` tables) |
-| Derived | `valuation_daily`, `rrg_point`, `return_stats`, `opportunity_score` | Python → Postgres; the writer never computes these |
+| Fundamentals | `metric_ttm`, `metric_fy` | Point-in-time TTM and fiscal-year snapshots from SEC companyfacts (no `financial_fact` warehouse) |
+| Derived | `valuation_daily`, `rrg_point`, `return_stats`, `opportunity_score`, `quant_score` | Python → Postgres; the writer never computes these |
 | News / calendar | `news_item`, `event_item`, `policy_item` | RSS headlines; YAML catalysts (FOMC/CPI/PCE/NFP/GDP/JOLTS/speeches/minutes/Beige Book/ISM/Treasury/central banks) + Finnhub earnings; official Fed Board RSS (speech/statement/minutes/testimony excerpts) |
 | Agent | `evidence_pack`, `outlook_report`, `opportunity_memo`, `job_run` | Pack JSONB, briefs, memos, run log |
 
@@ -181,7 +192,9 @@ All of this is Python → Postgres. The writer never computes a multiple. Weight
 valuation universe → data-quality filters → sleeve scores → rank → writer on top 15–25
 ```
 
-Sleeves in `analytics/scores.py`: Cheap 0.30, Quality 0.25, Change 0.20, Setup 0.15, Insider 0.10, minus Risk. Value trap = cheap + falling revenue/margins or distressed leverage. Insider is a **neutral 0.5** until Form 4 exists (it does not).
+Sleeves in `analytics/scores.py`: Cheap 0.30, Quality 0.25, Change 0.20, Setup 0.15, Insider 0.10, minus Risk. Value trap = cheap + falling revenue/margins or distressed leverage. Insider is a **neutral 0.5** until Form 4 exists (it does not). F-score is **not** a hard gate on Opportunities; it is stored on `quant_score` and may later feed quality. Incomplete F-scores are null, not zero.
+
+**Piotroski F-Score (0–9) and Altman Z:** fiscal-year snapshots in `metric_fy` (need three years for a complete F-score: ROA and turnover use beginning assets). Accrual test is **CFO > net income**, not CFO vs ROA. Altman Z is the industrial formula; null + `z_inapplicable` when current assets/liabilities are missing (typical banks/insurers). Market equity = FY (or TTM) shares × last stored close. `analytics/piotroski.py`, `analytics/altman.py`, `jobs/compute_quant.py`. Gem candidate flag uses yaml thresholds (cap band, revenue growth, FCF yield, D/E); insider ownership is not required until Form 4.
 
 **Correlation / lead-lag:** 63-session corr on sector ETFs; lags −5…+5. `analytics/corr.py`. Default finding is usually same-day — still show it so the brief cannot invent leadership.
 
@@ -211,6 +224,7 @@ Unattended local = `cron` / `launchd` → Python job → Anthropic or Gemini (of
 - Post-check: every ticker and every `%` / yield in the output must appear in the pack; CPI YoY and weekly claims must be covered when present — otherwise fail the job and keep yesterday’s report (`agent/citations.py`)
 - Prompt version stored on the row
 - Opportunities: one memo schema `{why_scored, what_10q_changed, invalidation, caveats}` per top name
+- Later recommendation fiches: Python owns `trade_blueprint` and portfolio weights; the model only narrates packed thesis / risk / insider summaries. Citation check still gates prose.
 
 **Do not** give the model tools to fetch live prices. Do not wrap LangChain. Call `anthropic` / `google-genai`, not raw HTTP.
 
@@ -270,17 +284,29 @@ GET /search?q=
 GET /health
 ```
 
+Book CRUD, `GET /recommendations`, `GET /gems`, and `GET /portfolio/plan` are contracted; do not add them until that phase. No GraphQL.
+
 ---
 
 ## 12. As-built gaps
 
-These were in the original v1 sketch and are **not** implemented. Do not add them unless this file is updated first.
+These are contracted or sketched and are **not** implemented. Do not add them unless this file is updated first (pull the item out of this list into the current phase).
+
+**Decision layer (next phases)**
 
 - No Form 4 ingest; opportunity `insider` sleeve is stubbed at 0.5
+- No `filing_index` / `filing_excerpt` (Item 1A / Item 7). Still no `financial_fact` / `raw_payload` warehouse
+- No Book (`portfolio` / holdings), no portfolio risk snapshot, no constrained optimizer / rebalance plan
+- No Gems universe membership or Yahoo gems ingest (`is_gem_candidate` on `quant_score` is a flag only)
+- No recommendation rows, fiches, or explain-drawer UI
+- No 13F institutional accumulation
+
+**Still out**
+
 - No Alpaca quote adapter
-- No `filing` / `financial_fact` / `raw_payload` tables
 - No in-process scheduler
 - Pi host is allowed later (same compose); not a current task
+- Redis / GraphQL / extra fundamental vendors
 
 ---
 
@@ -299,4 +325,4 @@ These were in the original v1 sketch and are **not** implemented. Do not add the
 
 ## 14. What “good” looks like
 
-A weekday morning you open Outlook and see three sections whose sources table matches Postgres. CPI/PCE are YoY/MoM with print dates, not index levels. 10Y, 2s10s, breakevens, real yields, and funds-vs-2Y are pack facts. Live 10Y and sector tape agree with Yahoo delayed. Dynamics does not claim a leader that lead-lag says is same-day. Valuation percentiles match a spot-check of EV/EBITDA vs history. Opportunities #1 is cheap-or-improving **and** not a collapsing-margin trap. Watchlist charts are TradingView. Nothing required a web search by the model.
+A weekday morning you open Outlook and see three sections whose sources table matches Postgres. CPI/PCE are YoY/MoM with print dates, not index levels. 10Y, 2s10s, breakevens, real yields, and funds-vs-2Y are pack facts. Live 10Y and sector tape agree with Yahoo delayed. Dynamics does not claim a leader that lead-lag says is same-day. Valuation percentiles match a spot-check of EV/EBITDA vs history. Opportunities #1 is cheap-or-improving **and** not a collapsing-margin trap. `quant_score` F-scores are 0–9 or null; Altman Z is null when inapplicable. Watchlist charts are TradingView. Nothing required a web search by the model.

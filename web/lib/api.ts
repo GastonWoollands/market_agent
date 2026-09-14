@@ -30,9 +30,11 @@ export type Health = {
   outlook_reports?: number;
   valuation_instruments?: number;
   metric_ttm?: number;
+  metric_fy?: number;
   valuation_daily?: number;
   opportunity_scores?: number;
   opportunity_memos?: number;
+  quant_score?: number;
   intraday_bars?: number;
   jobs: JobStatus[];
 };
