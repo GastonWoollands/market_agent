@@ -457,9 +457,13 @@ WRITER_SERIES = frozenset(
         "DEXJPUS",
         "VIXCLS",
         "DTWEXBGS",
+        "DCOILWTICO",
+        "DCOILBRENTEU",
+        "ECBDFR",
     }
 )
 STALE_FOREIGN_LAG = 60
+WRITER_ANOMALY_CAP = 3
 
 
 def writer_pack(pack: dict[str, Any]) -> dict[str, Any]:
@@ -483,7 +487,17 @@ def writer_pack(pack: dict[str, Any]) -> dict[str, Any]:
         "header": pack.get("header") or [],
         "drivers": pack.get("drivers") or [],
         "news": (pack.get("news") or [])[:5],
+        "regime": pack.get("regime"),
+        "liquidity": pack.get("liquidity"),
+        "anomalies": _top_anomalies(pack.get("anomalies")),
+        "watchlist": pack.get("watchlist") or [],
     }
+
+
+def _top_anomalies(rows: Any) -> list[dict[str, Any]]:
+    items = [row for row in rows or [] if isinstance(row, dict)]
+    items.sort(key=lambda row: float(row.get("severity") or 0), reverse=True)
+    return items[:WRITER_ANOMALY_CAP]
 
 
 def _writer_extra_ids(pack: dict[str, Any]) -> set[str]:

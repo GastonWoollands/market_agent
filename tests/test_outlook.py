@@ -264,3 +264,33 @@ def test_writer_pack_keeps_three_policy_items() -> None:
     compact = writer_pack(payload)
     assert len(compact["policy_items"]) == 3
     assert compact["policy_items"][0]["title"] == "Speech 0"
+
+
+def test_writer_pack_carries_regime_liquidity_anomalies_and_oil() -> None:
+    payload = assemble_pack(
+        as_of=date(2026, 10, 29),
+        header=[],
+        movers=[],
+        macro=[
+            {"series_id": "DCOILWTICO", "value": 103.37, "lag_days": 2, "region": "us"},
+            {"series_id": "DHHNGSP", "value": 2.76, "lag_days": 2, "region": "us"},
+        ],
+        risk_on=None,
+        odds=[],
+        news=[],
+        events=[],
+        watchlist=[{"ticker": "AMZN", "change_pct": -3.8767, "price": 244.73}],
+        sources=[],
+    )
+    payload["regime"] = {"growth": "slowdown", "confidence": {"growth": 0.5}}
+    payload["liquidity"] = {"net_liquidity_bn": 5801.6, "wow_change_bn": -70.7}
+    payload["anomalies"] = [
+        {"type": "z_score_extreme", "severity": severity, "description": f"a{severity}"}
+        for severity in (0.3, 0.92, 0.5, 0.7)
+    ]
+    compact = writer_pack(payload)
+    assert compact["regime"]["growth"] == "slowdown"
+    assert compact["liquidity"]["wow_change_bn"] == -70.7
+    assert [row["severity"] for row in compact["anomalies"]] == [0.92, 0.7, 0.5]
+    assert compact["watchlist"][0]["ticker"] == "AMZN"
+    assert [row["series_id"] for row in compact["macro"]] == ["DCOILWTICO"]
