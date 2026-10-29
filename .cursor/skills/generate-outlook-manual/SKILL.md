@@ -1,6 +1,6 @@
 ---
 name: generate-outlook-manual
-description: Generate Outlook with Claude via Cursor for higher quality analysis. Use when automated Gemini output needs better reasoning, or when testing prompt changes.
+description: Generate the Outlook with the coding agent (Cursor or Claude Code) from the stored evidence pack. Use for the operator's manual morning/afternoon Outlook, when the automated SDK writer is off or too generic, or when testing prompt changes.
 ---
 
 # Generate Outlook Manually
@@ -27,8 +27,10 @@ If pack is stale, refresh data first:
 
 ```bash
 python -m jobs.ingest_yahoo
+python -m jobs.ingest_yahoo --universe watchlist   # default run is tape only
 python -m jobs.ingest_fred
 python -m jobs.compute_regime
+python -m jobs.ingest_polymarket
 python -m jobs.ingest_news
 python -m jobs.ingest_fed_rss
 python -m jobs.ingest_calendar
@@ -160,20 +162,20 @@ Same as automated job (`agent/citations.py`):
 
 ## Notes
 
-- Uses Claude Sonnet 4 via Cursor subscription (no API key needed)
+- Written by whichever coding agent runs the skill (Cursor or Claude Code); no API key needed
+- Stamp `MANUAL_MODEL` with that agent's real model, e.g. `manual/claude-opus-5-5`
 - Overwrites existing Outlook for the same date
 - Markdown and JSON both stored in `outlook_report` table
 - UI reads latest report for the date (manual overrides automated)
-- Temperature: 0.2 (consistent with automated job)
-- Max tokens: 4096 (same as automated)
+- Write from `writer_pack(pack)` (what the SDK writer sees); validate against the full pack
 
 ## Comparison to Automated Job
 
-| Aspect | Automated (Gemini) | Manual (Cursor) |
+| Aspect | Automated (SDK writer) | Manual (coding agent) |
 |--------|-------------------|-----------------|
-| Model | gemini-2.5-flash | claude-sonnet-4 |
+| Model | `AGENT_PROVIDER` / `AGENT_MODEL` | the coding agent running the skill |
 | Speed | 5-10 seconds | 15-30 seconds |
-| Cost | $0.075/$0.30 per 1M tokens | Cursor subscription |
+| Cost | provider API pricing | coding-agent subscription |
 | Quality | Good for routine days | Superior for complex days |
 | Iteration | No (one-shot) | Yes (can refine) |
 | Unattended | Yes (cron/launchd) | No (manual trigger) |

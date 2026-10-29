@@ -60,6 +60,7 @@ Fast path once the DB is already loaded:
 ```bash
 # morning Live + Outlook
 python -m jobs.ingest_yahoo
+python -m jobs.ingest_yahoo --universe watchlist   # the default run refreshes the tape only
 python -m jobs.ingest_fred
 python -m jobs.compute_regime
 python -m jobs.ingest_news
@@ -159,7 +160,7 @@ Make equivalent of A–F:
 make db migrate seed yahoo fred regime poly dynamics news fed-rss calendar pack outlook \
   sec yahoo-val valuation quant scores memos yahoo-watch intraday
 
-make yahoo fred regime poly dynamics news fed-rss calendar pack outlook
+make yahoo yahoo-watch fred regime poly dynamics news fed-rss calendar pack outlook
 ```
 
 ---
@@ -171,14 +172,15 @@ Intended times if you automate later. Until then, run the same commands by hand.
 ### Weekday morning (~07:30–07:45)
 
 1. `python -m jobs.ingest_yahoo` — delayed tape quotes
-2. `python -m jobs.ingest_fred` — 06:00 cadence
-3. `python -m jobs.compute_regime` — classify macro regime from FRED
-4. `python -m jobs.ingest_intraday` — pre/post 5m gaps
-5. `python -m jobs.ingest_news`
-6. `python -m jobs.ingest_fed_rss`
-7. `python -m jobs.ingest_calendar` — Finnhub ~07:00
-8. `python -m jobs.build_pack`
-9. `python -m jobs.generate_outlook` — ~07:45 (SDK writer; provider per `AGENT_PROVIDER`)
+2. `python -m jobs.ingest_yahoo --universe watchlist` — watchlist quotes (the default run is tape only; the pack reads both)
+3. `python -m jobs.ingest_fred` — 06:00 cadence
+4. `python -m jobs.compute_regime` — classify macro regime from FRED
+5. `python -m jobs.ingest_intraday` — pre/post 5m gaps
+6. `python -m jobs.ingest_news`
+7. `python -m jobs.ingest_fed_rss`
+8. `python -m jobs.ingest_calendar` — Finnhub ~07:00
+9. `python -m jobs.build_pack`
+10. `python -m jobs.generate_outlook` — ~07:45 (SDK writer; provider per `AGENT_PROVIDER`)
 
 Open Outlook: the sources table must match `/health` job rows. Hover the header status dot for latest `job_run`.
 
@@ -195,6 +197,25 @@ Use manual generation when:
 - Complex cross-asset narratives
 - Testing prompt changes
 
+### Weekday afternoon (manual Outlook, ~15:30–16:15)
+
+Current operating mode: the operator regenerates the Outlook with the coding-agent skill.
+`build_pack` stamps `session.phase` (intraday before 16:00 ET, after_close after), so run it
+when you want that framing. Yahoo yield indices can lag the rest of the tape by ~1h.
+
+```bash
+python -m jobs.ingest_yahoo
+python -m jobs.ingest_yahoo --universe watchlist
+python -m jobs.ingest_fred
+python -m jobs.compute_regime
+python -m jobs.ingest_polymarket
+python -m jobs.ingest_news
+python -m jobs.ingest_fed_rss
+python -m jobs.ingest_calendar
+python -m jobs.build_pack
+# then /generate-outlook-manual
+```
+
 ### During the session
 
 ```bash
@@ -202,12 +223,14 @@ python -m jobs.ingest_polymarket     # every 15–60 min
 python -m jobs.ingest_news           # every ~30 min
 python -m jobs.ingest_fed_rss        # every ~30 min with news
 python -m jobs.ingest_yahoo          # quotes when you want a fresher tape
+python -m jobs.ingest_yahoo --universe watchlist   # same for watchlist names
 ```
 
 ### After the close (~16:30)
 
 ```bash
 python -m jobs.ingest_yahoo
+python -m jobs.ingest_yahoo --universe watchlist
 python -m jobs.compute_dynamics
 ```
 
@@ -217,6 +240,7 @@ After a Chair speech (same stored Outlook slice; no Live-time LLM):
 python -m jobs.ingest_fed_rss
 python -m jobs.ingest_news
 python -m jobs.ingest_yahoo
+python -m jobs.ingest_yahoo --universe watchlist
 python -m jobs.ingest_fred
 python -m jobs.compute_regime
 python -m jobs.ingest_polymarket
