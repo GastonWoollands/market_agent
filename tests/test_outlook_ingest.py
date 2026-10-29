@@ -103,3 +103,28 @@ def test_finnhub_earnings_filter_to_watchlist() -> None:
 
 def test_empty_earnings_calendar_is_ok() -> None:
     assert events_from_earnings({"earningsCalendar": []}, allowed={"AAPL"}) == []
+
+
+def test_finnhub_asks_each_watchlist_symbol() -> None:
+    import httpx
+
+    from ingest.finnhub.client import FinnhubClient
+
+    seen: list[str | None] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        symbol = request.url.params.get("symbol")
+        seen.append(symbol)
+        rows = [{"symbol": symbol, "date": "2026-11-02", "hour": "amc"}] if symbol else []
+        return httpx.Response(200, json={"earningsCalendar": rows})
+
+    http = httpx.Client(transport=httpx.MockTransport(handler))
+    with FinnhubClient("test-key", rate=100.0, client=http) as client:
+        events = client.fetch_earnings(
+            start=date(2026, 10, 29), end=date(2026, 11, 12), symbols={"nvda", "AAPL"}
+        )
+    assert seen == ["AAPL", "NVDA"]
+    assert sorted(event.slug for event in events) == [
+        "finnhub:AAPL:2026-11-02",
+        "finnhub:NVDA:2026-11-02",
+    ]

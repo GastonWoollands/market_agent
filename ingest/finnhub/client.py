@@ -57,7 +57,17 @@ class FinnhubClient:
         end: date,
         symbols: set[str] | None = None,
     ) -> list[CalendarEvent]:
-        params: dict[str, Any] = {"from": start.isoformat(), "to": end.isoformat()}
+        """Unfiltered calendars are capped (~1500 rows), so known symbols are asked one by one."""
+        window = {"from": start.isoformat(), "to": end.isoformat()}
+        if not symbols:
+            return events_from_earnings(self._calendar(window))
+        out: list[CalendarEvent] = []
+        for symbol in sorted(item.upper() for item in symbols):
+            payload = self._calendar({**window, "symbol": symbol})
+            out.extend(events_from_earnings(payload, allowed={symbol}))
+        return out
+
+    def _calendar(self, params: dict[str, Any]) -> dict[str, Any]:
         try:
             response = http_get(self._http, self._bucket, FINNHUB_EARNINGS_URL, params=params)
         except httpx.HTTPError as exc:
@@ -79,4 +89,4 @@ class FinnhubClient:
             raise FinnhubParseError("earnings: response is not JSON") from exc
         if not isinstance(payload, dict):
             raise FinnhubParseError("earnings: unexpected JSON payload")
-        return events_from_earnings(payload, allowed=symbols)
+        return payload
