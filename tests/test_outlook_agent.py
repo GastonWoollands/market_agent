@@ -261,3 +261,11 @@ def test_brief_from_text_strips_fences() -> None:
     expected = _cited_brief()
     brief = brief_from_text(f"```json\n{expected.model_dump_json()}\n```")
     assert brief == expected
+
+
+def test_template_fallback_skips_prose_heuristics(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "agent.citations.validate_brief_fields", lambda _brief: ["what_happened:too_short"]
+    )
+    written = narrate(_pack(), client=None)
+    assert written.status == "fallback"

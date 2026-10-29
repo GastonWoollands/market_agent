@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from typing import Any
 
@@ -11,6 +12,8 @@ from pydantic import BaseModel, Field
 from agent.citations import citation_issues
 from agent.errors import AgentError
 from agent.providers import AgentClient
+
+log = logging.getLogger("agent.memos")
 
 MEMO_PROMPT_VERSION = "memo-v2"
 MEMO_LIMIT = 20
@@ -109,13 +112,15 @@ def narrate_memo(pack: dict[str, Any], *, client: AgentClient | None) -> Written
             memo = OpportunityMemo.model_validate(parsed)
             model = f"{client.provider}/{client.model}"
             status = "ok"
-        except AgentError:
+        except AgentError as exc:
+            log.warning("%s memo agent failed (%s); using template", pack.get("ticker"), exc)
             memo = template_memo(pack)
             model = "template"
             status = "fallback"
     text = " ".join([memo.why_scored, memo.what_10q_changed, memo.invalidation, memo.caveats])
     issues = citation_issues(pack, text)
     if issues:
+        log.warning("%s memo citation check failed: %s", pack.get("ticker"), ", ".join(issues))
         memo = template_memo(pack)
         model = "template"
         status = "fallback"

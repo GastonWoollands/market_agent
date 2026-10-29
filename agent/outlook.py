@@ -527,13 +527,11 @@ def narrate(pack: dict[str, Any], *, client: AgentClient | None) -> WrittenBrief
     text = render_markdown(brief)
     brief_json = brief.model_dump()
     
-    # Run all validation checks
+    # Prose-quality heuristics judge LLM output; the template only has to cite the pack.
     from agent.citations import validate_brief_fields
-    issues = (
-        citation_issues(pack, text) + 
-        coverage_issues(pack, text) + 
-        validate_brief_fields(brief_json)
-    )
+    issues = citation_issues(pack, text) + coverage_issues(pack, text)
+    if status == "ok":
+        issues += validate_brief_fields(brief_json)
     
     if issues:
         log.warning("validation check failed: %s\n%s", ", ".join(issues), text)
