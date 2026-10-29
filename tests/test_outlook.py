@@ -294,3 +294,38 @@ def test_writer_pack_carries_regime_liquidity_anomalies_and_oil() -> None:
     assert [row["severity"] for row in compact["anomalies"]] == [0.92, 0.7, 0.5]
     assert compact["watchlist"][0]["ticker"] == "AMZN"
     assert [row["series_id"] for row in compact["macro"]] == ["DCOILWTICO"]
+
+
+def test_yields_live_rows_report_bp_not_percent() -> None:
+    from datetime import UTC, datetime
+    from decimal import Decimal
+    from types import SimpleNamespace
+
+    from agent.pack import yields_live_rows
+    from store.catalog import LiveHeaderItem
+
+    tape = {
+        "^TNX": SimpleNamespace(
+            quote_price=Decimal("4.989"),
+            quote_change_pct=Decimal("-1.11001"),
+            last_close=None,
+            prev_close=None,
+            as_of=datetime(2026, 10, 29, 18, 59, tzinfo=UTC),
+        ),
+        "^TYX": SimpleNamespace(
+            quote_price=None,
+            quote_change_pct=None,
+            last_close=Decimal("5.329"),
+            prev_close=Decimal("5.361"),
+            as_of=None,
+        ),
+    }
+    section = [
+        LiveHeaderItem(ticker="^TNX", label="10Y"),
+        LiveHeaderItem(ticker="^TYX", label="30Y"),
+        LiveHeaderItem(ticker="^FVX", label="5Y"),
+    ]
+    rows = yields_live_rows(tape, section)
+    assert [row["ticker"] for row in rows] == ["^TNX", "^TYX"]
+    assert rows[0]["level"] == 4.989 and rows[0]["d1_bp"] == -5.6
+    assert rows[1]["d1_bp"] == -3.2

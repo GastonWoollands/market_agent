@@ -45,6 +45,7 @@ export type LiveQuote = {
   role: string | null;
   price: number | null;
   change_pct: number | null;
+  change_bp?: number | null;
   change_kind?: string | null;
   gap_pct?: number | null;
   market_state: string | null;
@@ -180,6 +181,7 @@ export type LiveTape = {
   stale: boolean;
   header: LiveQuote[];
   intl?: LiveQuote[];
+  yields?: LiveQuote[];
   movers: LiveQuote[];
   macro: LiveMacro[];
   drilldown: LiveDrilldown | null;

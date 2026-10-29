@@ -30,6 +30,10 @@ tape:
     - { ticker: HYG, yahoo: HYG, name: iShares iBoxx High Yield Corporate Bond, asset_class: etf, role: credit }
     - { ticker: LQD, yahoo: LQD, name: iShares iBoxx Investment Grade Corporate Bond, asset_class: etf, role: credit }
     - { ticker: TLT, yahoo: TLT, name: iShares 20+ Year Treasury Bond, asset_class: etf, role: rates }
+    - { ticker: "^IRX", yahoo: "^IRX", name: 13-week T-bill yield, asset_class: index, role: yield }
+    - { ticker: "^FVX", yahoo: "^FVX", name: 5Y Treasury yield, asset_class: index, role: yield }
+    - { ticker: "^TNX", yahoo: "^TNX", name: 10Y Treasury yield, asset_class: index, role: yield }
+    - { ticker: "^TYX", yahoo: "^TYX", name: 30Y Treasury yield, asset_class: index, role: yield }
     - { ticker: GLD, yahoo: GLD, name: SPDR Gold Shares, asset_class: etf, role: commodity }
     - { ticker: USO, yahoo: USO, name: United States Oil Fund, asset_class: etf, role: commodity }
     - { ticker: UUP, yahoo: UUP, name: Invesco DB US Dollar Index Bullish, asset_class: etf, role: fx }
@@ -53,6 +57,12 @@ live:
     - { ticker: UUP, label: Dollar }
     - { ticker: HYG, label: High yield }
   mover_roles: [sector, group]
+  # Same-day Treasury yields from Yahoo (level in %, move in bp). FRED stays the official series.
+  yields_section:
+    - { ticker: "^IRX", label: 3M bill }
+    - { ticker: "^FVX", label: 5Y }
+    - { ticker: "^TNX", label: 10Y }
+    - { ticker: "^TYX", label: 30Y }
   intl_section:
     - { ticker: EEM, label: Emerging Markets }
     - { ticker: "^N225", label: Nikkei }

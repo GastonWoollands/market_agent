@@ -24,7 +24,8 @@ from analytics.risk_on import (
     VIX_SERIES,
     compute_risk_on,
 )
-from store.catalog import load_fred_series, load_polymarket
+from store.catalog import load_fred_series, load_polymarket, load_universes
+from store.display import resolve_price, resolve_yield_change_bp
 from store.models import (
     BarDaily,
     MacroObservation,
@@ -290,7 +291,8 @@ def pack_from_store(session: Session, *, as_of: date) -> dict[str, Any]:
     facts = named_facts(macro)
     outliers, co_moves = as_dicts(*rank_drivers(_driver_series(session, as_of)))
     drivers = [_quote_dict(tape[ticker]) for ticker in DRIVER_TAPE_IDS if ticker in tape]
-    
+    yields_live = yields_live_rows(tape, load_universes().live.yields_section)
+
     # Load regime classification
     from store.models import RegimeSnapshot
     regime_row = session.query(RegimeSnapshot).filter_by(as_of=as_of).first()
@@ -359,6 +361,8 @@ def pack_from_store(session: Session, *, as_of: date) -> dict[str, Any]:
         pack["liquidity"] = liquidity
     if anomalies_data:
         pack["anomalies"] = anomalies_data
+    if yields_live:
+        pack["yields_live"] = yields_live
     
     return pack
 
@@ -370,6 +374,29 @@ def _driver_series(session: Session, as_of: date) -> dict[str, list[tuple[date, 
         out[ticker] = [(day, float(value)) for day, value in points]
     for series_id in DRIVER_MACRO_IDS:
         out[series_id] = _macro_floats(session, series_id, start)
+    return out
+
+
+def yields_live_rows(tape: dict[str, Any], section: list[Any]) -> list[dict[str, Any]]:
+    """Same-day Yahoo Treasury yields: level in percent, d1 move in bp."""
+    out: list[dict[str, Any]] = []
+    for item in section:
+        row = tape.get(item.ticker)
+        if row is None:
+            continue
+        level = resolve_price(row.quote_price, row.last_close)
+        move = resolve_yield_change_bp(
+            level, row.quote_change_pct, row.last_close, row.prev_close
+        )
+        out.append(
+            {
+                "ticker": item.ticker,
+                "label": item.label or item.ticker,
+                "level": None if level is None else round(float(level), 3),
+                "d1_bp": None if move is None else round(float(move), 1),
+                "as_of": row.as_of.isoformat() if row.as_of else None,
+            }
+        )
     return out
 
 
@@ -491,6 +518,7 @@ def writer_pack(pack: dict[str, Any]) -> dict[str, Any]:
         "liquidity": pack.get("liquidity"),
         "anomalies": _top_anomalies(pack.get("anomalies")),
         "watchlist": pack.get("watchlist") or [],
+        "yields_live": pack.get("yields_live") or [],
     }
 
 

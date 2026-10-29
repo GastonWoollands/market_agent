@@ -80,7 +80,7 @@ Each step needs the ones above it. Skip a block only if you do not care about th
 | # | Command | Why |
 |---|---------|-----|
 | 1 | `python -m jobs.seed_tape` | Instruments + `tape` / `watchlist` from `config/universes.yaml` (includes US indices/ETFs + international indices: Nikkei/DAX/FTSE/HSI/CSI 300 + EEM) |
-| 2 | `python -m jobs.ingest_yahoo` | 5y daily bars + delayed quotes for the tape (~36 names: US + intl indices) |
+| 2 | `python -m jobs.ingest_yahoo` | 5y daily bars + delayed quotes for the tape (~40 names: US + intl indices + Treasury yield indices) |
 | 3 | `python -m jobs.ingest_fred` | FRED catalog (US spine: rates/inflation/growth/employment + FX: DXY/EUR/JPY/MXN/BRL/CNY + commodities: copper/oil/gas + global: ECB/BOJ/PBOC; needs `FRED_API_KEY`) |
 | 3b | `python -m jobs.compute_regime` | `regime_snapshot` from stored FRED (Live band + `pack.regime`) |
 | 4 | `python -m jobs.ingest_polymarket` | Fed / inflation / recession odds |

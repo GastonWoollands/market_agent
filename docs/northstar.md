@@ -64,7 +64,7 @@ Do not implement a non-goal because it appeared in an older plan. Change this se
 
 | Tab | Job |
 |-----|-----|
-| **Live** | The read (stored Outlook `headline` / `live_md` / `expect`), regime & conditions band (growth/inflation/policy/volatility from `regime_snapshot`, Risk-On score, net liquidity), regime header (index, breadth, vol, duration, dollar, credit), global markets (`intl_section`), breakpoints (anomalies), outlier/co-move chips, Risk-On factors, today and the last two sessions’ catalysts, watchlist outliers, sector tape, Polymarket odds, existing FRED drill-down chart |
+| **Live** | The read (stored Outlook `headline` / `live_md` / `expect`), regime & conditions band (growth/inflation/policy/volatility from `regime_snapshot`, Risk-On score, net liquidity), regime header (index, breadth, vol, duration, dollar, credit), global markets (`intl_section`), same-day Treasury yields (`yields_section`, bp moves), breakpoints (anomalies), outlier/co-move chips, Risk-On factors, today and the last two sessions’ catalysts, watchlist outliers, sector tape, Polymarket odds, existing FRED drill-down chart |
 | **Outlook** | Structured brief (§10.1 sections; legacy macro / market / near-term as fallback), numeric snapshot from the pack, news tape, near calendar, **sources freshness table** |
 | **Dynamics** | RRG, indexed relative performance, sector table, correlation, lead-lag |
 | **Valuation** | EV/EBITDA vs own 5y, FCF yield, net debt / EBITDA, growth × re-rating |
@@ -126,7 +126,7 @@ Frozen for v1. A new vendor is a contract change: update this section first. Cat
 
 | Input | Vendor | Typical cadence |
 |-------|--------|-----------------|
-| Daily OHLCV, sector ETFs, proxy levers (gold = GLD) | Yahoo via `yfinance` behind `YahooClient` | 16:30 ET |
+| Daily OHLCV, sector ETFs, proxy levers (gold = GLD), same-day Treasury yield indices (^IRX/^FVX/^TNX/^TYX) | Yahoo via `yfinance` behind `YahooClient` | 16:30 ET |
 | Quote tape (delayed) | Same yfinance session | 60s in session when you re-run |
 | Pre/post 5m gaps | Yahoo 5m | ~07:30 ET, **tape + watchlist only** |
 | Yields, VIX, CPI/PCE (as indexes; pack computes YoY/MoM), OAS, DXY (spine), WTI/Brent/copper, real yield, breakevens, payrolls, claims, durable goods, debt/GDP, ECB/BOJ/PBOC policy, dollar crosses (EUR/JPY/GBP/MXN/BRL/CNY), lag-stamped foreign 10Ys | FRED (`config/fred_series.yaml`) | 06:00 ET |
@@ -153,7 +153,7 @@ Do not add scraping, unofficial APIs, or non-US listings. Expanding the FRED cat
 
 | Tier | Contents | Stored history |
 |------|----------|----------------|
-| **A Tape** | US indices/ETFs + international indices (Nikkei, DAX, FTSE, HSI, CSI 300) + EEM in `config/universes.yaml` | daily + quotes + 5m extended |
+| **A Tape** | US indices/ETFs + Treasury yield indices + international indices (Nikkei, DAX, FTSE, HSI, CSI 300) + EEM in `config/universes.yaml` | daily + quotes + 5m extended |
 | **B Valuation / Opportunity** | US NYSE/Nasdaq, TTM revenue ≥ $1B, usable XBRL, Yahoo history | daily bars + SEC TTM + fiscal-year facts + valuation + ratio snapshot / gem flag |
 | **C Watchlist** | user-defined | daily + 5m + TV chart |
 | **D Gems** | US listings, market cap $300M–$2B, TTM revenue floor in yaml, usable XBRL | **not built**; flags may appear on B via `quant_score.is_gem_candidate` |
@@ -228,7 +228,7 @@ Do not show sleeve unit-ranks (0–1) as the primary columns once those fields a
 
 Unattended local = `cron` / `launchd` → Python job → Anthropic or Gemini (official SDKs). Template fallback when the API is down. No in-process scheduler. Ollama can wait.
 
-**Evidence pack** (Python, stored JSONB) includes index/sector returns, a precomputed macro snapshot (levels, bp/YoY deltas, `lag_days`, named facts), a `judgment` object (takeaways, tensions, watch, invalidation, outliers, co_moves, `policy_comms`), Risk-On, RRG, labeled Polymarket odds, stored headlines (capped per bucket), last-72h official Fed `policy_items[]`, near vs later events, watchlist outliers, top opportunity rows, and a `sources[]` freshness table. `agent/pack.py`. Writer may quote packed policy excerpts only.
+**Evidence pack** (Python, stored JSONB) includes index/sector returns, a precomputed macro snapshot (levels, bp/YoY deltas, `lag_days`, named facts), a `judgment` object (takeaways, tensions, watch, invalidation, outliers, co_moves, `policy_comms`), Risk-On, RRG, labeled Polymarket odds, stored headlines (capped per bucket), last-72h official Fed `policy_items[]`, near vs later events, watchlist outliers, top opportunity rows, `regime`, `liquidity`, `anomalies`, same-day `yields_live` (Yahoo levels + bp), and a `sources[]` freshness table. `agent/pack.py`; the writer receives the compact `writer_pack` slice of it. Writer may quote packed policy excerpts only.
 
 **Generation rules**
 
