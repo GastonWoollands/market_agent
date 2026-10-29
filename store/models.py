@@ -402,7 +402,7 @@ class OpportunityScore(Base):
 
 
 class QuantScore(Base):
-    """Piotroski / Altman / gem flag from stored fiscal-year metrics."""
+    """Ratio snapshot + gem flag. f_score / z_score / f_tests / z_components: legacy, NULL."""
 
     __tablename__ = "quant_score"
 

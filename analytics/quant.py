@@ -1,6 +1,7 @@
-"""Assemble a quant_score row from stored FY snapshots, price, FCF, and EV.
+"""Assemble a quant_score row (ratio snapshot + gem flag) from stored FY snapshots.
 
 No vendor I/O. Gem flag uses catalog thresholds; insider ownership is not applied.
+Piotroski / Altman are not product and are not computed.
 """
 
 from __future__ import annotations
@@ -9,8 +10,6 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
-from analytics.altman import altman
-from analytics.piotroski import piotroski
 from store.canonical import MetricFy
 from store.catalog import GemsConfig
 
@@ -20,16 +19,11 @@ ZERO = Decimal("0")
 @dataclass(frozen=True)
 class QuantRow:
     fy_as_of: date | None
-    f_score: int | None
-    z_score: Decimal | None
-    z_inapplicable: bool
     market_cap: Decimal | None
     revenue_growth_yoy: Decimal | None
     fcf_yield: Decimal | None
     debt_to_equity: Decimal | None
     is_gem_candidate: bool
-    f_tests: dict | None
-    z_components: dict | None
 
 
 def score_quant(
@@ -48,8 +42,6 @@ def score_quant(
     prior = years[-2] if len(years) >= 2 else None
     share_count = shares if shares is not None else current.shares
     market_cap = _mul(share_count, price)
-    f_result = piotroski(years)
-    z_result = altman(current, market_cap=market_cap)
     growth = _growth(current.revenue, None if prior is None else prior.revenue)
     fcf_yield = _ratio(fcf, ev)
     debt_to_equity = _ratio(current.long_term_debt, current.equity)
@@ -63,16 +55,11 @@ def score_quant(
     )
     return QuantRow(
         fy_as_of=current.as_of,
-        f_score=f_result.score,
-        z_score=z_result.z_score,
-        z_inapplicable=z_result.inapplicable,
         market_cap=None if market_cap is None else market_cap.quantize(Decimal("0.01")),
         revenue_growth_yoy=growth,
         fcf_yield=fcf_yield,
         debt_to_equity=debt_to_equity,
         is_gem_candidate=gem,
-        f_tests=f_result.tests,
-        z_components=z_result.components,
     )
 
 

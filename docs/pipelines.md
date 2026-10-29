@@ -116,7 +116,7 @@ Calendar still writes FOMC/CPI dates if Finnhub is unset; earnings just stay emp
 | 11 | `python -m jobs.ingest_sec` | SEC tickers + TTM + fiscal-year snapshots; builds the ~700–1000 name universe |
 | 12 | `python -m jobs.ingest_yahoo --universe valuation` | Daily bars for those names (≤2 req/s — long) |
 | 13 | `python -m jobs.compute_valuation` | EV/EBITDA, 5y percentile, growth × re-rating |
-| 14 | `python -m jobs.compute_quant` | Gem-candidate flag + ratio snapshot (`quant_score`). F-score / Z may still be written; not used in the UI |
+| 14 | `python -m jobs.compute_quant` | Gem-candidate flag + ratio snapshot (`quant_score`). F-score / Z are not computed |
 
 After a schema upgrade that adds `metric_fy`, backfill without rebuilding membership:
 
@@ -310,7 +310,7 @@ Both write to `outlook_report` table. UI displays latest for the date.
 | `jobs.generate_outlook` | `outlook_report` | `--template`, `--as-of`, `--provider`, `--model` |
 | `jobs.ingest_sec` | valuation membership, `metric_ttm`, `metric_fy` | `--refresh-zip`, `--zip PATH`, `--tickers`, `--limit`, `--fy-only` |
 | `jobs.compute_valuation` | `valuation_daily` | — |
-| `jobs.compute_quant` | `quant_score` (gem flag / ratios; F/Z leftover) | — |
+| `jobs.compute_quant` | `quant_score` (gem flag / ratios) | — |
 | `jobs.compute_scores` | `opportunity_score` | — |
 | `jobs.generate_memos` | `opportunity_memo` | `--template`, `--provider`, `--model` |
 | `jobs.ingest_intraday` | `bar_intraday` (5m) | `--tickers`, `--resume` |

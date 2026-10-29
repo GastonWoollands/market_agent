@@ -63,8 +63,6 @@ def test_score_quant_flags_gem_inside_band() -> None:
     assert row is not None
     assert row.market_cap == Decimal("800000000.00")
     assert row.is_gem_candidate is True
-    assert row.f_score is not None
-    assert row.z_inapplicable is False
 
 
 def test_score_quant_rejects_gem_outside_cap_or_growth() -> None:
@@ -93,7 +91,6 @@ def test_score_quant_rejects_gem_outside_cap_or_growth() -> None:
     )
     assert flat is not None
     assert flat.is_gem_candidate is False
-    assert flat.f_score is None
 
 
 def test_score_quant_empty_years() -> None:

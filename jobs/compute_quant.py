@@ -67,9 +67,7 @@ def compute() -> dict[str, object]:
 
     rows: list[dict[str, object]] = []
     skipped: list[str] = []
-    complete_f = 0
     gems_n = 0
-    z_na = 0
     for instrument in instruments:
         years = fy_by_id.get(instrument.id, [])
         if not years:
@@ -93,27 +91,24 @@ def compute() -> dict[str, object]:
             skipped.append(instrument.ticker)
             continue
         as_of = price_day or scored.fy_as_of or date.today()
-        if scored.f_score is not None:
-            complete_f += 1
         if scored.is_gem_candidate:
             gems_n += 1
-        if scored.z_inapplicable:
-            z_na += 1
         rows.append(
             {
                 "instrument_id": instrument.id,
                 "as_of": as_of,
                 "fy_as_of": scored.fy_as_of,
-                "f_score": scored.f_score,
-                "z_score": _dec(scored.z_score, 4),
-                "z_inapplicable": scored.z_inapplicable,
+                # Legacy Piotroski / Altman columns stay NULL; not product.
+                "f_score": None,
+                "z_score": None,
+                "z_inapplicable": False,
                 "market_cap": scored.market_cap,
                 "revenue_growth_yoy": _dec(scored.revenue_growth_yoy),
                 "fcf_yield": _dec(scored.fcf_yield),
                 "debt_to_equity": _dec(scored.debt_to_equity),
                 "is_gem_candidate": scored.is_gem_candidate,
-                "f_tests": scored.f_tests,
-                "z_components": scored.z_components,
+                "f_tests": None,
+                "z_components": None,
             }
         )
 
@@ -128,9 +123,7 @@ def compute() -> dict[str, object]:
         "as_of": as_of.isoformat() if isinstance(as_of, date) else str(as_of),
         "written": written,
         "members": len(instruments),
-        "complete_f_score": complete_f,
         "gem_candidates": gems_n,
-        "z_inapplicable": z_na,
         "skipped": skipped,
     }
 
@@ -158,7 +151,7 @@ def _canonical_fy(cik: str, row: MetricFyRow) -> MetricFy:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Piotroski F-Score, Altman Z, and gem-candidate flags from stored FY metrics."
+        description="Ratio snapshot and gem-candidate flags from stored FY metrics."
     )
     parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -177,12 +170,10 @@ def main() -> None:
         raise SystemExit(1) from exc
     record_job(JOB_NAME, status="ok", rows_written=int(result["written"]), extra=result)
     log.info(
-        "compute_quant as_of=%s written=%s f_complete=%s gems=%s z_na=%s skipped=%s",
+        "compute_quant as_of=%s written=%s gems=%s skipped=%s",
         result["as_of"],
         result["written"],
-        result["complete_f_score"],
         result["gem_candidates"],
-        result["z_inapplicable"],
         len(result["skipped"]) if isinstance(result["skipped"], list) else result["skipped"],
     )
 

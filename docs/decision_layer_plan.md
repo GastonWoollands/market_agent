@@ -30,7 +30,7 @@ This file is **not** the product contract. If intent, sources, universes, pages,
 | Phase | Name | Status | Notes |
 |---|---|---|---|
 | 0 | Contract | **Done** | Desk metrics are the product language; F/Z out of product (2026-09-14) |
-| 1 | `metric_fy` + ratio snapshot / gem flag | **Warehouse done** | Branch `cursor/metric-fy-quant-scores`. Code still writes F/Z; **do not consume**. No UI |
+| 1 | `metric_fy` + ratio snapshot / gem flag | **Warehouse done** | Branch `feat/desk-metrics-and-review`. F/Z computation removed 2026-10-29. No UI |
 | 1.5 | Desk metrics on Valuation + Opportunities | **Done** | Named fields on `GET /valuation` and `GET /opportunities`; grids match. No LLM |
 | 2 | Gems universe D | Not started | Flag only on B; membership + Yahoo gems later. No F-score gate |
 | 3 | Book (portfolio CRUD + current risk) | Not started | Watchlist stays unsized. After 1.5 for user value |
@@ -71,7 +71,7 @@ Rewrote the product sentence without becoming a broker: research terminal + deci
 
 ## Phase 1 — FY facts + ratio snapshot (warehouse done)
 
-Fiscal-year snapshots from the existing SEC companyfacts zip. Gem **flag** only (no universe D). `quant_score` also still writes Piotroski F-Score and industrial Altman Z from that branch — **leftover, not a surface**. Do not harden F/Z matching bugs for UI. Do not feed F into quality.
+Fiscal-year snapshots from the existing SEC companyfacts zip. Gem **flag** only (no universe D). The branch first computed Piotroski F-Score and Altman Z; that code was removed on 2026-10-29 and the legacy `quant_score` columns are written NULL. Do not bring them back.
 
 ### Shipped
 
@@ -80,11 +80,10 @@ Fiscal-year snapshots from the existing SEC companyfacts zip. Gem **flag** only 
 | Tables | `metric_fy`, `quant_score` — Alembic `0016_metric_fy_quant` |
 | FY extract | `ingest/sec/parse.py` `fy_history_from_facts` |
 | Ratios / gem flag | `analytics/quant.py` (FCF yield, revenue growth, D/E, cap band) |
-| Leftover (unused) | `analytics/piotroski.py`, `analytics/altman.py` — do not expose |
 | Ingest | `jobs/ingest_sec.py` writes FY on full run; `--fy-only` backfills members |
 | Compute | `jobs/compute_quant.py` / `make quant` |
 | Health | `GET /health` → `metric_fy`, `quant_score` |
-| Tests | `tests/test_quant.py`, FY cases in `test_sec_parse.py` (plus leftover F/Z tests) |
+| Tests | `tests/test_quant.py`, FY cases in `test_sec_parse.py` |
 
 **Keep from FY:** revenue, NI, CFO, assets, debt, equity — used for revenue YoY, accrual badge (CFO > NI), gems D/E (fail when equity ≤ 0).
 
@@ -280,7 +279,7 @@ For each Opportunities row when the book is non-empty: ρ vs current holdings, s
 ## Suggested staffing order
 
 ```text
-Phase 1 warehouse ✓  (FY facts; F/Z leftover unused)
+Phase 1 warehouse ✓  (FY facts; F/Z removed)
     └─ Phase 1.5 ✓  Desk metrics on Valuation + Opportunities
           ├─ Phase 3  Book   ← next
           │     └─ Phase 3.5  book-aware Opportunities (ρ, sector, cash)
@@ -304,7 +303,7 @@ Operator / hygiene items found in the full review. Do these before or alongside 
 6. ~~**Finnhub earnings = 0.**~~ Done 2026-10-29: the unfiltered calendar is capped at 1500 rows; watchlist earnings are now fetched per symbol.
 7. **Small cleanups.** `CORS_ORIGINS` parsed but unused (API hard-codes `*`); `ALPACA_*` in `.env.example` without a settings field; Polymarket month-guess slugs for non-monthly prefixes waste ~10 requests per slot.
 8. **Design question.** FCF yield is in the Quality sleeve while Cheap already weighs the multiple (partial double count).
-9. **Ship the branch.** `cursor/metric-fy-quant-scores` carries Polymarket slots, desk metrics, memo-v2, docs; open the PR to `main`.
+9. **Ship the branch.** `feat/desk-metrics-and-review` (renamed from `cursor/metric-fy-quant-scores`) carries Polymarket slots, desk metrics, memo-v2, docs; PR to `main`.
 
 Next concrete PR: **Phase 3 Book**. Gems membership can parallel Book. Do not start Phase 7 until packs exist. Do not start a PR to “fix F-score for the UI.”
 
@@ -318,3 +317,4 @@ Next concrete PR: **Phase 3 Book**. Gems membership can parallel Book. Do not st
 | 2026-09-14 | Product simplification: F-score / Altman Z out of product. Desk metrics are the read. Phase 1.5 is next; Book before Gems/optimizer/fiches. Blueprint stamped superseded. |
 | 2026-09-14 | Phase 1.5: `fcf_yield`, `nd_ebitda`, `accrual` on GET /valuation and GET /opportunities; both grids. |
 | 2026-10-29 | Review + hardening: Polymarket slot identity committed; no look-ahead on `?as_of=`; stored memos shown on Opportunities; Outlook contract (§10) matches v12; DB rebuilt from scratch; gold moved from FRED LBMA to GLD tape. |
+| 2026-10-29 | Piotroski / Altman modules and tests removed; `compute_quant` writes legacy F/Z columns NULL. Branch renamed `feat/desk-metrics-and-review`. |

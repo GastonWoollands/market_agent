@@ -174,7 +174,7 @@ Keep vendor payloads out of hot tables. Polymarket `raw` JSONB is the exception.
 | Market | `bar_daily`, `quote_latest`, `bar_intraday` | Daily history, delayed last, 5m for tape ∪ watchlist only |
 | Macro | `macro_series`, `macro_observation`, `odds_snapshot`, `regime_snapshot` | FRED prints; Polymarket implied yes keyed by catalog slot; daily growth / inflation / policy / volatility classification from stored FRED |
 | Fundamentals | `metric_ttm`, `metric_fy` | Point-in-time TTM and fiscal-year facts from SEC companyfacts (no `financial_fact` warehouse). FY is for growth, accrual, gems — not an on-screen F/Z |
-| Derived | `valuation_daily`, `rrg_point`, `return_stats`, `opportunity_score`, `quant_score` | Python → Postgres; the writer never computes these. `quant_score` holds a gem flag and ratio snapshot; F-score / Z columns are not a product surface |
+| Derived | `valuation_daily`, `rrg_point`, `return_stats`, `opportunity_score`, `quant_score` | Python → Postgres; the writer never computes these. `quant_score` holds a gem flag and ratio snapshot; legacy `f_score` / `z_score` columns stay NULL |
 | News / calendar | `news_item`, `event_item`, `policy_item` | RSS headlines; YAML catalysts (FOMC/CPI/PCE/NFP/GDP/JOLTS/speeches/minutes/Beige Book/ISM/Treasury/central banks) + Finnhub earnings; official Fed Board RSS (speech/statement/minutes/testimony excerpts) |
 | Agent | `evidence_pack`, `outlook_report`, `opportunity_memo`, `job_run` | Pack JSONB, briefs, memos, run log |
 
@@ -208,7 +208,7 @@ Sleeves in `analytics/scores.py` are a **sort key**, not the grid: Cheap 0.30 (1
 
 Do not show sleeve unit-ranks (0–1) as the primary columns once those fields are on the API. Do not add P/E, P/B, or interest coverage until those facts exist.
 
-**Not product:** Piotroski F-Score and Altman Z. Do not show them, pack them, or feed F into quality. Do not hard-cut F ≥ 7. Code may still write `f_score` / `z_score` on `quant_score`; that is leftover, not a surface. Gem candidate flag uses yaml thresholds (cap band, revenue growth, FCF yield, D/E); fail negative book equity. Insider ownership is not required until Form 4.
+**Not product:** Piotroski F-Score and Altman Z. Do not show them, pack them, or feed F into quality. Do not hard-cut F ≥ 7. Nothing computes them: the Piotroski / Altman modules were removed (2026-10-29) and the legacy `quant_score` columns are written NULL. Gem candidate flag uses yaml thresholds (cap band, revenue growth, FCF yield, D/E); fail negative book equity. Insider ownership is not required until Form 4.
 
 **Correlation / lead-lag:** 63-session corr on sector ETFs; lags −5…+5. `analytics/corr.py`. Default finding is usually same-day — still show it so the brief cannot invent leadership.
 
