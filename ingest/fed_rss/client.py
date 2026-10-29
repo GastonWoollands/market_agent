@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+from urllib.parse import urlparse
+
 import httpx
 
 from ingest.fed_rss.errors import FedRssHttpError, FedRssParseError
-from ingest.fed_rss.parse import docs_from_rss
+from ingest.fed_rss.parse import body_from_html, docs_from_rss
 from ingest.retry import http_get
 from ingest.yahoo.rate_limit import TokenBucket
 from store.canonical import PolicyDoc
 
+FED_HOST = "www.federalreserve.gov"
 FEEDS = {
     "press_monetary": "https://www.federalreserve.gov/feeds/press_monetary.xml",
     "speeches": "https://www.federalreserve.gov/feeds/speeches.xml",
@@ -16,7 +19,10 @@ FEEDS = {
 
 
 class FedRssClient:
-    """Federal Reserve Board RSS. Do not fetch speech HTML."""
+    """Federal Reserve Board RSS, plus the official article page an item links to.
+
+    Only www.federalreserve.gov pages linked from the feeds; capped body text, no crawling.
+    """
 
     def __init__(
         self,
@@ -67,3 +73,18 @@ class FedRssClient:
             raise
         except Exception as exc:
             raise FedRssParseError(f"{feed}: RSS parse failed") from exc
+
+    def fetch_body(self, url: str) -> str | None:
+        if urlparse(url).hostname != FED_HOST:
+            raise FedRssParseError(f"refusing non-Fed URL {url}")
+        try:
+            response = http_get(self._http, self._bucket, url)
+        except httpx.HTTPError as exc:
+            raise FedRssHttpError(f"body: request failed ({exc.__class__.__name__})") from exc
+        if response.status_code == 429:
+            raise FedRssHttpError("body: rate limited", status_code=429)
+        if response.status_code >= 400:
+            raise FedRssHttpError(
+                f"body: HTTP {response.status_code}", status_code=response.status_code
+            )
+        return body_from_html(response.text)

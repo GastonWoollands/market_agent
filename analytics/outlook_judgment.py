@@ -339,7 +339,8 @@ def _display_title(title: str, speaker: str | None) -> str:
 
 
 def _stance(blob: str) -> str | None:
-    if any(token in blob for token in ("work to do", "further tightening", "hike")):
+    hawkish = ("work to do", "further tightening", "hike", "raise the target range")
+    if any(token in blob for token in hawkish):
         return "hawkish"
     if any(token in blob for token in ("cutting", "cut rates", "easing")):
         return "dovish"

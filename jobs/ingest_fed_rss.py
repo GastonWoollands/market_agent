@@ -3,16 +3,21 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from datetime import UTC, datetime, timedelta
 
 from ingest.fed_rss import FedRssClient
 from ingest.fed_rss.client import FEEDS
 from ingest.fed_rss.errors import FedRssError, FedRssHttpError
+from ingest.fed_rss.parse import is_venue_excerpt
 from jobs.runtime import schema_behind_error, tracked_job
+from store.canonical import PolicyDoc
 from store.engine import session_scope
-from store.repos import upsert_policy_items
+from store.repos import policy_excerpts, upsert_policy_items
 
 log = logging.getLogger("jobs.ingest_fed_rss")
 JOB_NAME = "ingest_fed_rss"
+BODY_LOOKBACK = timedelta(days=14)
+BODY_KINDS = frozenset({"statement", "minutes", "speech", "testimony"})
 
 
 def ingest(*, kinds: set[str] | None = None) -> dict[str, int | list[str]]:
@@ -46,6 +51,7 @@ def ingest(*, kinds: set[str] | None = None) -> dict[str, int | list[str]]:
                 log.warning("%s failed: %s", feed, exc)
                 failures.append(f"{feed}: {exc}")
                 continue
+            docs = _with_bodies(client, docs, failures)
             try:
                 with session_scope() as session:
                     written += upsert_policy_items(session, docs)
@@ -58,6 +64,38 @@ def ingest(*, kinds: set[str] | None = None) -> dict[str, int | list[str]]:
     if written == 0:
         raise RuntimeError(f"no policy rows written; failures={failures}")
     return {"policy_rows": written, "failures": failures, "feeds": feeds}
+
+
+def _with_bodies(
+    client: FedRssClient, docs: list[PolicyDoc], failures: list[str]
+) -> list[PolicyDoc]:
+    """Swap thin RSS descriptions for the article body; keep bodies already stored."""
+    with session_scope() as session:
+        stored = policy_excerpts(session, [doc.guid for doc in docs])
+    cutoff = datetime.now(UTC) - BODY_LOOKBACK
+    out: list[PolicyDoc] = []
+    for doc in docs:
+        kept = stored.get(doc.guid)
+        if kept and len(kept) > len(doc.excerpt or ""):
+            out.append(doc.model_copy(update={"excerpt": kept}))
+            continue
+        thin = is_venue_excerpt(doc.excerpt) or (doc.excerpt or "").strip() == doc.title.strip()
+        if doc.kind not in BODY_KINDS or doc.published_at < cutoff or not thin:
+            out.append(doc)
+            continue
+        try:
+            body = client.fetch_body(doc.url)
+        except FedRssHttpError as exc:
+            if exc.status_code == 429:
+                raise RuntimeError("Fed Board site rate limited") from exc
+            log.warning("%s body failed: %s", doc.url, exc)
+            failures.append(f"body {doc.url}: {exc}")
+            body = None
+        except FedRssError as exc:
+            log.warning("%s body skipped: %s", doc.url, exc)
+            body = None
+        out.append(doc.model_copy(update={"excerpt": body}) if body else doc)
+    return out
 
 
 def main() -> None:

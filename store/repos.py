@@ -779,6 +779,13 @@ def latest_news(
 _POLICY_UPSERT_CHUNK = 25
 
 
+def policy_excerpts(session: Session, guids: Sequence[str]) -> dict[str, str]:
+    if not guids:
+        return {}
+    stmt = select(PolicyItem.guid, PolicyItem.excerpt).where(PolicyItem.guid.in_(list(guids)))
+    return {guid: excerpt for guid, excerpt in session.execute(stmt) if excerpt}
+
+
 def upsert_policy_items(session: Session, docs: Sequence[PolicyDoc]) -> int:
     if not docs:
         return 0

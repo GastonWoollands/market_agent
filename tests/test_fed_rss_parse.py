@@ -105,3 +105,74 @@ def test_empty_rss_raises() -> None:
 def test_429_is_typed() -> None:
     err = FedRssHttpError("speeches: RSS rate limited", status_code=429)
     assert err.status_code == 429
+
+
+STATEMENT_HTML = """<html><head><meta name="description" content="ignored"></head><body>
+<div id="article">
+  <div class="heading col-xs-12 col-sm-8 col-md-8">
+    <p class="article__time">October 28, 2026</p>
+    <h3 class="title">Federal Reserve issues FOMC statement</h3>
+    <p class="releaseTime">For release at 2:00 p.m. EDT</p>
+    <p>Share
+  </div>
+  <div class="col-xs-12 col-sm-8 col-md-8">
+    <p>The Federal Open Market Committee approved the following statement
+    for release by a 10 &#8211; 2 vote:</p>
+    <p>The Committee decided to maintain the target range for the federal funds rate
+    at 3-3/4 to 4 percent.</p>
+    <p>Inflation remains elevated.</p>
+    <p>&nbsp;</p>
+    <p>Voting against the monetary policy action were Lisa D. Cook and Beth M. Hammack,
+    who preferred to raise the target range.</p>
+    <p>For media inquiries, please email <a href="#">[email protected]</a>.</p>
+    <p><a href="/x.htm">Implementation Note issued October 28, 2026</a></p>
+  </div>
+</div>
+<div id="lastUpdate" class="lastUpdate">Last Update: October 28, 2026</div>
+</body></html>"""
+
+
+def test_statement_body_keeps_vote_decision_and_dissent() -> None:
+    from ingest.fed_rss.parse import body_from_html
+
+    body = body_from_html(STATEMENT_HTML)
+    assert body is not None
+    assert body.startswith("The Federal Open Market Committee approved")
+    assert "10 – 2 vote" in body
+    assert "maintain the target range" in body
+    assert body.endswith("who preferred to raise the target range.")
+    for noise in ("Share", "For release", "media inquiries", "Implementation Note", "October 28"):
+        assert noise not in body
+    assert body_from_html("<html><p>no article</p></html>") is None
+    assert len(body_from_html(STATEMENT_HTML, max_chars=40) or "") == 40
+
+
+def test_fetch_body_refuses_non_fed_hosts() -> None:
+    import httpx
+    import pytest
+
+    from ingest.fed_rss import FedRssClient
+    from ingest.fed_rss.errors import FedRssParseError
+
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(str(request.url))
+        return httpx.Response(200, text=STATEMENT_HTML)
+
+    http = httpx.Client(transport=httpx.MockTransport(handler))
+    with FedRssClient(client=http, rate=100.0) as client:
+        with pytest.raises(FedRssParseError):
+            client.fetch_body("https://example.com/monetary20261028a.htm")
+        body = client.fetch_body(
+            "https://www.federalreserve.gov/newsevents/pressreleases/monetary20261028a.htm"
+        )
+    assert calls == ["https://www.federalreserve.gov/newsevents/pressreleases/monetary20261028a.htm"]
+    assert body is not None and "10 – 2 vote" in body
+
+
+def test_hike_dissent_reads_hawkish() -> None:
+    from analytics.outlook_judgment import _stance
+
+    text = "voting against were cook and hammack, who preferred to raise the target range"
+    assert _stance(text) == "hawkish"

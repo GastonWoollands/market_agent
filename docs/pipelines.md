@@ -100,7 +100,7 @@ No vendor call. Re-run after a fresh Yahoo daily ingest.
 | # | Command | Why |
 |---|---------|-----|
 | 6 | `python -m jobs.ingest_news` | Google News RSS (`config/news_queries.yaml`: rates/inflation/growth/fx/commodities/trade/treasury/corporate/energy/central banks/geopolitics) |
-| 7 | `python -m jobs.ingest_fed_rss` | Fed Board RSS (statements, speeches, testimony) |
+| 7 | `python -m jobs.ingest_fed_rss` | Fed Board RSS (statements, speeches, testimony); thin items get the official article body (capped) |
 | 8 | `python -m jobs.ingest_calendar` | YAML catalysts (FOMC/CPI/PCE/NFP/GDP/JOLTS/speeches/minutes/Beige Book/ISM/Treasury/CBs) + Finnhub watchlist earnings |
 | 9 | `python -m jobs.build_pack` | JSON evidence pack from **Postgres only** |
 | 10 | `python -m jobs.generate_outlook` | Brief from that pack |
@@ -304,7 +304,7 @@ Both write to `outlook_report` table. UI displays latest for the date.
 | `jobs.ingest_polymarket` | `odds_snapshot` | `--slots front_fomc,core_cpi_yoy`, `--slugs slug-a,slug-b` |
 | `jobs.compute_dynamics` | `rrg_point`, `return_stats` | — |
 | `jobs.ingest_news` | `news_item` | `--categories macro,fed` |
-| `jobs.ingest_fed_rss` | `policy_item` | `--kinds speech,statement` |
+| `jobs.ingest_fed_rss` | `policy_item` (RSS + capped federalreserve.gov body for recent thin items) | `--kinds speech,statement` |
 | `jobs.ingest_calendar` | `event_item` | `--skip-finnhub` |
 | `jobs.build_pack` | `evidence_pack` | `--as-of YYYY-MM-DD` |
 | `jobs.generate_outlook` | `outlook_report` | `--template`, `--as-of`, `--provider`, `--model` |

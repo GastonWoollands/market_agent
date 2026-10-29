@@ -132,7 +132,7 @@ Frozen for v1. A new vendor is a contract change: update this section first. Cat
 | Yields, VIX, CPI/PCE (as indexes; pack computes YoY/MoM), OAS, DXY (spine), WTI/Brent/copper, real yield, breakevens, payrolls, claims, durable goods, debt/GDP, ECB/BOJ/PBOC policy, dollar crosses (EUR/JPY/GBP/MXN/BRL/CNY), lag-stamped foreign 10Ys | FRED (`config/fred_series.yaml`) | 06:00 ET |
 | Fed / inflation / recession / geo odds | Polymarket Gamma API (`config/polymarket_slugs.yaml` slots + match rules; ingest resolves the current slug) | 15–60 min in session |
 | Headlines | Google News RSS (`config/news_queries.yaml`) | 30 min |
-| FOMC statements, minutes, Chair speeches, testimony | Fed Board RSS (`press_monetary`, `speeches`, `testimony`) via `ingest/fed_rss` | 30–60 min in session |
+| FOMC statements, minutes, Chair speeches, testimony | Fed Board RSS (`press_monetary`, `speeches`, `testimony`) via `ingest/fed_rss`, plus the official `www.federalreserve.gov` article each recent item links to when the RSS text is only a title or venue line (capped body text, ≤2500 chars, 14-day lookback; no crawling, no other hosts) | 30–60 min in session |
 | Earnings calendar + EPS/rev est. | Finnhub free | 07:00 ET |
 | FOMC, CPI, PCE, NFP, GDP, JOLTS, Chair/Jackson Hole speeches, FOMC minutes, Beige Book, ISM, Treasury refunding, ECB/BoE/BoJ, elections | curated `config/catalysts.yaml` | hand, yearly |
 | TTM metrics + valuation membership | SEC EDGAR companyfacts (bulk zip, then incremental) | nightly / monthly |
