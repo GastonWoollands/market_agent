@@ -292,6 +292,20 @@ Phase 1 warehouse ✓  (FY facts; F/Z leftover unused)
                                     └─ Phase 7  three-zone cards
 ```
 
+## Pending before the next phase (2026-10-29 review)
+
+Operator / hygiene items found in the full review. Do these before or alongside Phase 3.
+
+1. **Writer keys.** `.env`: `GOOGLE_API_KEY` and `GEMINI_API_KEY` return `API_KEY_INVALID`; `ANTHROPIC_API_KEY` is empty. Outlook and memos in the DB are template fallbacks until fixed. Then re-run `generate_outlook` + `generate_memos`.
+2. **Backups.** The Docker volume was lost and the DB was rebuilt from scratch. Add a nightly `make dump` via `launchd` (allowed by Northstar §2) before anything else.
+3. **Unattended runs.** `launchd` plists calling the existing CLIs for the morning / close / nightly recipes in pipelines.md §4 (no in-process scheduler).
+4. **2027 catalysts.** `config/catalysts.yaml` ends 2026-12-30.
+5. **Writer model.** `agent/providers.py` `DEFAULT_MODELS["anthropic"]` is `claude-sonnet-4-5`; decide on a current model.
+6. **Finnhub earnings = 0** on 2026-10-29 with a 14-day window and AAPL/AMZN/MSFT in the watchlist — verify the key and response.
+7. **Small cleanups.** `CORS_ORIGINS` parsed but unused (API hard-codes `*`); `ALPACA_*` in `.env.example` without a settings field; Polymarket month-guess slugs for non-monthly prefixes waste ~10 requests per slot.
+8. **Design question.** FCF yield is in the Quality sleeve while Cheap already weighs the multiple (partial double count).
+9. **Ship the branch.** `cursor/metric-fy-quant-scores` carries Polymarket slots, desk metrics, memo-v2, docs; open the PR to `main`.
+
 Next concrete PR: **Phase 3 Book**. Gems membership can parallel Book. Do not start Phase 7 until packs exist. Do not start a PR to “fix F-score for the UI.”
 
 ---
