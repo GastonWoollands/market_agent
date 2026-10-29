@@ -184,8 +184,7 @@ def latest_jobs(session: Session) -> list[JobRun]:
         select(JobRun)
         .join(
             latest,
-            (JobRun.job_name == latest.c.job_name)
-            & (JobRun.started_at == latest.c.started_at),
+            (JobRun.job_name == latest.c.job_name) & (JobRun.started_at == latest.c.started_at),
         )
         .order_by(JobRun.job_name)
     )
@@ -528,14 +527,12 @@ def live_macro_rows(session: Session) -> list[LiveMacroRow]:
     ).subquery()
     last_obs = select(ranked).where(ranked.c.rn == 1).subquery()
     prev_obs = select(ranked).where(ranked.c.rn == 2).subquery()
-    stmt = (
-        select(
-            last_obs.c.series_id,
-            last_obs.c.value,
-            prev_obs.c.value,
-            last_obs.c.date,
-        ).outerjoin(prev_obs, prev_obs.c.series_id == last_obs.c.series_id)
-    )
+    stmt = select(
+        last_obs.c.series_id,
+        last_obs.c.value,
+        prev_obs.c.value,
+        last_obs.c.date,
+    ).outerjoin(prev_obs, prev_obs.c.series_id == last_obs.c.series_id)
     return [
         LiveMacroRow(
             series_id=series_id,
@@ -693,8 +690,7 @@ def latest_rrg_points(
         .join(RrgPoint, RrgPoint.instrument_id == Instrument.id)
         .join(
             latest,
-            (RrgPoint.instrument_id == latest.c.instrument_id)
-            & (RrgPoint.as_of == latest.c.as_of),
+            (RrgPoint.instrument_id == latest.c.instrument_id) & (RrgPoint.as_of == latest.c.as_of),
         )
         .order_by(Instrument.ticker)
     )
@@ -1049,9 +1045,7 @@ def upsert_metric_fy(session: Session, instrument_id: int, item: FySnapshot) -> 
     session.execute(stmt)
 
 
-def metric_fy_history(
-    session: Session, instrument_ids: Sequence[int]
-) -> dict[int, list[MetricFy]]:
+def metric_fy_history(session: Session, instrument_ids: Sequence[int]) -> dict[int, list[MetricFy]]:
     if not instrument_ids:
         return {}
     stmt = (
@@ -1149,6 +1143,54 @@ def upsert_valuation_daily(session: Session, rows: Sequence[dict[str, object]]) 
     return len(rows)
 
 
+def latest_metric_ttm_map(
+    session: Session, instrument_ids: Sequence[int], as_of: date | None = None
+) -> dict[int, MetricTtm]:
+    if not instrument_ids:
+        return {}
+    filters = [MetricTtm.instrument_id.in_(list(instrument_ids))]
+    if as_of is not None:
+        filters.append(MetricTtm.as_of <= as_of)
+    ranked = (
+        select(
+            MetricTtm.instrument_id,
+            func.max(MetricTtm.as_of).label("as_of"),
+        )
+        .where(*filters)
+        .group_by(MetricTtm.instrument_id)
+        .subquery()
+    )
+    stmt = select(MetricTtm).join(
+        ranked,
+        (MetricTtm.instrument_id == ranked.c.instrument_id) & (MetricTtm.as_of == ranked.c.as_of),
+    )
+    return {int(row.instrument_id): row for row in session.execute(stmt).scalars()}
+
+
+def latest_metric_fy_map(
+    session: Session, instrument_ids: Sequence[int], as_of: date | None = None
+) -> dict[int, MetricFy]:
+    if not instrument_ids:
+        return {}
+    filters = [MetricFy.instrument_id.in_(list(instrument_ids))]
+    if as_of is not None:
+        filters.append(MetricFy.as_of <= as_of)
+    ranked = (
+        select(
+            MetricFy.instrument_id,
+            func.max(MetricFy.as_of).label("as_of"),
+        )
+        .where(*filters)
+        .group_by(MetricFy.instrument_id)
+        .subquery()
+    )
+    stmt = select(MetricFy).join(
+        ranked,
+        (MetricFy.instrument_id == ranked.c.instrument_id) & (MetricFy.as_of == ranked.c.as_of),
+    )
+    return {int(row.instrument_id): row for row in session.execute(stmt).scalars()}
+
+
 def latest_valuation_rows(
     session: Session, universe: str = "valuation"
 ) -> list[tuple[Instrument, MetricTtm, ValuationDaily]]:
@@ -1190,9 +1232,7 @@ def latest_valuation_rows(
     return list(session.execute(stmt).all())
 
 
-def comparable_valuation_counts(
-    session: Session, universe: str = "valuation"
-) -> tuple[int, int]:
+def comparable_valuation_counts(session: Session, universe: str = "valuation") -> tuple[int, int]:
     latest = (
         select(
             ValuationDaily.instrument_id,

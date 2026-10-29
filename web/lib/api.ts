@@ -507,6 +507,9 @@ export type ValuationMember = {
   pctile_5y: number | null;
   ebitda_growth_1y: number | null;
   multiple_change_1y: number | null;
+  fcf_yield: number | null;
+  nd_ebitda: number | null;
+  accrual: boolean | null;
   comparable: boolean;
 };
 
@@ -581,6 +584,9 @@ export type OpportunityMember = {
   ev_ebitda: number | null;
   ebitda_growth_1y: number | null;
   fcf_margin: number | null;
+  fcf_yield: number | null;
+  nd_ebitda: number | null;
+  accrual: boolean | null;
   ret_3m: number | null;
   memo: OpportunityMemo | null;
 };
@@ -610,7 +616,8 @@ export async function fetchOpportunities(query?: {
     if (!response.ok) {
       return null;
     }
-    return (await response.json()) as OpportunityTape;
+    const tape = (await response.json()) as OpportunityTape;
+    return { ...tape, members: tape.members ?? [] };
   } catch {
     return null;
   }

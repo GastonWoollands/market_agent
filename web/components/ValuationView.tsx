@@ -5,6 +5,8 @@ import type { ValuationMember, ValuationTape } from "@/lib/api";
 const SORTS = [
   { id: "pctile", label: "5y %ile" },
   { id: "ev_ebitda", label: "EV/EBITDA" },
+  { id: "fcf_yield", label: "FCF yield" },
+  { id: "nd_ebitda", label: "ND/EBITDA" },
   { id: "growth", label: "EBITDA growth" },
   { id: "rerate", label: "Re-rate" },
   { id: "revenue", label: "Revenue" },
@@ -29,7 +31,8 @@ export function ValuationView({
           <h1 className="text-2xl font-semibold tracking-tight">Valuation</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-mute">
             EV/EBITDA from stored prices and SEC TTM. Percentile is vs that name’s own 5y daily
-            multiple. 1y change splits into EBITDA growth × multiple re-rating.
+            multiple. FCF yield is TTM FCF / EV. ND/EBITDA is TTM net debt / EBITDA. 1y change
+            splits into EBITDA growth × multiple re-rating.
           </p>
         </div>
         <p className="text-[13px] text-mute">
@@ -122,6 +125,8 @@ export function ValuationView({
                 <th className="px-3 py-2 font-normal">Name</th>
                 <th className="px-3 py-2 text-right font-normal">EV/EBITDA</th>
                 <th className="px-3 py-2 text-right font-normal">5y %ile</th>
+                <th className="px-3 py-2 text-right font-normal">FCF yield</th>
+                <th className="px-3 py-2 text-right font-normal">ND/EBITDA</th>
                 <th className="px-3 py-2 text-right font-normal">EBITDA 1y</th>
                 <th className="px-3 py-2 text-right font-normal">Re-rate 1y</th>
                 <th className="px-3 py-2 text-right font-normal">Rev</th>
@@ -148,6 +153,8 @@ function MemberRow({ item }: { item: ValuationMember }) {
         {item.comparable ? formatMultiple(item.ev_ebitda) : "—"}
       </td>
       <td className="px-3 py-2 text-right tabular-nums">{formatPctile(item.pctile_5y)}</td>
+      <td className="px-3 py-2 text-right tabular-nums">{formatYield(item.fcf_yield)}</td>
+      <td className="px-3 py-2 text-right tabular-nums">{formatLeverage(item.nd_ebitda)}</td>
       <td className={cn("px-3 py-2 text-right tabular-nums", signedClass(item.ebitda_growth_1y))}>
         {formatSignedPct(item.ebitda_growth_1y)}
       </td>
@@ -178,6 +185,20 @@ function formatPctile(value: number | null): string {
     return "—";
   }
   return `${value.toFixed(0)}`;
+}
+
+function formatYield(value: number | null): string {
+  if (value == null) {
+    return "—";
+  }
+  return `${(value * 100).toFixed(1)}%`;
+}
+
+function formatLeverage(value: number | null): string {
+  if (value == null) {
+    return "—";
+  }
+  return `${value.toFixed(1)}x`;
 }
 
 function formatSignedPct(value: number | null): string {

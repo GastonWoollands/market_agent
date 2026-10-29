@@ -474,6 +474,9 @@ class ValuationMember(BaseModel):
     pctile_5y: float | None = None
     ebitda_growth_1y: float | None = None
     multiple_change_1y: float | None = None
+    fcf_yield: float | None = None
+    nd_ebitda: float | None = None
+    accrual: bool | None = None
     comparable: bool = False
 
 
@@ -517,6 +520,9 @@ class OpportunityMember(BaseModel):
     ev_ebitda: float | None = None
     ebitda_growth_1y: float | None = None
     fcf_margin: float | None = None
+    fcf_yield: float | None = None
+    nd_ebitda: float | None = None
+    accrual: bool | None = None
     ret_3m: float | None = None
     memo: OpportunityMemo | None = None
 

@@ -333,7 +333,7 @@ class MetricTtm(Base):
 
 
 class MetricFy(Base):
-    """Fiscal-year snapshot for Piotroski / Altman. Curated columns only."""
+    """Fiscal-year snapshot (revenue YoY, accrual, gems inputs). Curated columns only."""
 
     __tablename__ = "metric_fy"
 
