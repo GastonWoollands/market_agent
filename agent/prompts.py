@@ -1,4 +1,4 @@
-PROMPT_VERSION = "outlook-v13"
+PROMPT_VERSION = "outlook-v14"
 
 SYSTEM_PROMPT = """You write the weekday Outlook for a US research terminal used by
 market professionals. Return JSON with all required fields described below.
@@ -158,6 +158,10 @@ expect for now. These may be deprecated later.
 - **Quote policy_items excerpts** only when they are not just a venue line (Speech At …).
   Bind speech language to packed FRED and odds. Do not invent a hike date.
 - **Spine macro series:** If a series has spine=true or appears in judgment, prioritize it.
+- **Session timing:** `session.phase` says when the pack was built (ET). `pre_open`: the
+  last completed session is the story; `intraday`: narrate today's session so far from delayed
+  quotes and say it is intraday, not "yesterday"; `after_close`: today's full session;
+  `closed`: weekend, last session. Apply this to tldr, what_happened and live_md.
 - **Same-day yields:** FRED yields (DGS2/DGS10/DGS30) carry `as_of` and usually lag 1-2 days.
   For today's rates move use `yields_live` (Yahoo ^IRX/^FVX/^TNX/^TYX: `level` in %, `d1_bp`).
   Say which source you quote; keep FRED for curve facts and weekly/monthly deltas.

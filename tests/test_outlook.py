@@ -329,3 +329,18 @@ def test_yields_live_rows_report_bp_not_percent() -> None:
     assert [row["ticker"] for row in rows] == ["^TNX", "^TYX"]
     assert rows[0]["level"] == 4.989 and rows[0]["d1_bp"] == -5.6
     assert rows[1]["d1_bp"] == -3.2
+
+
+def test_session_phase_by_eastern_clock() -> None:
+    from datetime import UTC, datetime
+
+    from agent.pack import session_phase
+
+    day = date(2026, 10, 29)
+    at = lambda h, m: datetime(2026, 10, 29, h, m, tzinfo=UTC)  # noqa: E731
+    assert session_phase(day, at(12, 0))["phase"] == "pre_open"  # 08:00 ET
+    assert session_phase(day, at(19, 0)) == {"phase": "intraday", "built_at_et": "2026-10-29 15:00"}
+    assert session_phase(day, at(21, 5))["phase"] == "after_close"  # 17:05 ET
+    assert session_phase(date(2026, 10, 28), at(14, 0))["phase"] == "after_close"
+    saturday = datetime(2026, 10, 31, 15, 0, tzinfo=UTC)
+    assert session_phase(date(2026, 10, 31), saturday)["phase"] == "closed"

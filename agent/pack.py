@@ -5,9 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
@@ -229,7 +230,9 @@ def store_counts(session: Session) -> dict[str, int]:
     }
 
 
-def pack_from_store(session: Session, *, as_of: date) -> dict[str, Any]:
+def pack_from_store(
+    session: Session, *, as_of: date, now: datetime | None = None
+) -> dict[str, Any]:
     tape = {row.ticker: row for row in live_tape_rows(session, "tape")}
     header = [_quote_dict(tape[ticker]) for ticker in HEADER_TICKERS if ticker in tape]
     stats = latest_return_stats(session, as_of)
@@ -363,6 +366,7 @@ def pack_from_store(session: Session, *, as_of: date) -> dict[str, Any]:
         pack["anomalies"] = anomalies_data
     if yields_live:
         pack["yields_live"] = yields_live
+    pack["session"] = session_phase(as_of, now or datetime.now(UTC))
     
     return pack
 
@@ -375,6 +379,27 @@ def _driver_series(session: Session, as_of: date) -> dict[str, list[tuple[date, 
     for series_id in DRIVER_MACRO_IDS:
         out[series_id] = _macro_floats(session, series_id, start)
     return out
+
+
+ET = ZoneInfo("America/New_York")
+SESSION_OPEN = time(9, 30)
+SESSION_CLOSE = time(16, 0)
+
+
+def session_phase(as_of: date, now: datetime) -> dict[str, str]:
+    """Where the US cash session stood when the pack was built (no holiday calendar)."""
+    local = now.astimezone(ET)
+    if as_of < local.date():
+        phase = "after_close"
+    elif local.weekday() >= 5:
+        phase = "closed"
+    elif local.time() < SESSION_OPEN:
+        phase = "pre_open"
+    elif local.time() < SESSION_CLOSE:
+        phase = "intraday"
+    else:
+        phase = "after_close"
+    return {"phase": phase, "built_at_et": local.strftime("%Y-%m-%d %H:%M")}
 
 
 def yields_live_rows(tape: dict[str, Any], section: list[Any]) -> list[dict[str, Any]]:
@@ -519,6 +544,7 @@ def writer_pack(pack: dict[str, Any]) -> dict[str, Any]:
         "anomalies": _top_anomalies(pack.get("anomalies")),
         "watchlist": pack.get("watchlist") or [],
         "yields_live": pack.get("yields_live") or [],
+        "session": pack.get("session"),
     }
 
 

@@ -228,7 +228,7 @@ Do not show sleeve unit-ranks (0–1) as the primary columns once those fields a
 
 Unattended local = `cron` / `launchd` → Python job → Anthropic or Gemini (official SDKs). Template fallback when the API is down. No in-process scheduler. Ollama can wait.
 
-**Evidence pack** (Python, stored JSONB) includes index/sector returns, a precomputed macro snapshot (levels, bp/YoY deltas, `lag_days`, named facts), a `judgment` object (takeaways, tensions, watch, invalidation, outliers, co_moves, `policy_comms`), Risk-On, RRG, labeled Polymarket odds, stored headlines (capped per bucket), last-72h official Fed `policy_items[]`, near vs later events, watchlist outliers, top opportunity rows, `regime`, `liquidity`, `anomalies`, same-day `yields_live` (Yahoo levels + bp), and a `sources[]` freshness table. `agent/pack.py`; the writer receives the compact `writer_pack` slice of it. Writer may quote packed policy excerpts only.
+**Evidence pack** (Python, stored JSONB) includes index/sector returns, a precomputed macro snapshot (levels, bp/YoY deltas, `lag_days`, named facts), a `judgment` object (takeaways, tensions, watch, invalidation, outliers, co_moves, `policy_comms`), Risk-On, RRG, labeled Polymarket odds, stored headlines (capped per bucket), last-72h official Fed `policy_items[]`, near vs later events, watchlist outliers, top opportunity rows, `regime`, `liquidity`, `anomalies`, same-day `yields_live` (Yahoo levels + bp), `session.phase` (pre_open / intraday / after_close / closed, ET clock at build time), and a `sources[]` freshness table. `agent/pack.py`; the writer receives the compact `writer_pack` slice of it. Writer may quote packed policy excerpts only.
 
 **Generation rules**
 
