@@ -165,7 +165,7 @@ def test_narrate_drops_uncited_agent_output(caplog: pytest.LogCaptureFixture) ->
 
     class _Client:
         provider = "anthropic"
-        model = "claude-sonnet-4-5"
+        model = "claude-sonnet-5-5"
 
         def complete(self, *, system: str, user: str) -> OutlookBrief:
             return _cited_brief().model_copy(
@@ -269,3 +269,44 @@ def test_template_fallback_skips_prose_heuristics(monkeypatch: pytest.MonkeyPatc
     )
     written = narrate(_pack(), client=None)
     assert written.status == "fallback"
+
+
+def _anthropic_agent(response: object, calls: list[dict]) -> object:
+    from agent.providers import AnthropicAgent
+
+    class _Messages:
+        def parse(self, **kwargs: object) -> object:
+            calls.append(kwargs)
+            return response
+
+    agent = AnthropicAgent.__new__(AnthropicAgent)
+    agent.model = "claude-sonnet-5-5"
+    agent._client = type("C", (), {"messages": _Messages()})()
+    return agent
+
+
+def test_anthropic_default_is_sonnet_5_5_without_temperature() -> None:
+    from types import SimpleNamespace
+
+    from agent.providers import DEFAULT_MODELS
+
+    assert DEFAULT_MODELS["anthropic"] == "claude-sonnet-5-5"
+    calls: list[dict] = []
+    brief = _cited_brief()
+    agent = _anthropic_agent(SimpleNamespace(stop_reason="end_turn", parsed_output=brief), calls)
+    assert agent.complete(system="s", user="u") == brief
+    assert "temperature" not in calls[0]
+    assert calls[0]["max_tokens"] >= 16000
+
+
+def test_anthropic_refusal_falls_back() -> None:
+    from types import SimpleNamespace
+
+    from agent.errors import AgentError
+
+    refusal = SimpleNamespace(
+        stop_reason="refusal", stop_details=SimpleNamespace(category="cyber"), parsed_output=None
+    )
+    agent = _anthropic_agent(refusal, [])
+    with pytest.raises(AgentError, match="refusal"):
+        agent.complete(system="s", user="u")

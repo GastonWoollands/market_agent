@@ -35,7 +35,7 @@ def test_narrate_memo_falls_back_when_agent_invents() -> None:
 
     class _Client:
         provider = "anthropic"
-        model = "claude-sonnet-4-5"
+        model = "claude-sonnet-5-5"
 
         def complete(self, *, system: str, user: str, schema=None):
             return schema(

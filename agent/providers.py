@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Protocol, TypeVar
+from typing import Any, Protocol, TypeVar
 
 from pydantic import BaseModel
 
@@ -9,10 +9,11 @@ from agent.errors import AgentError, AgentHttpError
 from store.settings import Settings, settings
 
 DEFAULT_MODELS = {
-    "anthropic": "claude-sonnet-4-5",
+    "anthropic": "claude-sonnet-5-5",
     "gemini": "gemini-2.5-flash",
 }
 PROVIDERS = frozenset(DEFAULT_MODELS)
+ANTHROPIC_MAX_TOKENS = 16000
 T = TypeVar("T", bound=BaseModel)
 
 
@@ -71,24 +72,25 @@ class AnthropicAgent:
         try:
             parse = getattr(self._client.messages, "parse", None)
             if parse is not None:
+                # Sonnet 5.5 rejects non-default temperature; adaptive thinking shares max_tokens.
                 result = parse(
                     model=self.model,
-                    max_tokens=4096,
-                    temperature=0.2,
+                    max_tokens=ANTHROPIC_MAX_TOKENS,
                     system=system,
                     messages=[{"role": "user", "content": user}],
                     output_format=output,
                 )
+                _check_stop(result)
                 parsed = getattr(result, "parsed_output", None) or getattr(result, "parsed", None)
                 if parsed is not None:
                     return output.model_validate(parsed)
             response = self._client.messages.create(
                 model=self.model,
-                max_tokens=2048,
-                temperature=0.2,
+                max_tokens=ANTHROPIC_MAX_TOKENS,
                 system=system,
                 messages=[{"role": "user", "content": user}],
             )
+            _check_stop(response)
         except AgentError:
             raise
         except Exception as exc:
@@ -98,6 +100,16 @@ class AnthropicAgent:
             block.text for block in response.content if getattr(block, "type", "") == "text"
         )
         return parse_model(text, output)
+
+
+def _check_stop(response: Any) -> None:
+    reason = getattr(response, "stop_reason", None)
+    if reason == "refusal":
+        details = getattr(response, "stop_details", None)
+        category = getattr(details, "category", None) if details else None
+        raise AgentError(f"anthropic: refusal ({category or 'uncategorized'})")
+    if reason == "max_tokens":
+        raise AgentError("anthropic: output hit max_tokens")
 
 
 class GeminiAgent:

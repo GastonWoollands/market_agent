@@ -262,26 +262,26 @@ Timeouts and HTTP 5xx retry up to 3 times inside the adapters. **Yahoo 429 still
 
 Two approaches: **automated (default)** and **manual override (Cursor skill)**.
 
-#### Automated (Gemini - 80% of days)
+#### Automated (SDK writer)
 
 ```bash
 python -m jobs.generate_outlook
 ```
 
-- **Model:** `gemini-2.5-flash` (default) or `claude-sonnet-4-5` (if `ANTHROPIC_API_KEY` set)
+- **Model:** `AGENT_PROVIDER` / `AGENT_MODEL` from `.env`; defaults `claude-sonnet-5-5` (Anthropic) or `gemini-2.5-flash` (Gemini). Sonnet 5.5 runs without `temperature` (the API rejects non-default values) and with `max_tokens` 16000 because adaptive thinking shares the budget
 - **Speed:** 5-10 seconds
-- **Cost:** ~$0.01 per run (Gemini) or ~$0.50 per run (Claude API)
+- **Cost:** low per run; check the provider console
 - **Use when:** Normal market day, routine updates, running unattended
 
 Template fallback if API unavailable: `python -m jobs.generate_outlook --template`
 
-#### Manual (Cursor skill - 20% of days)
+#### Manual (coding-agent skill — current operating mode)
 
-In Cursor Chat: `/generate-outlook-manual`
+Cursor or Claude Code: `/generate-outlook-manual`. As of 2026-10-29 the operator runs this each morning and afternoon to iterate on the brief; the SDK writer keys are intentionally left unset/invalid.
 
-- **Model:** `claude-sonnet-4` (via Cursor subscription)
+- **Model:** whatever coding agent runs the skill; stamped as `manual/<agent-model>`
 - **Speed:** 15-30 seconds (with streaming)
-- **Cost:** Included in Cursor subscription
+- **Cost:** included in the coding-agent subscription
 - **Use when:**
   - High-severity anomalies (>0.7 severity)
   - Regime classification changed

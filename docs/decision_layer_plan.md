@@ -296,12 +296,12 @@ Phase 1 warehouse ✓  (FY facts; F/Z leftover unused)
 
 Operator / hygiene items found in the full review. Do these before or alongside Phase 3.
 
-1. **Writer keys.** `.env`: `GOOGLE_API_KEY` and `GEMINI_API_KEY` return `API_KEY_INVALID`; `ANTHROPIC_API_KEY` is empty. Outlook and memos in the DB are template fallbacks until fixed. Then re-run `generate_outlook` + `generate_memos`.
-2. **Backups.** The Docker volume was lost and the DB was rebuilt from scratch. Add a nightly `make dump` via `launchd` (allowed by Northstar §2) before anything else.
+1. **Writer keys — decided 2026-10-29: leave as is.** Gemini keys invalid and `ANTHROPIC_API_KEY` empty on purpose; the operator generates the Outlook manually (`/generate-outlook-manual`) each morning and afternoon to iterate on it. Automated `generate_outlook` / `generate_memos` write template fallbacks meanwhile.
+2. **Backups — deferred until prod.** Not needed while the DB is local (decided 2026-10-29). Add nightly `make dump` when it moves to a hosted / Pi environment.
 3. **Unattended runs.** `launchd` plists calling the existing CLIs for the morning / close / nightly recipes in pipelines.md §4 (no in-process scheduler).
 4. **2027 catalysts.** `config/catalysts.yaml` ends 2026-12-30.
-5. **Writer model.** `agent/providers.py` `DEFAULT_MODELS["anthropic"]` is `claude-sonnet-4-5`; decide on a current model.
-6. **Finnhub earnings = 0** on 2026-10-29 with a 14-day window and AAPL/AMZN/MSFT in the watchlist — verify the key and response.
+5. ~~**Writer model.**~~ Done 2026-10-29: Anthropic default `claude-sonnet-5-5` (no `temperature`, `max_tokens` 16000, refusal / truncation → template).
+6. ~~**Finnhub earnings = 0.**~~ Done 2026-10-29: the unfiltered calendar is capped at 1500 rows; watchlist earnings are now fetched per symbol.
 7. **Small cleanups.** `CORS_ORIGINS` parsed but unused (API hard-codes `*`); `ALPACA_*` in `.env.example` without a settings field; Polymarket month-guess slugs for non-monthly prefixes waste ~10 requests per slot.
 8. **Design question.** FCF yield is in the Quality sleeve while Cheap already weighs the multiple (partial double count).
 9. **Ship the branch.** `cursor/metric-fy-quant-scores` carries Polymarket slots, desk metrics, memo-v2, docs; open the PR to `main`.
