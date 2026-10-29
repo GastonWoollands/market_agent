@@ -48,7 +48,8 @@ python -m jobs.build_pack
 Execute the following Python code to generate the Outlook:
 
 ```python
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 from agent.brief import OutlookBrief
 from agent.outlook import user_prompt, render_markdown
 from agent.prompts import SYSTEM_PROMPT, PROMPT_VERSION
@@ -56,8 +57,11 @@ from agent.citations import citation_issues, coverage_issues, validate_brief_fie
 from store.engine import session_scope
 from store.repos import latest_evidence_pack, upsert_outlook_report
 
+# Stamp the real author, e.g. "manual/claude-opus-5-5" or "manual/cursor-<model>"
+MANUAL_MODEL = "manual/<agent-model>"
+
 # 1. Load evidence pack
-target_date = date.today()  # or date.fromisoformat("2026-08-30")
+target_date = datetime.now(ZoneInfo("America/New_York")).date()  # or date.fromisoformat("2026-08-30")
 
 with session_scope() as session:
     pack_row = latest_evidence_pack(session, target_date)
@@ -133,14 +137,14 @@ else:
         upsert_outlook_report(
             session,
             as_of=target_date,
-            model="cursor/claude-sonnet-4",
+            model=MANUAL_MODEL,
             prompt_version=PROMPT_VERSION,
             body_md=text,
             body_json=brief.model_dump(),
             pack_id=pack_id,
             status="ok"
         )
-    print(f"✅ Outlook saved (pack_id: {pack_id}, model: cursor/claude-sonnet-4)")
+    print(f"✅ Outlook saved (pack_id: {pack_id}, model: {MANUAL_MODEL})")
     print(f"   View at: http://localhost:3000/outlook")
 ```
 

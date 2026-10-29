@@ -9,6 +9,7 @@ v1 is shipped: Live, Outlook, Dynamics, Valuation, Opportunities, Watchlist — 
 | [docs/northstar.md](docs/northstar.md) | Product contract (intent, sources, schema meaning, non-goals) |
 | [docs/system.md](docs/system.md) | As-built map: job → table → API → UI |
 | [docs/pipelines.md](docs/pipelines.md) | Setup, job order, flags, backup |
+| [docs/decision_layer_plan.md](docs/decision_layer_plan.md) | Decision-layer phase tracker (status, next PR) |
 | [AGENTS.md](AGENTS.md) | Cursor / Claude Code map |
 
 ## Run
@@ -29,6 +30,6 @@ First load and recurring recipes: [pipelines.md](docs/pipelines.md). Serve with 
 |------|---------|
 | `config/universes.yaml` | Tape ETFs/indices, Live header, seed watchlist, valuation floor |
 | `config/fred_series.yaml` | FRED levers + insight templates |
-| `config/polymarket_slugs.yaml` | Odds markets (slugs rotate — edit when a contract expires) |
+| `config/polymarket_slugs.yaml` | Odds slots + match rules (ingest rotates Gamma slugs) |
 | `config/news_queries.yaml` | Google News RSS buckets |
 | `config/catalysts.yaml` | FOMC / CPI / elections (hand-maintained) |

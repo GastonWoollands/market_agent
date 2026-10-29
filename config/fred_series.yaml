@@ -145,16 +145,6 @@ series:
     pack_view: level
     insight: Spot WTI. Energy equities (XLE) and inflation prints track this with a lag.
 
-  - id: GOLDAMGBD228NLBM
-    name: Gold spot
-    unit: usd_per_oz
-    category: commodities
-    region: us
-    pack_view: level
-    spine: false
-    insight: London gold fixing. Structural hedge against fiscal risk; EM central banks accumulate during dollar strength cycles. Fallback GOLDPMGBD228NLBM (PM fixing) if this series fails.
-    watch: [GLD]
-
   - id: DCOILBRENTEU
     name: Brent Crude
     unit: usd_per_barrel

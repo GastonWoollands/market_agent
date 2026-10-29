@@ -33,6 +33,7 @@ dev = [
 market-seed = "jobs.seed_tape:main"
 market-yahoo = "jobs.ingest_yahoo:main"
 market-fred = "jobs.ingest_fred:main"
+market-regime = "jobs.compute_regime:main"
 market-poly = "jobs.ingest_polymarket:main"
 market-dynamics = "jobs.compute_dynamics:main"
 market-news = "jobs.ingest_news:main"
