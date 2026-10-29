@@ -38,7 +38,9 @@ class OutlookBrief(BaseModel):
     macro_deep: str = Field(min_length=1, description="Curve, inflation, employment, fiscal")
     market_deep: str = Field(min_length=1, description="Risk-On, credit, odds, positioning")
     policy_deep: str = Field(min_length=1, description="Fed/ECB/BOJ stance and next tests")
-    geopolitical_deep: str | None = Field(default=None, description="Energy, trade, conflicts (optional)")
+    geopolitical_deep: str | None = Field(
+        default=None, description="Energy, trade, conflicts (optional)"
+    )
     
     # Calendar
     calendar: list[CalendarItem] = Field(default_factory=list)

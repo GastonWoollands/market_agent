@@ -127,7 +127,7 @@ function LagChart({
   return (
     <div>
       <div className="relative h-28">
-        {peakIndex >= 0 && peakCorr != null ? (
+        {peak != null && peakIndex >= 0 && peakCorr != null ? (
           <p
             className="absolute -top-0.5 text-[11px] text-[#6cb6ff]"
             style={{

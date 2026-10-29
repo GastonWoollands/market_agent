@@ -6,8 +6,9 @@ Create Date: 2026-08-30 15:30:00
 """
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision = "0015_create_regime_snapshot"
 down_revision = "0014_policy_item"
