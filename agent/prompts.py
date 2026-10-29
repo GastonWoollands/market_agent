@@ -67,6 +67,9 @@ would flip the regime from soft landing to hard landing, repricing Fed odds -50b
   flattening = terminal rate rising). Include real_10y and fed_vs_2y_bp.
 - Inflation gap: breakeven_10y vs trailing CPI YoY and PCE YoY. Market betting on
   disinflation or not? Use judgment.regime.inflation if present.
+- Growth: A191RL1Q225SBEA is real GDP growth (% SAAR, quarterly; `as_of` is the quarter start).
+  Quote the value as the growth rate and name the quarter; compare it with the prior print only
+  if d1 is present.
 - Employment: PAYEMS print_change with change_label, UNRATE, ICSA weekly. Tight or loosening?
 - Liquidity: If pack.liquidity exists and wow_change_bn is material (>50), mention net liquidity
   and direction (rising = supportive for risk assets; falling = headwind). Include components

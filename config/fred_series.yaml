@@ -218,6 +218,16 @@ series:
     insight: U-3 unemployment. Labor softening is a late-cycle / easing signal.
     frequency: monthly
 
+  - id: A191RL1Q225SBEA
+    name: Real GDP growth
+    unit: percent
+    category: growth
+    region: us
+    pack_view: level
+    spine: true
+    insight: Real GDP, percent change from the prior quarter at a seasonally adjusted annual rate. Quarterly; the value is the growth rate itself, not an index.
+    frequency: quarterly
+
   - id: PAYEMS
     name: Nonfarm payrolls
     unit: thousands
