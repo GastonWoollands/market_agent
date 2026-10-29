@@ -320,3 +320,7 @@ def test_citation_rejects_invented_precision_but_keeps_rounding() -> None:
     assert citation_issues(pack, "10Y at 5.0%.") == []
     assert citation_issues(pack, "recession 7%.") == []
     assert citation_issues(pack, "recession 8%.") == ["pct:8%"]
+
+
+def test_citation_allows_saar_unit() -> None:
+    assert citation_issues({"macro": [{"value": 3.4}]}, "GDP 3.4 SAAR.") == []

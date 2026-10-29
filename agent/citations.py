@@ -48,6 +48,7 @@ STOP = frozenset(
         "PM",
         "RRG",
         "RSS",
+        "SAAR",
         "SEP",
         "SPX",
         "THAT",
