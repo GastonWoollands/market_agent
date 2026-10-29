@@ -272,6 +272,7 @@ def pack_from_store(
             "date": item.date.isoformat(),
             "title": item.title,
             "kind": item.kind,
+            "time_et": (item.extra or {}).get("time_et"),
             "ticker": item.ticker,
             "source": item.source,
         }

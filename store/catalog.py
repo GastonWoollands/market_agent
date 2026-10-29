@@ -159,10 +159,12 @@ class CatalystItem(BaseModel):
     title: str
     sep: bool = False
     type: str | None = None
+    time: str | None = None
 
 
 class CatalystsFile(BaseModel):
     timezone: str = "America/New_York"
+    default_times: dict[str, str] = Field(default_factory=dict)
     fomc: list[CatalystItem] = Field(default_factory=list)
     cpi: list[CatalystItem] = Field(default_factory=list)
     pce: list[CatalystItem] = Field(default_factory=list)

@@ -4,6 +4,20 @@
 
 timezone: America/New_York
 
+# Release time (ET) per kind; an item's own `time:` wins. Non-US central banks are left
+# blank on purpose (their ET time shifts with DST mismatches).
+default_times:
+  fomc: "14:00"
+  cpi: "08:30"
+  pce: "08:30"
+  nfp: "08:30"
+  gdp: "08:30"
+  jolts: "10:00"
+  minutes: "14:00"
+  beige_book: "14:00"
+  ism: "10:00"
+  treasury: "08:30"
+
 fomc:
   # Decision day (second day of the meeting). Statement ~14:00 ET, presser ~14:30.
   # Source: Federal Reserve tentative 2026 schedule.
