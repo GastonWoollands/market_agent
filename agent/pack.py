@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
@@ -470,6 +471,10 @@ def _macro_floats(session: Session, series_id: str, start: date) -> list[tuple[d
     ]
 
 
+CUTS_RE = re.compile(r"(\d+(?: or more)?) Fed rate cuts? happen in (\d{4})")
+CPI_LEVEL_RE = re.compile(r"Core CPI YoY be ([\d.]+% ?(?:or (?:less|more))?)")
+
+
 def short_outcome(question: str) -> str:
     text = question.strip()
     lower = text.lower()
@@ -477,14 +482,23 @@ def short_outcome(question: str) -> str:
         return "Hold"
     if "no fed rate cuts" in lower or "no cuts" in lower:
         return "No 2026 cuts"
+    if "decrease" in lower and "50" in lower:
+        return "Cut 50+"
     if "decrease" in lower and "25" in lower:
         return "Cut 25bp"
     if "increase" in lower and "50" in lower:
         return "Hike 50+"
     if "increase" in lower:
-        return "Hike"
+        return "Hike 25bp"
     if "recession" in lower:
         return "Recession"
+    cuts = CUTS_RE.search(text)
+    if cuts:
+        count, plural = cuts.group(1), "" if cuts.group(1) == "1" else "s"
+        return f"{count} cut{plural} in {cuts.group(2)}"
+    cpi = CPI_LEVEL_RE.search(text)
+    if cpi:
+        return f"Core CPI YoY {cpi.group(1).strip()}"
     cleaned = text.replace("Will ", "").replace("?", "").strip()
     return cleaned[:48] if cleaned else text[:48]
 

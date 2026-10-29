@@ -344,3 +344,20 @@ def test_session_phase_by_eastern_clock() -> None:
     assert session_phase(date(2026, 10, 28), at(14, 0))["phase"] == "after_close"
     saturday = datetime(2026, 10, 31, 15, 0, tzinfo=UTC)
     assert session_phase(date(2026, 10, 31), saturday)["phase"] == "closed"
+
+
+def test_short_outcome_labels_every_fed_and_cpi_market() -> None:
+    from agent.pack import short_outcome
+
+    tail = " after the December 2026 meeting?"
+    assert short_outcome("Will the Fed decrease interest rates by 50+ bps" + tail) == "Cut 50+"
+    assert short_outcome("Will the Fed decrease interest rates by 25 bps" + tail) == "Cut 25bp"
+    assert short_outcome("Will there be no change in Fed interest rates" + tail) == "Hold"
+    assert short_outcome("Will the Fed increase interest rates by 25 bps" + tail) == "Hike 25bp"
+    assert short_outcome("Will the Fed increase interest rates by 50+ bps" + tail) == "Hike 50+"
+    assert short_outcome("Will 1 Fed rate cut happen in 2026?") == "1 cut in 2026"
+    many = short_outcome("Will 12 or more Fed rate cuts happen in 2026?")
+    assert many == "12 or more cuts in 2026"
+    assert short_outcome("Will Core CPI YoY be 2.6% in October?") == "Core CPI YoY 2.6%"
+    low = short_outcome("Will Core CPI YoY be 2.2% or less in October?")
+    assert low == "Core CPI YoY 2.2% or less"
