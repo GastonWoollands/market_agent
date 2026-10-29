@@ -58,7 +58,8 @@ def test_polymarket_yaml_has_live_fed_inflation_recession() -> None:
     live = [item for item in catalog.events if item.show_on_live]
     categories = {item.category for item in live}
     assert categories >= {"rates", "inflation", "growth"}
-    assert any("recession" in item.slug for item in live)
+    assert any(item.slot == "recession" for item in live)
+    assert all(item.query and item.slug_prefix for item in catalog.events)
     assert catalog.search_hints["rates"]
 
 

@@ -60,6 +60,7 @@ class OddsPoint(BaseModel):
     liquidity: Decimal | None = None
     as_of: datetime
     raw: dict | None = None
+    slot: str = ""
 
 
 class NewsHeadline(BaseModel):

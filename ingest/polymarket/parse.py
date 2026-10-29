@@ -66,7 +66,7 @@ def _open_markets(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return open_markets
 
 
-def snapshot_from_event(slug: str, payload: dict[str, Any]) -> OddsPoint:
+def snapshot_from_event(slug: str, payload: dict[str, Any], *, slot: str = "") -> OddsPoint:
     if not isinstance(payload, dict) or not payload:
         raise PolymarketParseError(f"{slug}: empty event")
     if payload.get("closed") is True:
@@ -100,6 +100,7 @@ def snapshot_from_event(slug: str, payload: dict[str, Any]) -> OddsPoint:
     liquidity = _dec(payload.get("liquidity")) or _dec(payload.get("liquidityNum"))
     title = str(payload.get("title") or question)
     return OddsPoint(
+        slot=slot,
         slug=slug,
         question=title,
         implied_yes=implied_yes,

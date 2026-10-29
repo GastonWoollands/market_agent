@@ -236,11 +236,13 @@ def test_build_live_odds_do_not_affect_risk_on() -> None:
     catalog = PolymarketFile(
         events=[
             PolymarketEvent(
+                slot="recession",
                 slug="us-recession-by-end-of-2026",
                 label="Recession by year-end",
                 category="growth",
             ),
             PolymarketEvent(
+                slot="hidden",
                 slug="hidden",
                 label="Hidden",
                 category="rates",
@@ -249,6 +251,7 @@ def test_build_live_odds_do_not_affect_risk_on() -> None:
         ]
     )
     row = OddsSnapshot(
+        slot="recession",
         slug="us-recession-by-end-of-2026",
         as_of=datetime(2026, 8, 18, 8, 0, tzinfo=UTC),
         question="US recession by end of 2026?",
@@ -271,7 +274,40 @@ def test_build_live_odds_do_not_affect_risk_on() -> None:
     assert tape.risk_on.score == 0.42
     assert tape.risk_on.factors == {"curve": 0.1}
     assert [item.slug for item in tape.odds] == ["us-recession-by-end-of-2026"]
+    assert tape.odds[0].slot == "recession"
     assert tape.odds[0].implied_yes == 0.075
+
+
+def test_build_live_odds_join_by_slot_not_seed_slug() -> None:
+    catalog = PolymarketFile(
+        events=[
+            PolymarketEvent(
+                slot="core_cpi_yoy",
+                slug="core-cpi-yoy-august-2026-1786474662954",
+                label="Core CPI YoY",
+                category="inflation",
+            )
+        ]
+    )
+    row = OddsSnapshot(
+        slot="core_cpi_yoy",
+        slug="core-cpi-yoy-september-2026",
+        as_of=datetime(2026, 9, 15, 12, 0, tzinfo=UTC),
+        question="Core CPI YoY - September 2026",
+        implied_yes=Decimal("0.33"),
+        liquidity=Decimal("50000"),
+        raw={"closed": False, "markets": [{"question": "2.4%", "yes": "0.33"}]},
+    )
+    tape = build_live(
+        [],
+        _catalog(),
+        now=datetime(2026, 9, 15, tzinfo=UTC),
+        odds_rows=[row],
+        polymarket=catalog,
+    )
+    assert [item.slot for item in tape.odds] == ["core_cpi_yoy"]
+    assert tape.odds[0].slug == "core-cpi-yoy-september-2026"
+    assert tape.odds[0].label == "Core CPI YoY"
 
 
 def test_build_live_sorts_movers_and_labels_change_kind() -> None:

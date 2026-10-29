@@ -13,6 +13,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -178,8 +179,10 @@ class MacroObservation(Base):
 
 class OddsSnapshot(Base):
     __tablename__ = "odds_snapshot"
+    __table_args__ = (UniqueConstraint("slug", name="uq_odds_snapshot_slug"),)
 
-    slug: Mapped[str] = mapped_column(String(128), primary_key=True)
+    slot: Mapped[str] = mapped_column(String(64), primary_key=True)
+    slug: Mapped[str] = mapped_column(String(128), nullable=False)
     as_of: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     question: Mapped[str] = mapped_column(Text, nullable=False)
     implied_yes: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)

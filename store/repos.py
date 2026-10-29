@@ -604,9 +604,12 @@ def closes_for_tickers(
 
 
 def upsert_odds(session: Session, point: OddsPoint) -> None:
+    if not point.slot:
+        raise ValueError("odds slot is required")
     stmt = (
         insert(OddsSnapshot)
         .values(
+            slot=point.slot,
             slug=point.slug,
             as_of=point.as_of,
             question=point.question,
@@ -615,8 +618,9 @@ def upsert_odds(session: Session, point: OddsPoint) -> None:
             raw=point.raw,
         )
         .on_conflict_do_update(
-            index_elements=[OddsSnapshot.slug],
+            index_elements=[OddsSnapshot.slot],
             set_={
+                "slug": point.slug,
                 "as_of": point.as_of,
                 "question": point.question,
                 "implied_yes": point.implied_yes,
@@ -629,7 +633,7 @@ def upsert_odds(session: Session, point: OddsPoint) -> None:
 
 
 def latest_odds(session: Session) -> list[OddsSnapshot]:
-    stmt = select(OddsSnapshot).order_by(OddsSnapshot.slug)
+    stmt = select(OddsSnapshot).order_by(OddsSnapshot.slot)
     return list(session.execute(stmt).scalars())
 
 

@@ -533,14 +533,12 @@ def _odds_outcomes(raw: dict[str, Any] | None, fallback: str) -> list[dict[str, 
 
 def _odds_dicts(rows: list[Any]) -> list[dict[str, Any]]:
     catalog = load_polymarket()
-    by_slug = {row.slug: row for row in rows}
+    by_slot = {row.slot: row for row in rows}
     out: list[dict[str, Any]] = []
-    seen: set[str] = set()
     for event in catalog.events:
-        row = by_slug.get(event.slug)
+        row = by_slot.get(event.slot)
         if row is None:
             continue
-        seen.add(event.slug)
         label = event.short_label or event.label
         raw = row.raw if isinstance(row.raw, dict) else {}
         if raw.get("closed"):
@@ -555,30 +553,11 @@ def _odds_dicts(rows: list[Any]) -> list[dict[str, Any]]:
         top = outcomes[0] if outcomes else None
         out.append(
             {
-                "slug": event.slug,
+                "slot": event.slot,
+                "slug": row.slug,
                 "label": label,
                 "category": event.category,
                 "implied_yes": implied,
-                "as_of": row.as_of.isoformat(),
-                "outcomes": outcomes,
-                "top_outcome": top["label"] if top else None,
-                "top_implied_yes": top["implied_yes"] if top else None,
-            }
-        )
-    for row in rows:
-        if row.slug in seen:
-            continue
-        raw = row.raw if isinstance(getattr(row, "raw", None), dict) else {}
-        if raw.get("closed"):
-            continue
-        outcomes = _odds_outcomes(raw, row.question)
-        top = outcomes[0] if outcomes else None
-        out.append(
-            {
-                "slug": row.slug,
-                "label": row.question,
-                "category": None,
-                "implied_yes": _num(row.implied_yes),
                 "as_of": row.as_of.isoformat(),
                 "outcomes": outcomes,
                 "top_outcome": top["label"] if top else None,

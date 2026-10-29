@@ -106,6 +106,7 @@ class LiveOddsOutcome(BaseModel):
 
 
 class LiveOdds(BaseModel):
+    slot: str
     slug: str
     label: str
     category: str
@@ -317,6 +318,7 @@ class OutlookOddsOutcome(BaseModel):
 
 
 class OutlookOdds(BaseModel):
+    slot: str | None = None
     slug: str
     label: str | None = None
     category: str | None = None

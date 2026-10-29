@@ -106,6 +106,7 @@ export type LiveOddsOutcome = {
 };
 
 export type LiveOdds = {
+  slot: string;
   slug: string;
   label: string;
   category: string;
@@ -362,6 +363,7 @@ export type OutlookOddsOutcome = {
 };
 
 export type OutlookOdds = {
+  slot?: string | null;
   slug: string;
   label: string | null;
   category: string | null;
