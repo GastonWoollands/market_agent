@@ -126,7 +126,7 @@ Frozen for v1. A new vendor is a contract change: update this section first. Cat
 
 | Input | Vendor | Typical cadence |
 |-------|--------|-----------------|
-| Daily OHLCV, sector ETFs, proxy levers (gold = GLD), same-day Treasury yield indices (^IRX/^FVX/^TNX/^TYX) | Yahoo via `yfinance` behind `YahooClient` | 16:30 ET |
+| Daily OHLCV, sector ETFs, proxy levers (gold = GLD), same-day Treasury yield indices (^IRX/^FVX/^TNX/^TYX) and ICE dollar index (DXY = `DX-Y.NYB`) | Yahoo via `yfinance` behind `YahooClient` | 16:30 ET |
 | Quote tape (delayed) | Same yfinance session | 60s in session when you re-run |
 | Pre/post 5m gaps | Yahoo 5m | ~07:30 ET, **tape + watchlist only** |
 | Yields, VIX, CPI/PCE (as indexes; pack computes YoY/MoM), OAS, DXY (spine), WTI/Brent/copper, real yield, breakevens, payrolls, claims, durable goods, debt/GDP, ECB/BOJ/PBOC policy, dollar crosses (EUR/JPY/GBP/MXN/BRL/CNY), lag-stamped foreign 10Ys | FRED (`config/fred_series.yaml`) | 06:00 ET |

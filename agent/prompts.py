@@ -165,6 +165,9 @@ expect for now. These may be deprecated later.
   last completed session is the story; `intraday`: narrate today's session so far from delayed
   quotes and say it is intraday, not "yesterday"; `after_close`: today's full session;
   `closed`: weekend, last session. Apply this to tldr, what_happened and live_md.
+- **Dollar:** `drivers` DXY is the ICE dollar index from Yahoo, same day. DTWEXBGS is the
+  FRED broad trade-weighted index, a different series that lags several days. Never compare
+  their levels; quote DXY for today's move and DTWEXBGS only with its as_of.
 - **Same-day yields:** FRED yields (DGS2/DGS10/DGS30) carry `as_of` and usually lag 1-2 days.
   For today's rates move use `yields_live` (Yahoo ^IRX/^FVX/^TNX/^TYX: `level` in %, `d1_bp`).
   Say which source you quote; keep FRED for curve facts and weekly/monthly deltas.

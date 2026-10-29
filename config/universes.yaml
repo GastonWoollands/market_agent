@@ -37,6 +37,7 @@ tape:
     - { ticker: GLD, yahoo: GLD, name: SPDR Gold Shares, asset_class: etf, role: commodity }
     - { ticker: USO, yahoo: USO, name: United States Oil Fund, asset_class: etf, role: commodity }
     - { ticker: UUP, yahoo: UUP, name: Invesco DB US Dollar Index Bullish, asset_class: etf, role: fx }
+    - { ticker: DXY, yahoo: DX-Y.NYB, name: US Dollar Index (ICE), asset_class: index, role: fx }
     - { ticker: EEM, yahoo: EEM, name: iShares MSCI Emerging Markets, asset_class: etf, role: intl }
     - { ticker: "^N225", yahoo: "^N225", name: Nikkei 225, asset_class: index, role: intl }
     - { ticker: "^GDAXI", yahoo: "^GDAXI", name: DAX, asset_class: index, role: intl }
@@ -54,7 +55,7 @@ live:
     - { ticker: IWM, label: Russell 2000 }
     - { ticker: "^VIX", label: VIX }
     - { ticker: TLT, label: 20Y+ Treasury }
-    - { ticker: UUP, label: Dollar }
+    - { ticker: DXY, label: Dollar (DXY) }
     - { ticker: HYG, label: High yield }
   mover_roles: [sector, group]
   # Same-day Treasury yields from Yahoo (level in %, move in bp). FRED stays the official series.
