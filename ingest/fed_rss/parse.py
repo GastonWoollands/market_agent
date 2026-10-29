@@ -138,3 +138,38 @@ def _published(item: ElementTree.Element) -> datetime | None:
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=UTC)
     return parsed.astimezone(UTC)
+
+
+BODY_MAX = 2500
+ARTICLE_START = re.compile(r"""<div\s+id=["']article["']""", re.IGNORECASE)
+ARTICLE_END = re.compile(r"""<div\s+id=["']lastUpdate["']""", re.IGNORECASE)
+# A paragraph may not contain another <p>, so an unclosed earlier <p> cannot swallow the body.
+PARAGRAPH_RE = re.compile(
+    r"<p(?:\s[^>]*)?>((?:(?!<p[\s>]).)*?)</p>", re.IGNORECASE | re.DOTALL
+)
+BOILERPLATE = (
+    "for media inquiries",
+    "implementation note issued",
+    "for release at",
+    "share",
+)
+
+
+def body_from_html(html: str, *, max_chars: int = BODY_MAX) -> str | None:
+    """Capped plain text of a federalreserve.gov article (statement, minutes, speech)."""
+    start = ARTICLE_START.search(html)
+    if start is None:
+        return None
+    end = ARTICLE_END.search(html, start.end())
+    article = html[start.end() : end.start() if end else len(html)]
+    parts: list[str] = []
+    for raw in PARAGRAPH_RE.findall(article):
+        text = WS_RE.sub(" ", unescape(TAG_RE.sub(" ", raw))).replace("\xa0", " ").strip()
+        if not text or text.lower().startswith(BOILERPLATE):
+            continue
+        if re.fullmatch(r"[A-Z][a-z]+ \d{1,2}, \d{4}", text):
+            continue
+        parts.append(text)
+    if not parts:
+        return None
+    return " ".join(parts)[:max_chars]

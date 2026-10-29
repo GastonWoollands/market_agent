@@ -10,7 +10,7 @@ from ingest.finnhub import FinnhubClient
 from ingest.finnhub.errors import FinnhubError, FinnhubHttpError
 from jobs.runtime import record_job
 from store.canonical import CalendarEvent
-from store.catalog import CatalystsFile, load_catalysts, load_universes
+from store.catalog import CatalystItem, CatalystsFile, load_catalysts, load_universes
 from store.engine import session_scope
 from store.repos import event_count_for_source, upsert_events
 from store.settings import settings
@@ -63,9 +63,17 @@ def _event(
 
 def events_from_yaml(catalog: CatalystsFile) -> list[CalendarEvent]:
     out: list[CalendarEvent] = []
+    def timed(kind: str, item: CatalystItem, extra: dict | None = None) -> dict | None:
+        at = item.time or catalog.default_times.get(kind)
+        if not at:
+            return extra
+        return {**(extra or {}), "time_et": at}
+
     for item in catalog.fomc:
         extra = {"sep": True} if item.sep else None
-        out.append(_event(day=item.date, title=item.title, kind="fomc", extra=extra))
+        out.append(
+            _event(day=item.date, title=item.title, kind="fomc", extra=timed("fomc", item, extra))
+        )
     for kind, items in (
         ("cpi", catalog.cpi),
         ("pce", catalog.pce),
@@ -79,10 +87,12 @@ def events_from_yaml(catalog: CatalystsFile) -> list[CalendarEvent]:
         ("treasury", catalog.treasury),
     ):
         for item in items:
-            out.append(_event(day=item.date, title=item.title, kind=kind))
+            out.append(
+                _event(day=item.date, title=item.title, kind=kind, extra=timed(kind, item))
+            )
     for item in catalog.other:
         kind = item.type if item.type in YAML_KINDS else "other"
-        out.append(_event(day=item.date, title=item.title, kind=kind))
+        out.append(_event(day=item.date, title=item.title, kind=kind, extra=timed(kind, item)))
     return out
 
 

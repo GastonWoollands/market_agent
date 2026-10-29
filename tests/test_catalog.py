@@ -24,7 +24,7 @@ def test_universes_yaml_loads() -> None:
     assert catalog.watchlist.instruments
     assert {item.ticker for item in catalog.watchlist.instruments} >= {"NVDA", "SPY"}
     header = [item.ticker for item in catalog.live.header]
-    assert header == ["^GSPC", "IWM", "^VIX", "TLT", "UUP", "HYG"]
+    assert header == ["^GSPC", "IWM", "^VIX", "TLT", "DXY", "HYG"]
     assert "SPY" not in header
     assert catalog.live.header[0].label == "S&P 500"
 

@@ -524,3 +524,27 @@ def test_live_brief_empty_without_fields() -> None:
     attached = live_brief(_Full())
     assert attached is not None
     assert attached.headline == "Tape"
+
+
+def test_yield_quote_carries_bp_move() -> None:
+    from decimal import Decimal
+
+    from api.live import _quote_from_row
+    from store.repos import LiveTapeRow
+
+    row = LiveTapeRow(
+        ticker="^FVX",
+        name="5Y Treasury yield",
+        quote_price=Decimal("4.801"),
+        quote_change_pct=Decimal("-1.437077"),
+        market_state="REGULAR",
+        as_of=None,
+        last_close=None,
+        prev_close=None,
+        last_date=None,
+    )
+    quote = _quote_from_row(ticker="^FVX", name="5Y", role="yield", row=row)
+    assert quote.price == 4.801
+    assert round(quote.change_bp, 1) == -7.0
+    equity = _quote_from_row(ticker="^FVX", name="5Y", role="index", row=row)
+    assert equity.change_bp is None

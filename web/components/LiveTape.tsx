@@ -121,6 +121,7 @@ export function LiveTapeView({ tape }: { tape: LiveTape | null }) {
         ) : null}
 
         <GlobalMarkets items={tape.intl ?? []} />
+        <TreasuryYields items={tape.yields ?? []} />
         <AnomaliesBoard items={tape.anomalies ?? []} />
         <DriverBoard outliers={tape.outliers ?? []} coMoves={tape.co_moves ?? []} />
         <RiskOnFactors riskOn={tape.risk_on} />
@@ -283,6 +284,37 @@ function GlobalMarkets({ items }: { items: LiveQuote[] }) {
       </div>
     </section>
   );
+}
+
+function TreasuryYields({ items }: { items: LiveQuote[] }) {
+  if (items.length === 0) {
+    return null;
+  }
+  return (
+    <section>
+      <SectionLabel>Treasury yields · same day</SectionLabel>
+      <div className="grid gap-px overflow-hidden rounded border border-line bg-line grid-cols-2 sm:grid-cols-4">
+        {items.map((item) => (
+          <div key={item.ticker} className="bg-panel px-3 py-3">
+            <div className="truncate text-[11px] uppercase tracking-wide text-mute">{item.name}</div>
+            <div className="mt-1 text-lg tabular-nums tracking-tight">
+              {item.price == null ? "—" : `${item.price.toFixed(2)}%`}
+            </div>
+            <div className={cn("mt-0.5 text-[13px] tabular-nums", changeClass(item.change_bp ?? null))}>
+              {formatBp(item.change_bp ?? null)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function formatBp(value: number | null): string {
+  if (value == null) {
+    return "—";
+  }
+  return `${value > 0 ? "+" : ""}${value.toFixed(1)}bp`;
 }
 
 function AnomaliesBoard({ items }: { items: LiveAnomaly[] }) {

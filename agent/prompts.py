@@ -1,4 +1,4 @@
-PROMPT_VERSION = "outlook-v12"
+PROMPT_VERSION = "outlook-v14"
 
 SYSTEM_PROMPT = """You write the weekday Outlook for a US research terminal used by
 market professionals. Return JSON with all required fields described below.
@@ -67,6 +67,9 @@ would flip the regime from soft landing to hard landing, repricing Fed odds -50b
   flattening = terminal rate rising). Include real_10y and fed_vs_2y_bp.
 - Inflation gap: breakeven_10y vs trailing CPI YoY and PCE YoY. Market betting on
   disinflation or not? Use judgment.regime.inflation if present.
+- Growth: A191RL1Q225SBEA is real GDP growth (% SAAR, quarterly; `as_of` is the quarter start).
+  Quote the value as the growth rate and name the quarter; compare it with the prior print only
+  if d1 is present.
 - Employment: PAYEMS print_change with change_label, UNRATE, ICSA weekly. Tight or loosening?
 - Liquidity: If pack.liquidity exists and wow_change_bn is material (>50), mention net liquidity
   and direction (rising = supportive for risk assets; falling = headwind). Include components
@@ -158,6 +161,16 @@ expect for now. These may be deprecated later.
 - **Quote policy_items excerpts** only when they are not just a venue line (Speech At …).
   Bind speech language to packed FRED and odds. Do not invent a hike date.
 - **Spine macro series:** If a series has spine=true or appears in judgment, prioritize it.
+- **Session timing:** `session.phase` says when the pack was built (ET). `pre_open`: the
+  last completed session is the story; `intraday`: narrate today's session so far from delayed
+  quotes and say it is intraday, not "yesterday"; `after_close`: today's full session;
+  `closed`: weekend, last session. Apply this to tldr, what_happened and live_md.
+- **Dollar:** `drivers` DXY is the ICE dollar index from Yahoo, same day. DTWEXBGS is the
+  FRED broad trade-weighted index, a different series that lags several days. Never compare
+  their levels; quote DXY for today's move and DTWEXBGS only with its as_of.
+- **Same-day yields:** FRED yields (DGS2/DGS10/DGS30) carry `as_of` and usually lag 1-2 days.
+  For today's rates move use `yields_live` (Yahoo ^IRX/^FVX/^TNX/^TYX: `level` in %, `d1_bp`).
+  Say which source you quote; keep FRED for curve facts and weekly/monthly deltas.
 - **YoY for CPI/PCE:** Use yoy_pct field, not raw index values as percents.
 - **Payrolls/Claims:** Use print_change and change_label (weekly vs monthly).
 - **Odds:** implied_yes is a probability level (0-1, display as %). Name top_outcome 

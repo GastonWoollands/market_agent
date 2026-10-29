@@ -136,7 +136,7 @@ def test_narrate_keeps_cited_agent_output() -> None:
     assert written.status == "ok"
     assert written.model == "gemini/gemini-2.5-flash"
     assert written.prompt_version == PROMPT_VERSION
-    assert PROMPT_VERSION == "outlook-v12"
+    assert PROMPT_VERSION == "outlook-v14"
     assert "## TL;DR" in written.body_md
     assert "## Abstract" in written.body_md
     assert written.body_json["abstract"]
@@ -310,3 +310,13 @@ def test_anthropic_refusal_falls_back() -> None:
     agent = _anthropic_agent(refusal, [])
     with pytest.raises(AgentError, match="refusal"):
         agent.complete(system="s", user="u")
+
+
+def test_citation_rejects_invented_precision_but_keeps_rounding() -> None:
+    pack = {"facts": {"real_10y": 2.61, "dgs10": 4.99}, "odds": [{"implied_yes": 0.07}]}
+    assert citation_issues(pack, "real_10y 2.6%.") == []
+    assert citation_issues(pack, "real_10y 2.61%.") == []
+    assert citation_issues(pack, "real_10y 2.64%.") == ["pct:2.64%"]
+    assert citation_issues(pack, "10Y at 5.0%.") == []
+    assert citation_issues(pack, "recession 7%.") == []
+    assert citation_issues(pack, "recession 8%.") == ["pct:8%"]

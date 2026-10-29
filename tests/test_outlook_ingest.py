@@ -128,3 +128,24 @@ def test_finnhub_asks_each_watchlist_symbol() -> None:
         "finnhub:AAPL:2026-11-02",
         "finnhub:NVDA:2026-11-02",
     ]
+
+
+def test_yaml_events_carry_release_time() -> None:
+    from store.catalog import CatalystItem, CatalystsFile
+
+    catalog = CatalystsFile(
+        default_times={"fomc": "14:00", "cpi": "08:30"},
+        fomc=[CatalystItem(date=date(2026, 12, 9), title="FOMC decision + SEP", sep=True)],
+        cpi=[
+            CatalystItem(date=date(2026, 11, 10), title="CPI (October)"),
+            CatalystItem(date=date(2026, 12, 10), title="CPI (November)", time="08:45"),
+        ],
+        other=[CatalystItem(date=date(2026, 10, 30), title="BoJ decision", type="central_bank")],
+    )
+    by_title = {event.title: event for event in events_from_yaml(catalog)}
+    assert by_title["FOMC decision + SEP"].extra == {"sep": True, "time_et": "14:00"}
+    assert by_title["CPI (October)"].extra == {"time_et": "08:30"}
+    assert by_title["CPI (November)"].extra == {"time_et": "08:45"}
+    assert by_title["BoJ decision"].extra is None
+    real = events_from_yaml(load_catalysts())
+    assert all((event.extra or {}).get("time_et") for event in real if event.kind == "cpi")

@@ -23,7 +23,12 @@ from api.schemas import (
     LiveWatch,
 )
 from store.catalog import FredSeriesFile, PolymarketFile, UniversesFile
-from store.display import resolve_change_pct, resolve_level_change, resolve_price
+from store.display import (
+    resolve_change_pct,
+    resolve_level_change,
+    resolve_price,
+    resolve_yield_change_bp,
+)
 from store.models import OddsSnapshot
 from store.repos import LiveMacroRow, LiveTapeRow
 
@@ -78,12 +83,18 @@ def _quote_from_row(
     price = resolve_price(row.quote_price, row.last_close)
     change_pct = resolve_change_pct(row.quote_change_pct, row.last_close, row.prev_close)
     state = row.market_state.upper() if row.market_state else None
+    change_bp = (
+        resolve_yield_change_bp(price, row.quote_change_pct, row.last_close, row.prev_close)
+        if role == "yield"
+        else None
+    )
     return LiveQuote(
         ticker=ticker,
         name=name,
         role=role,
         price=_to_float(price),
         change_pct=_to_float(change_pct),
+        change_bp=_to_float(change_bp),
         change_kind=_CHANGE_KIND.get(state) if state else None,
         market_state=row.market_state,
         as_of=row.as_of,
@@ -148,6 +159,7 @@ def build_live(
 
     header = _quotes_for(catalog.live.header)
     intl = _quotes_for(catalog.live.intl_section)
+    yields = _quotes_for(catalog.live.yields_section)
 
     mover_roles = set(catalog.live.mover_roles)
     movers: list[LiveQuote] = []
@@ -173,6 +185,7 @@ def build_live(
         stale=_is_stale(as_of, clock),
         header=header,
         intl=intl,
+        yields=yields,
         movers=movers,
         macro=_macro_items(macro_rows or [], fred),
         drilldown=_drilldown(lever, history or [], fred, rows) if fred is not None else None,

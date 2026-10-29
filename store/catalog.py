@@ -33,6 +33,7 @@ class LiveTapeConfig(BaseModel):
     header: list[LiveHeaderItem] = Field(default_factory=list)
     mover_roles: list[str] = Field(default_factory=lambda: ["sector", "group"])
     intl_section: list[LiveHeaderItem] = Field(default_factory=list)
+    yields_section: list[LiveHeaderItem] = Field(default_factory=list)
 
 
 class ValuationConfig(BaseModel):
@@ -158,10 +159,12 @@ class CatalystItem(BaseModel):
     title: str
     sep: bool = False
     type: str | None = None
+    time: str | None = None
 
 
 class CatalystsFile(BaseModel):
     timezone: str = "America/New_York"
+    default_times: dict[str, str] = Field(default_factory=dict)
     fomc: list[CatalystItem] = Field(default_factory=list)
     cpi: list[CatalystItem] = Field(default_factory=list)
     pce: list[CatalystItem] = Field(default_factory=list)

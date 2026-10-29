@@ -45,6 +45,7 @@ class LiveQuote(BaseModel):
     role: str | None = None
     price: float | None = None
     change_pct: float | None = None
+    change_bp: float | None = None
     change_kind: str | None = None
     gap_pct: float | None = None
     market_state: str | None = None
@@ -184,6 +185,7 @@ class LiveResponse(BaseModel):
     stale: bool = True
     header: list[LiveQuote] = []
     intl: list[LiveQuote] = Field(default_factory=list)
+    yields: list[LiveQuote] = Field(default_factory=list)
     movers: list[LiveQuote] = []
     macro: list[LiveMacro] = []
     drilldown: LiveDrilldown | None = None

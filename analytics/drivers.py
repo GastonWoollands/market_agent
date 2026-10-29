@@ -31,7 +31,7 @@ MACRO_IDS = (
     "DEXJPUS",
     "BAMLH0A0HYM2",
 )
-TAPE_IDS = ("^VIX", "UUP", "HYG", "LQD", "RSP", "SPY", "SMH", "IWM", "XLK", "XLU", "TLT")
+TAPE_IDS = ("^VIX", "UUP", "DXY", "HYG", "LQD", "RSP", "SPY", "SMH", "IWM", "XLK", "XLU", "TLT")
 YIELD_IDS = frozenset({"DGS2", "DGS10", "DGS30", "T10Y2Y", "BAMLH0A0HYM2"})
 
 _THEMES: tuple[tuple[str, tuple[str, ...]], ...] = (

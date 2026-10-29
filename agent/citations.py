@@ -80,8 +80,10 @@ def citation_issues(pack: dict[str, Any], text: str) -> list[str]:
         if ticker not in haystack:
             issues.append(f"ticker:{ticker}")
     for match in PERCENT_RE.finditer(text):
-        value = float(match.group(1))
-        if not _cited_number(value, numbers):
+        raw = match.group(1)
+        value = float(raw)
+        decimals = len(raw.split(".", 1)[1]) if "." in raw else 0
+        if not _cited_number(value, numbers, decimals):
             issues.append(f"pct:{match.group(0)}")
     return issues
 
@@ -196,18 +198,17 @@ def _numbers(value: Any) -> list[float]:
     return out
 
 
-def _cited_number(value: float, allowed: list[float]) -> bool:
-    if any(_number_matches(value, item) for item in allowed):
+def _cited_number(value: float, allowed: list[float], decimals: int = 2) -> bool:
+    """A cited number must be a pack value rounded to the precision the text writes.
+
+    "2.6%" may cite 2.64; "2.64%" may not cite 2.61 (that adds precision the pack lacks).
+    """
+    if any(_number_matches(value, item, decimals) for item in allowed):
         return True
     # 0-1 pack values written as percents (implied_yes 0.8525 -> 85.25%).
-    return any(_number_matches(value / 100.0, item) for item in allowed)
+    return any(_number_matches(value / 100.0, item, decimals + 2) for item in allowed)
 
 
-def _number_matches(value: float, item: float) -> bool:
-    if abs(item - value) < 1e-9:
-        return True
-    if round(item, 1) == round(value, 1):
-        return True
-    if round(item, 2) == round(value, 2):
-        return True
-    return round(item, 4) == round(value, 4)
+def _number_matches(value: float, item: float, decimals: int) -> bool:
+    # Integers keep the old 1-decimal tolerance; a big pack would otherwise match any "7%".
+    return abs(item - value) <= 0.5 * 10 ** (-max(decimals, 1)) + 1e-9

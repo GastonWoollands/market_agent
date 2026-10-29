@@ -264,3 +264,100 @@ def test_writer_pack_keeps_three_policy_items() -> None:
     compact = writer_pack(payload)
     assert len(compact["policy_items"]) == 3
     assert compact["policy_items"][0]["title"] == "Speech 0"
+
+
+def test_writer_pack_carries_regime_liquidity_anomalies_and_oil() -> None:
+    payload = assemble_pack(
+        as_of=date(2026, 10, 29),
+        header=[],
+        movers=[],
+        macro=[
+            {"series_id": "DCOILWTICO", "value": 103.37, "lag_days": 2, "region": "us"},
+            {"series_id": "DHHNGSP", "value": 2.76, "lag_days": 2, "region": "us"},
+        ],
+        risk_on=None,
+        odds=[],
+        news=[],
+        events=[],
+        watchlist=[{"ticker": "AMZN", "change_pct": -3.8767, "price": 244.73}],
+        sources=[],
+    )
+    payload["regime"] = {"growth": "slowdown", "confidence": {"growth": 0.5}}
+    payload["liquidity"] = {"net_liquidity_bn": 5801.6, "wow_change_bn": -70.7}
+    payload["anomalies"] = [
+        {"type": "z_score_extreme", "severity": severity, "description": f"a{severity}"}
+        for severity in (0.3, 0.92, 0.5, 0.7)
+    ]
+    compact = writer_pack(payload)
+    assert compact["regime"]["growth"] == "slowdown"
+    assert compact["liquidity"]["wow_change_bn"] == -70.7
+    assert [row["severity"] for row in compact["anomalies"]] == [0.92, 0.7, 0.5]
+    assert compact["watchlist"][0]["ticker"] == "AMZN"
+    assert [row["series_id"] for row in compact["macro"]] == ["DCOILWTICO"]
+
+
+def test_yields_live_rows_report_bp_not_percent() -> None:
+    from datetime import UTC, datetime
+    from decimal import Decimal
+    from types import SimpleNamespace
+
+    from agent.pack import yields_live_rows
+    from store.catalog import LiveHeaderItem
+
+    tape = {
+        "^TNX": SimpleNamespace(
+            quote_price=Decimal("4.989"),
+            quote_change_pct=Decimal("-1.11001"),
+            last_close=None,
+            prev_close=None,
+            as_of=datetime(2026, 10, 29, 18, 59, tzinfo=UTC),
+        ),
+        "^TYX": SimpleNamespace(
+            quote_price=None,
+            quote_change_pct=None,
+            last_close=Decimal("5.329"),
+            prev_close=Decimal("5.361"),
+            as_of=None,
+        ),
+    }
+    section = [
+        LiveHeaderItem(ticker="^TNX", label="10Y"),
+        LiveHeaderItem(ticker="^TYX", label="30Y"),
+        LiveHeaderItem(ticker="^FVX", label="5Y"),
+    ]
+    rows = yields_live_rows(tape, section)
+    assert [row["ticker"] for row in rows] == ["^TNX", "^TYX"]
+    assert rows[0]["level"] == 4.989 and rows[0]["d1_bp"] == -5.6
+    assert rows[1]["d1_bp"] == -3.2
+
+
+def test_session_phase_by_eastern_clock() -> None:
+    from datetime import UTC, datetime
+
+    from agent.pack import session_phase
+
+    day = date(2026, 10, 29)
+    at = lambda h, m: datetime(2026, 10, 29, h, m, tzinfo=UTC)  # noqa: E731
+    assert session_phase(day, at(12, 0))["phase"] == "pre_open"  # 08:00 ET
+    assert session_phase(day, at(19, 0)) == {"phase": "intraday", "built_at_et": "2026-10-29 15:00"}
+    assert session_phase(day, at(21, 5))["phase"] == "after_close"  # 17:05 ET
+    assert session_phase(date(2026, 10, 28), at(14, 0))["phase"] == "after_close"
+    saturday = datetime(2026, 10, 31, 15, 0, tzinfo=UTC)
+    assert session_phase(date(2026, 10, 31), saturday)["phase"] == "closed"
+
+
+def test_short_outcome_labels_every_fed_and_cpi_market() -> None:
+    from agent.pack import short_outcome
+
+    tail = " after the December 2026 meeting?"
+    assert short_outcome("Will the Fed decrease interest rates by 50+ bps" + tail) == "Cut 50+"
+    assert short_outcome("Will the Fed decrease interest rates by 25 bps" + tail) == "Cut 25bp"
+    assert short_outcome("Will there be no change in Fed interest rates" + tail) == "Hold"
+    assert short_outcome("Will the Fed increase interest rates by 25 bps" + tail) == "Hike 25bp"
+    assert short_outcome("Will the Fed increase interest rates by 50+ bps" + tail) == "Hike 50+"
+    assert short_outcome("Will 1 Fed rate cut happen in 2026?") == "1 cut in 2026"
+    many = short_outcome("Will 12 or more Fed rate cuts happen in 2026?")
+    assert many == "12 or more cuts in 2026"
+    assert short_outcome("Will Core CPI YoY be 2.6% in October?") == "Core CPI YoY 2.6%"
+    low = short_outcome("Will Core CPI YoY be 2.2% or less in October?")
+    assert low == "Core CPI YoY 2.2% or less"

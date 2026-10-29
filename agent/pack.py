@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
@@ -24,7 +26,8 @@ from analytics.risk_on import (
     VIX_SERIES,
     compute_risk_on,
 )
-from store.catalog import load_fred_series, load_polymarket
+from store.catalog import load_fred_series, load_polymarket, load_universes
+from store.display import resolve_price, resolve_yield_change_bp
 from store.models import (
     BarDaily,
     MacroObservation,
@@ -228,7 +231,9 @@ def store_counts(session: Session) -> dict[str, int]:
     }
 
 
-def pack_from_store(session: Session, *, as_of: date) -> dict[str, Any]:
+def pack_from_store(
+    session: Session, *, as_of: date, now: datetime | None = None
+) -> dict[str, Any]:
     tape = {row.ticker: row for row in live_tape_rows(session, "tape")}
     header = [_quote_dict(tape[ticker]) for ticker in HEADER_TICKERS if ticker in tape]
     stats = latest_return_stats(session, as_of)
@@ -267,6 +272,7 @@ def pack_from_store(session: Session, *, as_of: date) -> dict[str, Any]:
             "date": item.date.isoformat(),
             "title": item.title,
             "kind": item.kind,
+            "time_et": (item.extra or {}).get("time_et"),
             "ticker": item.ticker,
             "source": item.source,
         }
@@ -290,7 +296,8 @@ def pack_from_store(session: Session, *, as_of: date) -> dict[str, Any]:
     facts = named_facts(macro)
     outliers, co_moves = as_dicts(*rank_drivers(_driver_series(session, as_of)))
     drivers = [_quote_dict(tape[ticker]) for ticker in DRIVER_TAPE_IDS if ticker in tape]
-    
+    yields_live = yields_live_rows(tape, load_universes().live.yields_section)
+
     # Load regime classification
     from store.models import RegimeSnapshot
     regime_row = session.query(RegimeSnapshot).filter_by(as_of=as_of).first()
@@ -359,6 +366,9 @@ def pack_from_store(session: Session, *, as_of: date) -> dict[str, Any]:
         pack["liquidity"] = liquidity
     if anomalies_data:
         pack["anomalies"] = anomalies_data
+    if yields_live:
+        pack["yields_live"] = yields_live
+    pack["session"] = session_phase(as_of, now or datetime.now(UTC))
     
     return pack
 
@@ -370,6 +380,50 @@ def _driver_series(session: Session, as_of: date) -> dict[str, list[tuple[date, 
         out[ticker] = [(day, float(value)) for day, value in points]
     for series_id in DRIVER_MACRO_IDS:
         out[series_id] = _macro_floats(session, series_id, start)
+    return out
+
+
+ET = ZoneInfo("America/New_York")
+SESSION_OPEN = time(9, 30)
+SESSION_CLOSE = time(16, 0)
+
+
+def session_phase(as_of: date, now: datetime) -> dict[str, str]:
+    """Where the US cash session stood when the pack was built (no holiday calendar)."""
+    local = now.astimezone(ET)
+    if as_of < local.date():
+        phase = "after_close"
+    elif local.weekday() >= 5:
+        phase = "closed"
+    elif local.time() < SESSION_OPEN:
+        phase = "pre_open"
+    elif local.time() < SESSION_CLOSE:
+        phase = "intraday"
+    else:
+        phase = "after_close"
+    return {"phase": phase, "built_at_et": local.strftime("%Y-%m-%d %H:%M")}
+
+
+def yields_live_rows(tape: dict[str, Any], section: list[Any]) -> list[dict[str, Any]]:
+    """Same-day Yahoo Treasury yields: level in percent, d1 move in bp."""
+    out: list[dict[str, Any]] = []
+    for item in section:
+        row = tape.get(item.ticker)
+        if row is None:
+            continue
+        level = resolve_price(row.quote_price, row.last_close)
+        move = resolve_yield_change_bp(
+            level, row.quote_change_pct, row.last_close, row.prev_close
+        )
+        out.append(
+            {
+                "ticker": item.ticker,
+                "label": item.label or item.ticker,
+                "level": None if level is None else round(float(level), 3),
+                "d1_bp": None if move is None else round(float(move), 1),
+                "as_of": row.as_of.isoformat() if row.as_of else None,
+            }
+        )
     return out
 
 
@@ -418,6 +472,10 @@ def _macro_floats(session: Session, series_id: str, start: date) -> list[tuple[d
     ]
 
 
+CUTS_RE = re.compile(r"(\d+(?: or more)?) Fed rate cuts? happen in (\d{4})")
+CPI_LEVEL_RE = re.compile(r"Core CPI YoY be ([\d.]+% ?(?:or (?:less|more))?)")
+
+
 def short_outcome(question: str) -> str:
     text = question.strip()
     lower = text.lower()
@@ -425,14 +483,23 @@ def short_outcome(question: str) -> str:
         return "Hold"
     if "no fed rate cuts" in lower or "no cuts" in lower:
         return "No 2026 cuts"
+    if "decrease" in lower and "50" in lower:
+        return "Cut 50+"
     if "decrease" in lower and "25" in lower:
         return "Cut 25bp"
     if "increase" in lower and "50" in lower:
         return "Hike 50+"
     if "increase" in lower:
-        return "Hike"
+        return "Hike 25bp"
     if "recession" in lower:
         return "Recession"
+    cuts = CUTS_RE.search(text)
+    if cuts:
+        count, plural = cuts.group(1), "" if cuts.group(1) == "1" else "s"
+        return f"{count} cut{plural} in {cuts.group(2)}"
+    cpi = CPI_LEVEL_RE.search(text)
+    if cpi:
+        return f"Core CPI YoY {cpi.group(1).strip()}"
     cleaned = text.replace("Will ", "").replace("?", "").strip()
     return cleaned[:48] if cleaned else text[:48]
 
@@ -457,9 +524,13 @@ WRITER_SERIES = frozenset(
         "DEXJPUS",
         "VIXCLS",
         "DTWEXBGS",
+        "DCOILWTICO",
+        "DCOILBRENTEU",
+        "ECBDFR",
     }
 )
 STALE_FOREIGN_LAG = 60
+WRITER_ANOMALY_CAP = 3
 
 
 def writer_pack(pack: dict[str, Any]) -> dict[str, Any]:
@@ -483,7 +554,19 @@ def writer_pack(pack: dict[str, Any]) -> dict[str, Any]:
         "header": pack.get("header") or [],
         "drivers": pack.get("drivers") or [],
         "news": (pack.get("news") or [])[:5],
+        "regime": pack.get("regime"),
+        "liquidity": pack.get("liquidity"),
+        "anomalies": _top_anomalies(pack.get("anomalies")),
+        "watchlist": pack.get("watchlist") or [],
+        "yields_live": pack.get("yields_live") or [],
+        "session": pack.get("session"),
     }
+
+
+def _top_anomalies(rows: Any) -> list[dict[str, Any]]:
+    items = [row for row in rows or [] if isinstance(row, dict)]
+    items.sort(key=lambda row: float(row.get("severity") or 0), reverse=True)
+    return items[:WRITER_ANOMALY_CAP]
 
 
 def _writer_extra_ids(pack: dict[str, Any]) -> set[str]:
