@@ -49,3 +49,21 @@ def test_cheapest_quality_grower_ranks_first_and_trap_is_penalized() -> None:
     assert trap.trap is True
     assert trap.risk > gem.risk
     assert trap.total < gem.total
+
+
+def test_quality_blends_fcf_yield_when_present() -> None:
+    same = dict(
+        pctile_5y=50.0,
+        ebitda_growth_1y=0.1,
+        fcf_margin=0.10,
+        net_debt_to_ebitda=1.0,
+        ret_3m=0.0,
+    )
+    scored = score_universe(
+        [
+            ScoreInput(ticker="CASH", fcf_yield=0.08, **same),
+            ScoreInput(ticker="THIN", fcf_yield=0.01, **same),
+        ]
+    )
+    by_ticker = {item.ticker: item for item in scored}
+    assert by_ticker["CASH"].quality > by_ticker["THIN"].quality

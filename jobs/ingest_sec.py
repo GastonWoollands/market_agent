@@ -10,6 +10,7 @@ from ingest.sec.client import CompanyFactsArchive, SecClient
 from ingest.sec.errors import SecError, SecHttpError, SecParseError
 from ingest.sec.parse import (
     fresh_ttm,
+    fy_history_from_facts,
     ttm_from_facts,
     ttm_history_from_facts,
     usable_ttm,
@@ -19,9 +20,11 @@ from jobs.runtime import record_job
 from store.catalog import CatalogInstrument, load_universes
 from store.engine import session_scope
 from store.repos import (
+    instruments_in_universe,
     replace_membership,
     universe_size,
     upsert_instrument,
+    upsert_metric_fy,
     upsert_metric_ttm,
     upsert_universe,
 )
@@ -40,6 +43,7 @@ def ingest(
     per_cik: bool = False,
     limit: int | None = None,
     tickers: set[str] | None = None,
+    fy_only: bool = False,
 ) -> dict[str, int | list[str]]:
     catalog = load_universes().valuation
     floor = Decimal(catalog.min_revenue_usd)
@@ -49,18 +53,9 @@ def ingest(
 
     failures: list[str] = []
     kept = 0
+    fy_written = 0
+    listed = 0
     with SecClient(ua) as client:
-        listed = client.fetch_tickers(exchanges=catalog.exchanges)
-        listed = _one_ticker_per_cik(listed)
-        if tickers:
-            wanted = {item.upper() for item in tickers}
-            listed = [item for item in listed if item.ticker.upper() in wanted]
-        listed.sort(key=lambda item: item.ticker)
-        if limit is not None:
-            listed = listed[:limit]
-        if not listed:
-            raise RuntimeError("no SEC tickers after exchange filter")
-
         archive: CompanyFactsArchive | None = None
         if not per_cik:
             try:
@@ -71,20 +66,50 @@ def ingest(
                 failures.append(f"zip: {exc}")
 
         try:
-            kept = _write_members(client, listed, floor, archive, failures)
+            if fy_only:
+                fy_written, listed = _write_fy_only(
+                    client, archive, failures, tickers=tickers, limit=limit
+                )
+            else:
+                rows = client.fetch_tickers(exchanges=catalog.exchanges)
+                rows = _one_ticker_per_cik(rows)
+                if tickers:
+                    wanted = {item.upper() for item in tickers}
+                    rows = [item for item in rows if item.ticker.upper() in wanted]
+                rows.sort(key=lambda item: item.ticker)
+                if limit is not None:
+                    rows = rows[:limit]
+                if not rows:
+                    raise RuntimeError("no SEC tickers after exchange filter")
+                listed = len(rows)
+                kept, fy_written = _write_members(client, rows, floor, archive, failures)
         finally:
             if archive is not None:
                 archive.close()
 
     with session_scope() as session:
         members = universe_size(session, "valuation")
-    if tickers is None and limit is None and not (BAND[0] <= members <= BAND[1]):
+    if (
+        not fy_only
+        and tickers is None
+        and limit is None
+        and not (BAND[0] <= members <= BAND[1])
+    ):
         raise RuntimeError(f"valuation membership {members} is outside {BAND[0]}–{BAND[1]}")
-    return {"members": members, "written": kept, "listed": len(listed), "failures": failures}
+    return {
+        "members": members,
+        "written": kept,
+        "fy_written": fy_written,
+        "listed": listed,
+        "failures": failures,
+    }
 
 
-def _write_members(client, listed, floor: Decimal, archive, failures: list[str]) -> int:
+def _write_members(
+    client, listed, floor: Decimal, archive, failures: list[str]
+) -> tuple[int, int]:
     kept = 0
+    fy_written = 0
     with session_scope() as session:
         universe = upsert_universe(session, "valuation", load_universes().valuation.description)
         session.flush()
@@ -132,12 +157,65 @@ def _write_members(client, listed, floor: Decimal, archive, failures: list[str])
                 snapshots = [*snapshots, metric]
             for snap in snapshots:
                 upsert_metric_ttm(session, instrument.id, snap)
+            for fy_snap in fy_history_from_facts(payload):
+                upsert_metric_fy(session, instrument.id, fy_snap)
+                fy_written += 1
             ids.append(instrument.id)
             kept += 1
             if index % 500 == 0:
                 log.info("sec facts %s/%s kept=%s", index, len(listed), kept)
         replace_membership(session, universe.id, ids)
-    return kept
+    return kept, fy_written
+
+
+def _write_fy_only(
+    client,
+    archive,
+    failures: list[str],
+    *,
+    tickers: set[str] | None,
+    limit: int | None,
+) -> tuple[int, int]:
+    with session_scope() as session:
+        raw = instruments_in_universe(session, "valuation")
+        members = [(item.id, item.ticker, item.cik) for item in raw]
+    if tickers:
+        wanted = {item.upper() for item in tickers}
+        members = [item for item in members if item[1].upper() in wanted]
+    if limit is not None:
+        members = members[:limit]
+    if not members:
+        raise RuntimeError("valuation universe is empty — run ingest_sec first")
+
+    fy_written = 0
+    with session_scope() as session:
+        for index, (instrument_id, ticker, cik) in enumerate(members, start=1):
+            if not cik:
+                failures.append(f"{ticker}: missing cik")
+                continue
+            try:
+                if archive is not None:
+                    payload = archive.load(cik)
+                else:
+                    payload = client.fetch_companyfacts(cik)
+            except (SecHttpError, SecParseError, SecError, ValueError) as exc:
+                failures.append(f"{ticker}: {exc}")
+                if isinstance(exc, SecHttpError) and exc.status_code == 429:
+                    raise RuntimeError("SEC rate limited") from exc
+                continue
+            if not payload:
+                continue
+            try:
+                snapshots = fy_history_from_facts(payload)
+            except (SecParseError, ValueError) as exc:
+                failures.append(f"{ticker}: {exc}")
+                continue
+            for snap in snapshots:
+                upsert_metric_fy(session, instrument_id, snap)
+                fy_written += 1
+            if index % 200 == 0:
+                log.info("sec fy-only %s/%s fy_rows=%s", index, len(members), fy_written)
+    return fy_written, len(members)
 
 
 def _one_ticker_per_cik(rows):
@@ -161,7 +239,7 @@ def _preferred(new: str, old: str) -> bool:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Build the valuation universe from SEC tickers + companyfacts TTM revenue."
+        description="Build the valuation universe from SEC companyfacts TTM and FY snapshots."
     )
     parser.add_argument("--refresh-zip", action="store_true")
     parser.add_argument("--zip", dest="zip_path", help="Path to an existing companyfacts.zip")
@@ -172,6 +250,11 @@ def main() -> None:
     )
     parser.add_argument("--limit", type=int, help="Cap listed tickers (debug).")
     parser.add_argument("--tickers", help="Optional comma-separated tickers.")
+    parser.add_argument(
+        "--fy-only",
+        action="store_true",
+        help="Write metric_fy for current valuation members; do not rebuild membership.",
+    )
     args = parser.parse_args()
     selected = None
     if args.tickers:
@@ -179,7 +262,12 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
-    result: dict[str, int | list[str]] = {"members": 0, "written": 0, "failures": []}
+    result: dict[str, int | list[str]] = {
+        "members": 0,
+        "written": 0,
+        "fy_written": 0,
+        "failures": [],
+    }
     try:
         result = ingest(
             refresh_zip=args.refresh_zip,
@@ -187,6 +275,7 @@ def main() -> None:
             per_cik=args.per_cik,
             limit=args.limit,
             tickers=selected,
+            fy_only=args.fy_only,
         )
     except Exception as exc:
         record_job(
@@ -206,14 +295,16 @@ def main() -> None:
         extra={
             "members": result["members"],
             "listed": result["listed"],
+            "fy_written": result["fy_written"],
             "failures": result["failures"],
             "source": "sec",
         },
     )
     log.info(
-        "ingest_sec members=%s written=%s listed=%s failures=%s",
+        "ingest_sec members=%s written=%s fy=%s listed=%s failures=%s",
         result["members"],
         result["written"],
+        result["fy_written"],
         result["listed"],
         len(result["failures"]) if isinstance(result["failures"], list) else result["failures"],
     )

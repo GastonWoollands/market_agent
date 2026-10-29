@@ -72,3 +72,40 @@ def test_comparable_n_of_m_is_not_the_filtered_count() -> None:
         sort="pctile",
     )
     assert [item.ticker for item in cheap.members] == ["XOM", "MSFT", "AAPL"]
+    apple = cheap.members[-1]
+    assert apple.fcf_yield == 1.0 / 10_000_000_000
+    assert apple.nd_ebitda == 1.0 / 1_000_000_000
+    assert apple.accrual is None
+
+
+def test_valuation_missing_fcf_and_zero_ebitda_are_blank() -> None:
+    instrument, metric, value = _row("ZERO", ebitda=0, ev=5_000_000_000)
+    metric.fcf = None
+    metric.net_debt = 10.0
+    tape = build_valuation(
+        [(instrument, metric, value)],
+        comparable_n=0,
+        comparable_m=1,
+        min_revenue=1_000_000_000,
+        as_of=date(2026, 8, 14),
+        stale=False,
+    )
+    row = tape.members[0]
+    assert row.fcf_yield is None
+    assert row.nd_ebitda is None
+
+
+def test_valuation_accrual_from_fy() -> None:
+    instrument, metric, value = _row("AAPL")
+    instrument.id = 7
+    fy = SimpleNamespace(cfo=30, net_income=20)
+    tape = build_valuation(
+        [(instrument, metric, value)],
+        comparable_n=1,
+        comparable_m=1,
+        min_revenue=1_000_000_000,
+        as_of=date(2026, 8, 14),
+        stale=False,
+        fy_by_id={7: fy},
+    )
+    assert tape.members[0].accrual is True

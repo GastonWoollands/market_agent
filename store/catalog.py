@@ -1,6 +1,7 @@
 from datetime import date
+from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from yaml import safe_load
 
 from store.settings import CONFIG_DIR
@@ -41,6 +42,16 @@ class ValuationConfig(BaseModel):
     rebuild: str = "monthly"
 
 
+class GemsConfig(BaseModel):
+    description: str | None = None
+    min_market_cap_usd: int = 300_000_000
+    max_market_cap_usd: int = 2_000_000_000
+    min_revenue_usd: int = 50_000_000
+    min_revenue_growth_yoy: float = 0.15
+    min_fcf_yield: float = 0.04
+    max_debt_to_equity: float = 0.5
+
+
 class UniversesFile(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -48,6 +59,7 @@ class UniversesFile(BaseModel):
     watchlist: UniverseCatalog
     live: LiveTapeConfig = Field(default_factory=LiveTapeConfig)
     valuation: ValuationConfig = Field(default_factory=ValuationConfig)
+    gems: GemsConfig = Field(default_factory=GemsConfig)
 
 
 def load_universes() -> UniversesFile:
@@ -88,18 +100,32 @@ def load_fred_series() -> FredSeriesFile:
     return FredSeriesFile.model_validate(raw)
 
 
+PolymarketPick = Literal["soonest_end", "second_soonest_end", "first_open"]
+
+
 class PolymarketEvent(BaseModel):
-    slug: str
+    slot: str
     label: str
     category: str
     show_on_live: bool = True
     notes: str | None = None
     short_label: str | None = None
+    slug: str | None = None
+    query: str | None = None
+    slug_prefix: str | None = None
+    pick: PolymarketPick = "soonest_end"
 
 
 class PolymarketFile(BaseModel):
     events: list[PolymarketEvent] = Field(default_factory=list)
     search_hints: dict[str, list[str]] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def unique_slots(self) -> Self:
+        slots = [item.slot for item in self.events]
+        if len(slots) != len(set(slots)):
+            raise ValueError("duplicate Polymarket slot")
+        return self
 
 
 def load_polymarket() -> PolymarketFile:

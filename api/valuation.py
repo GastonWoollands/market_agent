@@ -1,5 +1,7 @@
 from datetime import date
+from typing import Any
 
+from analytics.desk import accrual_from_fy, fcf_yield, nd_ebitda
 from api.schemas import ValuationMember, ValuationResponse
 from store.models import Instrument, MetricTtm, ValuationDaily
 
@@ -8,6 +10,8 @@ DEFAULT_SORT = "pctile"
 SORTS: dict[str, tuple[str, bool]] = {
     "pctile": ("pctile_5y", False),
     "ev_ebitda": ("ev_ebitda", False),
+    "fcf_yield": ("fcf_yield", True),
+    "nd_ebitda": ("nd_ebitda", False),
     "growth": ("ebitda_growth_1y", True),
     "rerate": ("multiple_change_1y", True),
     "revenue": ("revenue", True),
@@ -27,16 +31,19 @@ def build_valuation(
     industry: str = "",
     sort: str = DEFAULT_SORT,
     min_rev: float | None = None,
+    fy_by_id: dict[int, Any] | None = None,
 ) -> ValuationResponse:
-    members = [_member(instrument, metric, value) for instrument, metric, value in rows]
+    fy_map = fy_by_id or {}
+    members = [
+        _member(instrument, metric, value, fy_map.get(getattr(instrument, "id", None)))
+        for instrument, metric, value in rows
+    ]
     industries = sorted({item.industry for item in members if item.industry})
     needle = q.strip().lower()
     visible = members
     if needle:
         visible = [
-            item
-            for item in visible
-            if needle in item.ticker.lower() or needle in item.name.lower()
+            item for item in visible if needle in item.ticker.lower() or needle in item.name.lower()
         ]
     if industry.strip():
         wanted = industry.strip()
@@ -63,7 +70,12 @@ def build_valuation(
     )
 
 
-def _member(instrument: Instrument, metric: MetricTtm, value: ValuationDaily) -> ValuationMember:
+def _member(
+    instrument: Instrument,
+    metric: MetricTtm,
+    value: ValuationDaily,
+    fy: Any | None = None,
+) -> ValuationMember:
     return ValuationMember(
         ticker=instrument.ticker,
         name=instrument.name,
@@ -80,6 +92,9 @@ def _member(instrument: Instrument, metric: MetricTtm, value: ValuationDaily) ->
         pctile_5y=_num(value.pctile_5y),
         ebitda_growth_1y=_num(value.ebitda_growth_1y),
         multiple_change_1y=_num(value.multiple_change_1y),
+        fcf_yield=fcf_yield(metric.fcf, value.ev),
+        nd_ebitda=nd_ebitda(metric.net_debt, value.ebitda),
+        accrual=accrual_from_fy(fy),
         comparable=bool(value.comparable),
     )
 

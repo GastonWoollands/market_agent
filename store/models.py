@@ -13,6 +13,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -178,8 +179,10 @@ class MacroObservation(Base):
 
 class OddsSnapshot(Base):
     __tablename__ = "odds_snapshot"
+    __table_args__ = (UniqueConstraint("slug", name="uq_odds_snapshot_slug"),)
 
-    slug: Mapped[str] = mapped_column(String(128), primary_key=True)
+    slot: Mapped[str] = mapped_column(String(64), primary_key=True)
+    slug: Mapped[str] = mapped_column(String(128), nullable=False)
     as_of: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     question: Mapped[str] = mapped_column(Text, nullable=False)
     implied_yes: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
@@ -329,6 +332,34 @@ class MetricTtm(Base):
     instrument: Mapped[Instrument] = relationship()
 
 
+class MetricFy(Base):
+    """Fiscal-year snapshot (revenue YoY, accrual, gems inputs). Curated columns only."""
+
+    __tablename__ = "metric_fy"
+
+    instrument_id: Mapped[int] = mapped_column(
+        ForeignKey("instrument.id", ondelete="CASCADE"), primary_key=True
+    )
+    as_of: Mapped[date] = mapped_column(Date, primary_key=True)
+    fiscal_year: Mapped[int] = mapped_column(Integer, nullable=False)
+    revenue: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
+    net_income: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
+    cfo: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
+    gross_profit: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
+    ebit: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
+    total_assets: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
+    current_assets: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
+    current_liabilities: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
+    long_term_debt: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
+    total_liabilities: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
+    retained_earnings: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
+    equity: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
+    shares: Mapped[Decimal | None] = mapped_column(Numeric(20, 4))
+    source: Mapped[str] = mapped_column(String(16), nullable=False)
+
+    instrument: Mapped[Instrument] = relationship()
+
+
 class ValuationDaily(Base):
     __tablename__ = "valuation_daily"
 
@@ -368,6 +399,37 @@ class OpportunityScore(Base):
     ret_3m: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
 
     instrument: Mapped[Instrument] = relationship()
+
+
+class QuantScore(Base):
+    """Ratio snapshot + gem flag. f_score / z_score / f_tests / z_components: legacy, NULL."""
+
+    __tablename__ = "quant_score"
+
+    instrument_id: Mapped[int] = mapped_column(
+        ForeignKey("instrument.id", ondelete="CASCADE"), primary_key=True
+    )
+    as_of: Mapped[date] = mapped_column(Date, primary_key=True)
+    fy_as_of: Mapped[date | None] = mapped_column(Date)
+    f_score: Mapped[int | None] = mapped_column(Integer)
+    z_score: Mapped[Decimal | None] = mapped_column(Numeric(8, 4))
+    z_inapplicable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    market_cap: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
+    revenue_growth_yoy: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    fcf_yield: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    debt_to_equity: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    is_gem_candidate: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    f_tests: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    z_components: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+
+    instrument: Mapped[Instrument] = relationship()
+
+    __table_args__ = (
+        CheckConstraint(
+            "f_score IS NULL OR (f_score >= 0 AND f_score <= 9)",
+            name="ck_quant_score_f_score",
+        ),
+    )
 
 
 class RegimeSnapshot(Base):

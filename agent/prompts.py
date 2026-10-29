@@ -59,8 +59,9 @@ would flip the regime from soft landing to hard landing, repricing Fed odds -50b
 ### Deep sections (4-6 sentences each)
 
 **macro_deep**: Narrate the macro regime, not just levels.
-- Regime Context: If pack.regime exists, state the classification (growth/inflation/policy/volatility)
-  with confidence scores. Interpret what this regime implies for asset allocation (e.g., 
+- Regime Context: If pack.regime exists, state the classification
+  (growth/inflation/policy/volatility) with confidence scores. Interpret what this regime
+  implies for asset allocation (e.g.,
   "expansion+stable inflation = cyclicals favored; current 85% confidence in expansion regime").
 - Curve: 2s10s level, recent move, what it signals (steepening = cutting cycle vs
   flattening = terminal rate rising). Include real_10y and fed_vs_2y_bp.

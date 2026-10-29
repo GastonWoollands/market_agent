@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from typing import Any
 
@@ -12,13 +13,20 @@ from agent.citations import citation_issues
 from agent.errors import AgentError
 from agent.providers import AgentClient
 
-MEMO_PROMPT_VERSION = "memo-v1"
+log = logging.getLogger("agent.memos")
+
+MEMO_PROMPT_VERSION = "memo-v2"
 MEMO_LIMIT = 20
 MEMO_SYSTEM = """You write a short research memo for one US stock.
 
 Rules:
 - Narrate only fields in the name pack JSON.
+- Use desk metrics in English: EV/EBITDA, 5y percentile, FCF yield,
+  net debt / EBITDA, EBITDA growth.
+- Do not mention quality, cheap, setup, insider, risk, total, or any 0-1 sleeve score.
+- Do not use snake_case field names in prose.
 - If a field is missing or null, write "unavailable". Do not invent a number.
+- what_10q_changed must be "unavailable" unless the pack has a filing excerpt.
 - Mention only the pack ticker. Do not name other firms.
 - Every percentage you mention must be a number already in the pack.
 - Not a trading signal. No buy/sell/hold. No price targets.
@@ -54,38 +62,38 @@ def user_prompt(pack: dict[str, Any]) -> str:
 
 def template_memo(pack: dict[str, Any]) -> OpportunityMemo:
     ticker = str(pack.get("ticker") or "unavailable")
-    rank = pack.get("rank")
-    total = pack.get("total")
-    cheap = pack.get("cheap")
-    quality = pack.get("quality")
-    change = pack.get("change")
-    setup = pack.get("setup")
-    risk = pack.get("risk")
-    trap = pack.get("trap")
+    ev = pack.get("ev_ebitda")
     pctile = pack.get("pctile_5y")
-    growth = pack.get("ebitda_growth_1y")
+    fcf_pct = pack.get("fcf_yield_pct")
+    nd = pack.get("nd_ebitda")
     growth_pct = pack.get("ebitda_growth_pct")
+    trap = pack.get("trap")
+    accrual = pack.get("accrual")
+    ev_s = "unavailable" if ev is None else str(ev)
+    vs_own = "unavailable vs own 5y" if pctile is None else f"{pctile}th %ile vs own 5y"
+    fcf_s = "unavailable" if fcf_pct is None else f"{fcf_pct}%"
+    nd_s = "unavailable" if nd is None else f"{nd}x"
+    growth_s = "unavailable" if growth_pct is None else f"{growth_pct}%"
+    if accrual is True:
+        accr_s = "cash from operations above net income"
+    elif accrual is False:
+        accr_s = "cash from operations not above net income"
+    else:
+        accr_s = "unavailable"
+    trap_s = "trap (cheap vs history with falling EBITDA)" if trap else "not a trap"
     why = (
-        f"{ticker} ranks {rank} with total {total}. "
-        f"Sleeves cheap {cheap}, quality {quality}, change {change}, setup {setup}. "
-        f"Risk {risk}. Trap {trap}. Not a trading signal."
-    )
-    ten_q = (
-        f"Four-quarter EBITDA growth {growth if growth is not None else 'unavailable'}"
-        f"{'' if growth_pct is None else f' ({growth_pct}%)'}. "
-        f"Own 5y EV/EBITDA percentile {pctile if pctile is not None else 'unavailable'}."
+        f"{ticker} EV/EBITDA {ev_s} ({vs_own}), "
+        f"FCF yield {fcf_s}, net debt / EBITDA {nd_s}, EBITDA 1y {growth_s}. "
+        f"{trap_s}. Accrual {accr_s}. Not a trading signal."
     )
     invalid = (
-        f"Invalidation: percentile {pctile} mean-reverts higher or EBITDA growth "
-        f"{growth if growth is not None else 'unavailable'} turns negative."
+        "Invalidation: EV/EBITDA mean-reverts toward its 5y history "
+        f"or EBITDA growth {growth_s} fades."
     )
-    caveats = (
-        "Insider sleeve is 0.5 because Form 4 is not ingested. "
-        "Fields not in the pack are unavailable."
-    )
+    caveats = "Delayed data. Insider unavailable until Form 4. 10-Q excerpt unavailable."
     return OpportunityMemo(
         why_scored=why,
-        what_10q_changed=ten_q,
+        what_10q_changed="unavailable",
         invalidation=invalid,
         caveats=caveats,
     )
@@ -104,15 +112,15 @@ def narrate_memo(pack: dict[str, Any], *, client: AgentClient | None) -> Written
             memo = OpportunityMemo.model_validate(parsed)
             model = f"{client.provider}/{client.model}"
             status = "ok"
-        except AgentError:
+        except AgentError as exc:
+            log.warning("%s memo agent failed (%s); using template", pack.get("ticker"), exc)
             memo = template_memo(pack)
             model = "template"
             status = "fallback"
-    text = " ".join(
-        [memo.why_scored, memo.what_10q_changed, memo.invalidation, memo.caveats]
-    )
+    text = " ".join([memo.why_scored, memo.what_10q_changed, memo.invalidation, memo.caveats])
     issues = citation_issues(pack, text)
     if issues:
+        log.warning("%s memo citation check failed: %s", pack.get("ticker"), ", ".join(issues))
         memo = template_memo(pack)
         model = "template"
         status = "fallback"
@@ -130,41 +138,29 @@ def name_pack(
     ticker: str,
     name: str,
     rank: int,
-    total: float,
-    cheap: float,
-    quality: float,
-    change: float,
-    setup: float,
-    insider: float,
-    risk: float,
     trap: bool,
     pctile_5y: float | None,
     ev_ebitda: float | None,
     ebitda_growth_1y: float | None,
-    fcf_margin: float | None,
-    ret_3m: float | None,
+    fcf_yield: float | None = None,
+    nd_ebitda: float | None = None,
+    accrual: bool | None = None,
     events: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     growth_pct = None if ebitda_growth_1y is None else round(ebitda_growth_1y * 100.0, 1)
-    ret_pct = None if ret_3m is None else round(ret_3m, 1)
+    fcf_pct = None if fcf_yield is None else round(fcf_yield * 100.0, 1)
     return {
         "ticker": ticker,
         "name": name,
         "rank": rank,
-        "total": round(total, 4),
-        "cheap": round(cheap, 4),
-        "quality": round(quality, 4),
-        "change": round(change, 4),
-        "setup": round(setup, 4),
-        "insider": round(insider, 4),
-        "risk": round(risk, 4),
         "trap": trap,
+        "accrual": accrual,
         "pctile_5y": None if pctile_5y is None else round(pctile_5y, 1),
         "ev_ebitda": None if ev_ebitda is None else round(ev_ebitda, 1),
         "ebitda_growth_1y": None if ebitda_growth_1y is None else round(ebitda_growth_1y, 4),
         "ebitda_growth_pct": growth_pct,
-        "fcf_margin": None if fcf_margin is None else round(fcf_margin, 4),
-        "ret_3m": None if ret_3m is None else round(ret_3m, 4),
-        "ret_3m_pct": ret_pct,
+        "fcf_yield": None if fcf_yield is None else round(fcf_yield, 4),
+        "fcf_yield_pct": fcf_pct,
+        "nd_ebitda": None if nd_ebitda is None else round(nd_ebitda, 2),
         "events": events or [],
     }

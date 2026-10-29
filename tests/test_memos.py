@@ -7,31 +7,27 @@ def _pack() -> dict:
         ticker="MSFT",
         name="Microsoft",
         rank=1,
-        total=0.72,
-        cheap=0.80,
-        quality=0.71,
-        change=0.66,
-        setup=0.40,
-        insider=0.5,
-        risk=0.05,
         trap=False,
         pctile_5y=19.9,
         ev_ebitda=20.5,
         ebitda_growth_1y=0.327,
-        fcf_margin=0.22,
-        ret_3m=4.2,
+        fcf_yield=0.032,
+        nd_ebitda=-0.4,
+        accrual=True,
     )
 
 
 def test_template_memo_is_fully_cited() -> None:
     pack = _pack()
     memo = template_memo(pack)
-    text = " ".join(
-        [memo.why_scored, memo.what_10q_changed, memo.invalidation, memo.caveats]
-    )
+    text = " ".join([memo.why_scored, memo.what_10q_changed, memo.invalidation, memo.caveats])
     assert citation_issues(pack, text) == []
     assert "MSFT" in memo.why_scored
     assert "TSLA" not in text
+    assert memo.what_10q_changed == "unavailable"
+    assert "quality" not in text.lower()
+    assert "sleeve" not in text.lower()
+    assert "FCF yield 3.2%" in memo.why_scored
 
 
 def test_narrate_memo_falls_back_when_agent_invents() -> None:
@@ -39,7 +35,7 @@ def test_narrate_memo_falls_back_when_agent_invents() -> None:
 
     class _Client:
         provider = "anthropic"
-        model = "claude-sonnet-4-5"
+        model = "claude-sonnet-5-5"
 
         def complete(self, *, system: str, user: str, schema=None):
             return schema(
@@ -64,10 +60,12 @@ def test_narrate_memo_keeps_cited_agent_output() -> None:
 
         def complete(self, *, system: str, user: str, schema=None):
             return schema(
-                why_scored="MSFT ranks 1 with total 0.72. Cheap 0.8.",
-                what_10q_changed="Four-quarter EBITDA growth 0.327 (32.7%).",
-                invalidation="Percentile 19.9 mean-reverts higher.",
-                caveats="Insider sleeve is 0.5 because Form 4 is not ingested.",
+                why_scored="MSFT EV/EBITDA 20.5 (19.9th %ile vs own 5y), FCF yield 3.2%.",
+                what_10q_changed="unavailable",
+                invalidation=(
+                    "EV/EBITDA mean-reverts toward its 5y history or EBITDA growth 32.7% fades."
+                ),
+                caveats="Delayed data. Insider unavailable until Form 4.",
             )
 
     written = narrate_memo(pack, client=_Ok())

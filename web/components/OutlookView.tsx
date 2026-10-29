@@ -726,7 +726,7 @@ function OddsStrip({ items }: { items: OutlookOdds[] }) {
       ) : (
         items.map((item, index) => (
           <div
-            key={item.slug}
+            key={item.slot || item.slug}
             className={cn(
               "flex items-baseline justify-between gap-3 px-4 py-3",
               index === items.length - 1 ? "" : "border-b border-slate-800",

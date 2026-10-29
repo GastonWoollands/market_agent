@@ -65,12 +65,14 @@ from store.models import (
     EventItem,
     EvidencePack,
     MacroObservation,
+    MetricFy,
     MetricTtm,
     NewsItem,
     OddsSnapshot,
     OpportunityMemoRow,
     OpportunityScore,
     OutlookReport,
+    QuantScore,
     QuoteLatest,
     ReturnStats,
     RrgPoint,
@@ -83,6 +85,8 @@ from store.repos import (
     instrument_by_ticker,
     intraday_closes_for_tickers,
     latest_jobs,
+    latest_metric_fy_map,
+    latest_metric_ttm_map,
     latest_odds,
     latest_opportunity_rows,
     latest_outlook_report,
@@ -149,9 +153,11 @@ def health(db: Session = Depends(get_db)) -> HealthResponse | JSONResponse:
             outlook_reports=table_count(db, OutlookReport),
             valuation_instruments=universe_size(db, "valuation"),
             metric_ttm=table_count(db, MetricTtm),
+            metric_fy=table_count(db, MetricFy),
             valuation_daily=table_count(db, ValuationDaily),
             opportunity_scores=table_count(db, OpportunityScore),
             opportunity_memos=table_count(db, OpportunityMemoRow),
+            quant_score=table_count(db, QuantScore),
             intraday_bars=table_count(db, BarIntraday),
             jobs=jobs,
         )
@@ -297,6 +303,7 @@ def valuation(
     try:
         catalog = load_universes()
         rows = latest_valuation_rows(db)
+        fy_by_id = latest_metric_fy_map(db, [instrument.id for instrument, _, _ in rows])
         comparable_n, comparable_m = comparable_valuation_counts(db)
         as_of = max((value.as_of for _, _, value in rows), default=None)
         stale = not rows
@@ -318,6 +325,7 @@ def valuation(
             industry=industry,
             sort=sort,
             min_rev=min_rev,
+            fy_by_id=fy_by_id,
         )
     except Exception:
         payload = ValuationResponse(stale=True)
@@ -332,7 +340,10 @@ def opportunities(
 ) -> OpportunityResponse | JSONResponse:
     try:
         rows = latest_opportunity_rows(db, as_of=as_of)
+        ids = [instrument.id for instrument, _, _, _ in rows]
         as_of_value = max((score.as_of for _, score, _, _ in rows), default=None)
+        ttm_by_id = latest_metric_ttm_map(db, ids, as_of=as_of_value)
+        fy_by_id = latest_metric_fy_map(db, ids, as_of=as_of_value)
         stale = not rows
         job = next((item for item in latest_jobs(db) if item.job_name == "compute_scores"), None)
         if job is None or job.status != "ok":
@@ -341,7 +352,14 @@ def opportunities(
             clock = datetime.now(job.finished_at.tzinfo)
             if (clock - job.finished_at).days > OPP_STALE:
                 stale = True
-        return build_opportunities(rows, as_of=as_of_value, stale=stale, sort=sort)
+        return build_opportunities(
+            rows,
+            as_of=as_of_value,
+            stale=stale,
+            sort=sort,
+            ttm_by_id=ttm_by_id,
+            fy_by_id=fy_by_id,
+        )
     except Exception:
         payload = OpportunityResponse(stale=True)
         return JSONResponse(status_code=503, content=payload.model_dump(mode="json"))

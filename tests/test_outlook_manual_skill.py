@@ -3,9 +3,17 @@
 from datetime import date
 
 import pytest
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 
 from store.engine import session_scope
 from store.repos import latest_evidence_pack
+
+try:
+    with session_scope() as _probe:
+        _probe.execute(text("SELECT 1"))
+except OperationalError:
+    pytest.skip("Postgres unreachable; run `make db`", allow_module_level=True)
 
 
 def test_pack_loading_for_manual_generation():

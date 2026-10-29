@@ -30,9 +30,11 @@ export type Health = {
   outlook_reports?: number;
   valuation_instruments?: number;
   metric_ttm?: number;
+  metric_fy?: number;
   valuation_daily?: number;
   opportunity_scores?: number;
   opportunity_memos?: number;
+  quant_score?: number;
   intraday_bars?: number;
   jobs: JobStatus[];
 };
@@ -104,6 +106,7 @@ export type LiveOddsOutcome = {
 };
 
 export type LiveOdds = {
+  slot: string;
   slug: string;
   label: string;
   category: string;
@@ -360,6 +363,7 @@ export type OutlookOddsOutcome = {
 };
 
 export type OutlookOdds = {
+  slot?: string | null;
   slug: string;
   label: string | null;
   category: string | null;
@@ -503,6 +507,9 @@ export type ValuationMember = {
   pctile_5y: number | null;
   ebitda_growth_1y: number | null;
   multiple_change_1y: number | null;
+  fcf_yield: number | null;
+  nd_ebitda: number | null;
+  accrual: boolean | null;
   comparable: boolean;
 };
 
@@ -577,6 +584,9 @@ export type OpportunityMember = {
   ev_ebitda: number | null;
   ebitda_growth_1y: number | null;
   fcf_margin: number | null;
+  fcf_yield: number | null;
+  nd_ebitda: number | null;
+  accrual: boolean | null;
   ret_3m: number | null;
   memo: OpportunityMemo | null;
 };
@@ -606,7 +616,8 @@ export async function fetchOpportunities(query?: {
     if (!response.ok) {
       return null;
     }
-    return (await response.json()) as OpportunityTape;
+    const tape = (await response.json()) as OpportunityTape;
+    return { ...tape, members: tape.members ?? [] };
   } catch {
     return null;
   }

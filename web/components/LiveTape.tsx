@@ -649,7 +649,7 @@ function OddsPanel({ items }: { items: LiveOdds[] }) {
       ) : (
         <div className="overflow-hidden rounded border border-line">
           {items.map((item, index) => (
-            <OddsRow key={item.slug} item={item} last={index === items.length - 1} />
+            <OddsRow key={item.slot || item.slug} item={item} last={index === items.length - 1} />
           ))}
         </div>
       )}

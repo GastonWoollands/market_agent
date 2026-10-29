@@ -36,7 +36,8 @@ alembic upgrade head
 | `FINNHUB_API_KEY` | Watchlist earnings on Outlook |
 | `SEC_USER_AGENT` | Valuation universe (`MarketAgent you@real-email`) |
 | `ANTHROPIC_API_KEY` or `GEMINI_API_KEY` | Outlook + memos (optional; `--template` works without) |
-| `AGENT_PROVIDER` | `anthropic` or `gemini` (empty = auto) |
+| `AGENT_PROVIDER` | `anthropic` or `gemini` (empty = Anthropic if its key is set, else Gemini) |
+| `AGENT_MODEL` | Override the provider default model (optional) |
 
 Activate `.venv` in every terminal before `python -m jobs…`.
 
@@ -47,10 +48,10 @@ Activate `.venv` in every terminal before `python -m jobs…`.
 | Situation | What to run |
 |-----------|-------------|
 | Empty database | [First load](#3-first-load-run-in-this-order) — all steps, in order |
-| Weekday morning | Tape Yahoo + FRED, then Outlook chain (news → calendar → pack → outlook) |
+| Weekday morning | Tape Yahoo + FRED + regime, then Outlook chain (news → Fed RSS → calendar → pack → outlook) |
 | During the session | Polymarket anytime; tape Yahoo for delayed quotes |
 | After the close (~16:30) | Tape Yahoo daily bars, then Dynamics |
-| Nightly | SEC (monthly is enough after the first zip), valuation Yahoo, valuation, scores, memos |
+| Nightly | SEC (monthly is enough after the first zip), valuation Yahoo, valuation, quant, scores, memos |
 | After Ctrl-C on Yahoo | `--resume` on the same job |
 | Before a Pi move / wipe | `pg_dump` |
 
@@ -60,6 +61,7 @@ Fast path once the DB is already loaded:
 # morning Live + Outlook
 python -m jobs.ingest_yahoo
 python -m jobs.ingest_fred
+python -m jobs.compute_regime
 python -m jobs.ingest_news
 python -m jobs.ingest_fed_rss
 python -m jobs.ingest_calendar
@@ -79,10 +81,11 @@ Each step needs the ones above it. Skip a block only if you do not care about th
 |---|---------|-----|
 | 1 | `python -m jobs.seed_tape` | Instruments + `tape` / `watchlist` from `config/universes.yaml` (includes US indices/ETFs + international indices: Nikkei/DAX/FTSE/HSI/CSI 300 + EEM) |
 | 2 | `python -m jobs.ingest_yahoo` | 5y daily bars + delayed quotes for the tape (~36 names: US + intl indices) |
-| 3 | `python -m jobs.ingest_fred` | FRED catalog (US spine: rates/inflation/growth/employment + FX: DXY/EUR/JPY/MXN/BRL/CNY + commodities: gold/copper/oil/gas + global: ECB/BOJ/PBOC; needs `FRED_API_KEY`) |
+| 3 | `python -m jobs.ingest_fred` | FRED catalog (US spine: rates/inflation/growth/employment + FX: DXY/EUR/JPY/MXN/BRL/CNY + commodities: copper/oil/gas + global: ECB/BOJ/PBOC; needs `FRED_API_KEY`) |
+| 3b | `python -m jobs.compute_regime` | `regime_snapshot` from stored FRED (Live band + `pack.regime`) |
 | 4 | `python -m jobs.ingest_polymarket` | Fed / inflation / recession odds |
 
-Live tab works after this. Required tape names: **SPY**, **XLK**, **EEM**. Required FRED series: **DGS10**, **DTWEXBGS**, **GOLDAMGBD228NLBM**.
+Live tab works after this. Required tape names: **SPY**, **XLK**, **EEM**. Required FRED series: **DGS10**, **DTWEXBGS**. Gold is the **GLD** tape quote (FRED dropped the LBMA fixing).
 
 ### B — Dynamics
 
@@ -110,9 +113,17 @@ Calendar still writes FOMC/CPI dates if Finnhub is unset; earnings just stay emp
 
 | # | Command | Why |
 |---|---------|-----|
-| 10 | `python -m jobs.ingest_sec` | SEC tickers + TTM; builds the ~700–1000 name universe |
-| 11 | `python -m jobs.ingest_yahoo --universe valuation` | Daily bars for those names (≤2 req/s — long) |
-| 12 | `python -m jobs.compute_valuation` | EV/EBITDA, 5y percentile, growth × re-rating |
+| 11 | `python -m jobs.ingest_sec` | SEC tickers + TTM + fiscal-year snapshots; builds the ~700–1000 name universe |
+| 12 | `python -m jobs.ingest_yahoo --universe valuation` | Daily bars for those names (≤2 req/s — long) |
+| 13 | `python -m jobs.compute_valuation` | EV/EBITDA, 5y percentile, growth × re-rating |
+| 14 | `python -m jobs.compute_quant` | Gem-candidate flag + ratio snapshot (`quant_score`). F-score / Z are not computed |
+
+After a schema upgrade that adds `metric_fy`, backfill without rebuilding membership:
+
+```bash
+python -m jobs.ingest_sec --fy-only
+python -m jobs.compute_quant
+```
 
 First `ingest_sec` downloads `companyfacts.zip` into `data/sec/` (gitignored). Set `SEC_USER_AGENT` to a real email.
 
@@ -128,8 +139,8 @@ Smoke-test one name: `--tickers MSFT`.
 
 | # | Command | Why |
 |---|---------|-----|
-| 13 | `python -m jobs.compute_scores` | Rank from stored TTM + multiples + returns |
-| 14 | `python -m jobs.generate_memos --template` | Pack-grounded memos for rank ≤ 20 |
+| 15 | `python -m jobs.compute_scores` | Rank from stored TTM + multiples + returns |
+| 16 | `python -m jobs.generate_memos --template` | Pack-grounded memos for rank ≤ 20 |
 
 Drop `--template` when an LLM key is set.
 
@@ -137,8 +148,8 @@ Drop `--template` when an LLM key is set.
 
 | # | Command | Why |
 |---|---------|-----|
-| 15 | `python -m jobs.ingest_yahoo --universe watchlist` | Daily bars for seeded watchlist names |
-| 16 | `python -m jobs.ingest_intraday` | 5m extended-hours for **tape ∪ watchlist** only |
+| 17 | `python -m jobs.ingest_yahoo --universe watchlist` | Daily bars for seeded watchlist names |
+| 18 | `python -m jobs.ingest_intraday` | 5m extended-hours for **tape ∪ watchlist** only |
 
 Adding a ticker in the UI hydrates that name on demand. This job is the batch path.
 
@@ -146,7 +157,7 @@ Make equivalent of A–F:
 
 ```bash
 make db migrate seed yahoo fred regime poly dynamics news fed-rss calendar pack outlook \
-  sec yahoo-val valuation scores memos yahoo-watch intraday
+  sec yahoo-val valuation quant scores memos yahoo-watch intraday
 
 make yahoo fred regime poly dynamics news fed-rss calendar pack outlook
 ```
@@ -167,11 +178,11 @@ Intended times if you automate later. Until then, run the same commands by hand.
 6. `python -m jobs.ingest_fed_rss`
 7. `python -m jobs.ingest_calendar` — Finnhub ~07:00
 8. `python -m jobs.build_pack`
-9. `python -m jobs.generate_outlook` — ~07:45 (Gemini, automated)
+9. `python -m jobs.generate_outlook` — ~07:45 (SDK writer; provider per `AGENT_PROVIDER`)
 
 Open Outlook: the sources table must match `/health` job rows. Hover the header status dot for latest `job_run`.
 
-**Manual override (optional):** If automated Gemini output needs better reasoning, use the Cursor skill:
+**Manual override (optional):** If the automated output needs better reasoning, use the coding-agent skill (Cursor or Claude Code). This is the one sanctioned exception to the writer/coder split in AGENTS.md; the citation check still gates the result:
 
 ```
 # In Cursor Chat
@@ -219,6 +230,7 @@ python -m jobs.generate_outlook
 python -m jobs.ingest_sec            # monthly after the first zip; --refresh-zip when you want a new bulk file
 python -m jobs.ingest_yahoo --universe valuation --resume
 python -m jobs.compute_valuation
+python -m jobs.compute_quant
 python -m jobs.compute_scores
 python -m jobs.generate_memos
 ```
@@ -250,26 +262,26 @@ Timeouts and HTTP 5xx retry up to 3 times inside the adapters. **Yahoo 429 still
 
 Two approaches: **automated (default)** and **manual override (Cursor skill)**.
 
-#### Automated (Gemini - 80% of days)
+#### Automated (SDK writer)
 
 ```bash
 python -m jobs.generate_outlook
 ```
 
-- **Model:** `gemini-2.5-flash` (default) or `claude-sonnet-4-5` (if `ANTHROPIC_API_KEY` set)
+- **Model:** `AGENT_PROVIDER` / `AGENT_MODEL` from `.env`; defaults `claude-sonnet-5-5` (Anthropic) or `gemini-2.5-flash` (Gemini). Sonnet 5.5 runs without `temperature` (the API rejects non-default values) and with `max_tokens` 16000 because adaptive thinking shares the budget
 - **Speed:** 5-10 seconds
-- **Cost:** ~$0.01 per run (Gemini) or ~$0.50 per run (Claude API)
+- **Cost:** low per run; check the provider console
 - **Use when:** Normal market day, routine updates, running unattended
 
 Template fallback if API unavailable: `python -m jobs.generate_outlook --template`
 
-#### Manual (Cursor skill - 20% of days)
+#### Manual (coding-agent skill — current operating mode)
 
-In Cursor Chat: `/generate-outlook-manual`
+Cursor or Claude Code: `/generate-outlook-manual`. As of 2026-10-29 the operator runs this each morning and afternoon to iterate on the brief; the SDK writer keys are intentionally left unset/invalid.
 
-- **Model:** `claude-sonnet-4` (via Cursor subscription)
+- **Model:** whatever coding agent runs the skill; stamped as `manual/<agent-model>`
 - **Speed:** 15-30 seconds (with streaming)
-- **Cost:** Included in Cursor subscription
+- **Cost:** included in the coding-agent subscription
 - **Use when:**
   - High-severity anomalies (>0.7 severity)
   - Regime classification changed
@@ -288,15 +300,17 @@ Both write to `outlook_report` table. UI displays latest for the date.
 | `jobs.seed_tape` | `instrument`, `universe`, `universe_member` | — |
 | `jobs.ingest_yahoo` | `bar_daily`, `quote_latest` | `--universe tape\|valuation\|watchlist`, `--tickers A,B`, `--resume` |
 | `jobs.ingest_fred` | `macro_series`, `macro_observation` | `--series DGS10,VIXCLS` |
-| `jobs.ingest_polymarket` | `odds_snapshot` | `--slugs slug-a,slug-b` |
+| `jobs.compute_regime` | `regime_snapshot` | `--as-of YYYY-MM-DD` |
+| `jobs.ingest_polymarket` | `odds_snapshot` | `--slots front_fomc,core_cpi_yoy`, `--slugs slug-a,slug-b` |
 | `jobs.compute_dynamics` | `rrg_point`, `return_stats` | — |
 | `jobs.ingest_news` | `news_item` | `--categories macro,fed` |
 | `jobs.ingest_fed_rss` | `policy_item` | `--kinds speech,statement` |
 | `jobs.ingest_calendar` | `event_item` | `--skip-finnhub` |
 | `jobs.build_pack` | `evidence_pack` | `--as-of YYYY-MM-DD` |
 | `jobs.generate_outlook` | `outlook_report` | `--template`, `--as-of`, `--provider`, `--model` |
-| `jobs.ingest_sec` | valuation membership, `metric_ttm` | `--refresh-zip`, `--zip PATH`, `--tickers`, `--limit` |
+| `jobs.ingest_sec` | valuation membership, `metric_ttm`, `metric_fy` | `--refresh-zip`, `--zip PATH`, `--tickers`, `--limit`, `--fy-only` |
 | `jobs.compute_valuation` | `valuation_daily` | — |
+| `jobs.compute_quant` | `quant_score` (gem flag / ratios) | — |
 | `jobs.compute_scores` | `opportunity_score` | — |
 | `jobs.generate_memos` | `opportunity_memo` | `--template`, `--provider`, `--model` |
 | `jobs.ingest_intraday` | `bar_intraday` (5m) | `--tickers`, `--resume` |
@@ -308,9 +322,9 @@ Catalogs you may edit without code:
 
 | File | Used by |
 |------|---------|
-| `config/universes.yaml` | seed, Yahoo universes, valuation floor |
+| `config/universes.yaml` | seed, Yahoo universes, valuation floor, gems thresholds |
 | `config/fred_series.yaml` | FRED ingest + Live insight templates + Outlook pack views |
-| `config/polymarket_slugs.yaml` | odds (edit when a contract expires) |
+| `config/polymarket_slugs.yaml` | odds slots + match rules (ingest rotates Gamma slugs) |
 | `config/news_queries.yaml` | news ingest |
 | `config/catalysts.yaml` | FOMC / CPI / PCE / NFP / GDP / JOLTS / speeches / minutes / Beige Book / ISM / Treasury / CBs / elections (hand-maintained) |
 
@@ -344,13 +358,14 @@ Dumps are gitignored under `data/`. Restore needs `docker compose up -d db`.
 
 | Check | Expect |
 |-------|--------|
-| `GET /health` | Postgres ok; latest `job_run` rows `ok` |
+| `GET /health` | Postgres ok; latest `job_run` rows `ok`; `metric_fy` / `quant_score` counts after those jobs |
 | Header status dot | Tooltip matches those jobs |
 | Live | SPY/XLK quotes, 10Y from FRED, odds present |
 | Outlook sources table | Same vendors / as_of as `/health` |
 | Dynamics | Quadrants after `compute_dynamics` |
 | Valuation | “N of M with a comparable multiple” is a real count |
-| Opportunities | Rank #1 explainable from SQL without the memo |
+| Opportunities | Rank #1 explainable from EV/EBITDA, 5y %ile, FCF yield, ND/EBITDA, EBITDA 1y, trap — without the memo and without F/Z. Accrual badge is yes/no/— |
+| Quant | `GET /health` `metric_fy` / `quant_score` > 0 after `ingest_sec --fy-only` and `compute_quant`. Do not check F-score in the UI |
 | Stale badges | Show when the backing job is old or missing |
 
 Yahoo mid-job kill: re-run with `--resume`; row counts in `bar_daily` must not grow as duplicates (same ticker+date).

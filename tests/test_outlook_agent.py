@@ -49,9 +49,15 @@ def _cited_brief() -> OutlookBrief:
         market_md="^GSPC 5600.0 (-0.12%). Risk-On 0.4. XLK leading.",
         near_term_md="FOMC decision + SEP on 2026-09-16.",
         tldr="Market consolidating ahead of FOMC decision.",
-        what_happened="Tape steady with DGS10 at 4.68%.",
-        current_positioning="Rates positioning neutral ahead of FOMC.",
-        drivers="FOMC decision and SEP on 2026-09-16.",
+        what_happened=(
+            "DGS10 led with a w1_bp of 6.0 to 4.68%, then ^GSPC followed at 5600.0 (-0.12%) "
+            "while XLK stayed leading on the RRG."
+        ),
+        current_positioning="10Y at 4.68% with curve_2s10s 0.12 ahead of the FOMC.",
+        drivers=(
+            "Printed: CPIAUCSL yoy_pct 2.7 and ICSA weekly print_change -4.0. "
+            "Next: FOMC decision + SEP on 2026-09-16."
+        ),
         invalidation="Break below support invalidates consolidation.",
         macro_deep="DGS10 4.68%. CPIAUCSL yoy_pct 2.7%. ICSA weekly print_change -4.0.",
         market_deep="^GSPC 5600.0 (-0.12%). Risk-On 0.4. XLK leading.",
@@ -130,7 +136,8 @@ def test_narrate_keeps_cited_agent_output() -> None:
     assert written.status == "ok"
     assert written.model == "gemini/gemini-2.5-flash"
     assert written.prompt_version == PROMPT_VERSION
-    assert PROMPT_VERSION == "outlook-v9"
+    assert PROMPT_VERSION == "outlook-v12"
+    assert "## TL;DR" in written.body_md
     assert "## Abstract" in written.body_md
     assert written.body_json["abstract"]
 
@@ -144,15 +151,8 @@ def test_narrate_keeps_implied_yes_percent() -> None:
         model = "gemini-2.5-flash"
 
         def complete(self, *, system: str, user: str) -> OutlookBrief:
-            return OutlookBrief(
-                headline="Tape",
-                abstract="DGS10 4.68. CPIAUCSL yoy_pct 2.7. ICSA weekly print_change -4.0.",
-                conclusions=["CPIAUCSL yoy_pct 2.7."],
-                expect="unavailable",
-                live_md="DGS10 4.68. CPIAUCSL yoy_pct 2.7.",
-                macro_md="DGS10 4.68. CPIAUCSL yoy_pct 2.7. ICSA weekly print_change -4.0.",
-                market_md="^GSPC 5600.0 (-0.12%). Cuts implied_yes 85.25%.",
-                near_term_md="unavailable",
+            return _cited_brief().model_copy(
+                update={"market_deep": "^GSPC 5600.0 (-0.12%). Cuts implied_yes 85.25%."}
             )
 
     written = narrate(pack, client=_Client())
@@ -165,18 +165,15 @@ def test_narrate_drops_uncited_agent_output(caplog: pytest.LogCaptureFixture) ->
 
     class _Client:
         provider = "anthropic"
-        model = "claude-sonnet-4-5"
+        model = "claude-sonnet-5-5"
 
         def complete(self, *, system: str, user: str) -> OutlookBrief:
-            return OutlookBrief(
-                headline="Tape",
-                abstract="Buy TSLA into 99.9%.",
-                conclusions=["Buy TSLA into 99.9%."],
-                expect="unavailable",
-                live_md="Buy TSLA into 99.9%.",
-                macro_md="Buy TSLA into 99.9%.",
-                market_md="unavailable",
-                near_term_md="unavailable",
+            return _cited_brief().model_copy(
+                update={
+                    "abstract": "Buy TSLA into 99.9%.",
+                    "live_md": "Buy TSLA into 99.9%.",
+                    "macro_deep": "Buy TSLA into 99.9%.",
+                }
             )
 
     with caplog.at_level("WARNING"):
@@ -261,11 +258,55 @@ def test_make_client_returns_none_without_keys() -> None:
 
 
 def test_brief_from_text_strips_fences() -> None:
-    brief = brief_from_text(
-        '```json\n{"headline": "Tape", "abstract": "^GSPC only.", '
-        '"conclusions": ["^GSPC only."], "expect": "unavailable", '
-        '"live_md": "^GSPC only.", "macro_md": "^GSPC only.", "market_md": "unavailable", '
-        '"near_term_md": "unavailable"}\n```'
+    expected = _cited_brief()
+    brief = brief_from_text(f"```json\n{expected.model_dump_json()}\n```")
+    assert brief == expected
+
+
+def test_template_fallback_skips_prose_heuristics(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "agent.citations.validate_brief_fields", lambda _brief: ["what_happened:too_short"]
     )
-    assert brief.headline == "Tape"
-    assert brief.abstract == "^GSPC only."
+    written = narrate(_pack(), client=None)
+    assert written.status == "fallback"
+
+
+def _anthropic_agent(response: object, calls: list[dict]) -> object:
+    from agent.providers import AnthropicAgent
+
+    class _Messages:
+        def parse(self, **kwargs: object) -> object:
+            calls.append(kwargs)
+            return response
+
+    agent = AnthropicAgent.__new__(AnthropicAgent)
+    agent.model = "claude-sonnet-5-5"
+    agent._client = type("C", (), {"messages": _Messages()})()
+    return agent
+
+
+def test_anthropic_default_is_sonnet_5_5_without_temperature() -> None:
+    from types import SimpleNamespace
+
+    from agent.providers import DEFAULT_MODELS
+
+    assert DEFAULT_MODELS["anthropic"] == "claude-sonnet-5-5"
+    calls: list[dict] = []
+    brief = _cited_brief()
+    agent = _anthropic_agent(SimpleNamespace(stop_reason="end_turn", parsed_output=brief), calls)
+    assert agent.complete(system="s", user="u") == brief
+    assert "temperature" not in calls[0]
+    assert calls[0]["max_tokens"] >= 16000
+
+
+def test_anthropic_refusal_falls_back() -> None:
+    from types import SimpleNamespace
+
+    from agent.errors import AgentError
+
+    refusal = SimpleNamespace(
+        stop_reason="refusal", stop_details=SimpleNamespace(category="cyber"), parsed_output=None
+    )
+    agent = _anthropic_agent(refusal, [])
+    with pytest.raises(AgentError, match="refusal"):
+        agent.complete(system="s", user="u")

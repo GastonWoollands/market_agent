@@ -1,4 +1,4 @@
-.PHONY: db migrate seed yahoo yahoo-watch fred poly dynamics regime news fed-rss calendar pack outlook outlook-manual sec yahoo-val valuation scores memos intraday backfill dump restore api web test
+.PHONY: db migrate seed yahoo yahoo-watch fred poly dynamics regime news fed-rss calendar pack outlook outlook-manual sec yahoo-val valuation quant scores memos intraday backfill dump restore api web test
 
 db:
 	docker compose up -d db
@@ -59,6 +59,9 @@ yahoo-val:
 
 valuation:
 	.venv/bin/python -m jobs.compute_valuation
+
+quant:
+	.venv/bin/python -m jobs.compute_quant
 
 scores:
 	.venv/bin/python -m jobs.compute_scores

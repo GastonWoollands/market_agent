@@ -70,7 +70,8 @@ def render_markdown(brief: OutlookBrief) -> str:
             prior_str = item.prior if item.prior else "—"
             source_str = item.source if item.source else "—"
             calendar_rows.append(
-                f"| {date_str} | {time_str} | {item.event} | {cons_str} | {prior_str} | {source_str} |"
+                f"| {date_str} | {time_str} | {item.event} | {cons_str} | {prior_str} "
+                f"| {source_str} |"
             )
         calendar_section = "\n".join(calendar_rows)
     
@@ -192,7 +193,7 @@ def render_markdown(brief: OutlookBrief) -> str:
 
 
 def template_brief(pack: dict[str, Any]) -> OutlookBrief:
-    from agent.brief import WatchScenario, CalendarItem
+    from agent.brief import CalendarItem, WatchScenario
     
     as_of = pack.get("as_of") or "unavailable"
     facts = pack.get("facts") if isinstance(pack.get("facts"), dict) else {}
@@ -246,9 +247,14 @@ def template_brief(pack: dict[str, Any]) -> OutlookBrief:
     if outliers and isinstance(outliers, list) and outliers:
         first_outlier = outliers[0]
         if isinstance(first_outlier, dict):
-            what_happened += f"Outlier: {first_outlier.get('id')} {first_outlier.get('change')} (z={first_outlier.get('z')}). "
+            what_happened += (
+                f"Outlier: {first_outlier.get('id')} {first_outlier.get('change')} "
+                f"(z={first_outlier.get('z')}). "
+            )
     if what_happened == "Template fallback: ":
-        what_happened += f"{header} {risk}. Detailed cross-asset mechanism unavailable in template mode."
+        what_happened += (
+            f"{header} {risk}. Detailed cross-asset mechanism unavailable in template mode."
+        )
     
     # Current positioning
     positioning = f"Current levels: {curve} {real} {fed2y}"
@@ -261,7 +267,10 @@ def template_brief(pack: dict[str, Any]) -> OutlookBrief:
         positioning = "Current positioning unavailable in template mode."
     
     # Drivers
-    drivers = f"Printed: {printed or 'None'}. Tape: {tape or 'No significant moves'}. Next: {nxt or 'No scheduled tests'}."
+    drivers = (
+        f"Printed: {printed or 'None'}. Tape: {tape or 'No significant moves'}. "
+        f"Next: {nxt or 'No scheduled tests'}."
+    )
     
     # Watch scenarios (template - just list next items)
     watch_scenarios: list[WatchScenario] = []
@@ -283,7 +292,9 @@ def template_brief(pack: dict[str, Any]) -> OutlookBrief:
                     break
     
     # Invalidation
-    invalidation_text = judgment.get("invalidation") or "Invalidation triggers unavailable in template mode."
+    invalidation_text = (
+        judgment.get("invalidation") or "Invalidation triggers unavailable in template mode."
+    )
     
     # Calendar
     calendar_items: list[CalendarItem] = []
@@ -516,13 +527,11 @@ def narrate(pack: dict[str, Any], *, client: AgentClient | None) -> WrittenBrief
     text = render_markdown(brief)
     brief_json = brief.model_dump()
     
-    # Run all validation checks
+    # Prose-quality heuristics judge LLM output; the template only has to cite the pack.
     from agent.citations import validate_brief_fields
-    issues = (
-        citation_issues(pack, text) + 
-        coverage_issues(pack, text) + 
-        validate_brief_fields(brief_json)
-    )
+    issues = citation_issues(pack, text) + coverage_issues(pack, text)
+    if status == "ok":
+        issues += validate_brief_fields(brief_json)
     
     if issues:
         log.warning("validation check failed: %s\n%s", ", ".join(issues), text)

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 
+from analytics.desk import fcf_yield
 from analytics.returns import LOOKBACK_3M, period_return
 from analytics.scores import ScoreInput, score_universe
 from jobs.runtime import record_job
@@ -36,6 +37,7 @@ class RowIn:
     as_of: date
     ret_3m: float | None
     fcf_margin: float | None
+    fcf_yield: float | None
     net_debt_to_ebitda: float | None
 
 
@@ -86,6 +88,7 @@ def compute() -> dict[str, object]:
                     as_of=value.as_of,
                     ret_3m=period_return(prices, LOOKBACK_3M),
                     fcf_margin=_margin(fcf, revenue),
+                    fcf_yield=fcf_yield(metric.fcf, value.ev),
                     net_debt_to_ebitda=_leverage(net_debt, ebitda),
                 )
             )
@@ -100,6 +103,7 @@ def compute() -> dict[str, object]:
                 pctile_5y=item.pctile_5y,
                 ebitda_growth_1y=item.ebitda_growth_1y,
                 fcf_margin=item.fcf_margin,
+                fcf_yield=item.fcf_yield,
                 net_debt_to_ebitda=item.net_debt_to_ebitda,
                 ret_3m=item.ret_3m,
             )

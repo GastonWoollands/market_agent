@@ -60,6 +60,7 @@ class OddsPoint(BaseModel):
     liquidity: Decimal | None = None
     as_of: datetime
     raw: dict | None = None
+    slot: str = ""
 
 
 class NewsHeadline(BaseModel):
@@ -117,4 +118,27 @@ class MetricTtm(BaseModel):
     ebitda: Decimal | None = None
     fcf: Decimal | None = None
     net_debt: Decimal | None = None
+    shares: Decimal | None = None
+
+
+class MetricFy(BaseModel):
+    """One fiscal-year snapshot from companyfacts. Not a fact warehouse."""
+
+    model_config = ConfigDict(frozen=True)
+
+    cik: str
+    as_of: date
+    fiscal_year: int
+    revenue: Decimal | None = None
+    net_income: Decimal | None = None
+    cfo: Decimal | None = None
+    gross_profit: Decimal | None = None
+    ebit: Decimal | None = None
+    total_assets: Decimal | None = None
+    current_assets: Decimal | None = None
+    current_liabilities: Decimal | None = None
+    long_term_debt: Decimal | None = None
+    total_liabilities: Decimal | None = None
+    retained_earnings: Decimal | None = None
+    equity: Decimal | None = None
     shares: Decimal | None = None

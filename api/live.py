@@ -462,12 +462,12 @@ def risk_on_from_store(
 def _odds_items(rows: list[OddsSnapshot], catalog: PolymarketFile | None) -> list[LiveOdds]:
     if catalog is None:
         return []
-    by_slug = {row.slug: row for row in rows}
+    by_slot = {row.slot: row for row in rows}
     items: list[LiveOdds] = []
     for event in catalog.events:
         if not event.show_on_live:
             continue
-        row = by_slug.get(event.slug)
+        row = by_slot.get(event.slot)
         if row is None:
             continue
         raw = row.raw or {}
@@ -489,7 +489,8 @@ def _odds_items(rows: list[OddsSnapshot], catalog: PolymarketFile | None) -> lis
         outcomes.sort(key=lambda item: item.implied_yes, reverse=True)
         items.append(
             LiveOdds(
-                slug=event.slug,
+                slot=event.slot,
+                slug=row.slug,
                 label=event.label,
                 category=event.category,
                 question=row.question,

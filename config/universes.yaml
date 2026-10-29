@@ -74,3 +74,14 @@ watchlist:
     - { ticker: MSFT, yahoo: MSFT, name: Microsoft }
     - { ticker: AMZN, yahoo: AMZN, name: Amazon }
     - { ticker: SPY, yahoo: SPY, name: SPDR S&P 500 }
+
+# Contracted universe D. Membership is not seeded here; compute_quant may flag
+# valuation names that already pass these rules. Yahoo gems ingest is a later phase.
+gems:
+  description: Small/mid names with usable XBRL. Not seed-stage. Membership not built yet.
+  min_market_cap_usd: 300000000
+  max_market_cap_usd: 2000000000
+  min_revenue_usd: 50000000
+  min_revenue_growth_yoy: 0.15
+  min_fcf_yield: 0.04
+  max_debt_to_equity: 0.5

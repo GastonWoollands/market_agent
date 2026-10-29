@@ -58,7 +58,8 @@ def test_polymarket_yaml_has_live_fed_inflation_recession() -> None:
     live = [item for item in catalog.events if item.show_on_live]
     categories = {item.category for item in live}
     assert categories >= {"rates", "inflation", "growth"}
-    assert any("recession" in item.slug for item in live)
+    assert any(item.slot == "recession" for item in live)
+    assert all(item.query and item.slug_prefix for item in catalog.events)
     assert catalog.search_hints["rates"]
 
 
@@ -66,3 +67,13 @@ def test_valuation_yaml_has_billion_floor() -> None:
     catalog = load_universes()
     assert catalog.valuation.min_revenue_usd == 1_000_000_000
     assert {"NYSE", "Nasdaq"} <= set(catalog.valuation.exchanges)
+
+
+def test_gems_yaml_thresholds_are_contracted() -> None:
+    catalog = load_universes()
+    assert catalog.gems.min_market_cap_usd == 300_000_000
+    assert catalog.gems.max_market_cap_usd == 2_000_000_000
+    assert catalog.gems.min_revenue_usd == 50_000_000
+    assert catalog.gems.min_revenue_growth_yoy == 0.15
+    assert catalog.gems.min_fcf_yield == 0.04
+    assert catalog.gems.max_debt_to_equity == 0.5

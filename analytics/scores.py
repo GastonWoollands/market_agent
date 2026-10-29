@@ -6,11 +6,12 @@ rescaled universe).
 
 Weights (sum to 1.0 before risk):
   cheap    0.30  1 − own 5y EV/EBITDA percentile
-  quality  0.25  cross-section rank of FCF margin
+  quality  0.25  cross-section rank of FCF margin and FCF yield
   change   0.20  cross-section rank of 1y EBITDA growth
   setup    0.15  cross-section rank of 63-session return
-  insider  0.10  0.5 (unavailable)
+  insider  0.10  0.5 (unavailable; omitted from the UI until Form 4)
 Risk is subtracted: cheap+falling EBITDA, or high net-debt/EBITDA.
+The grid shows named desk metrics; these sleeves are the sort key only.
 """
 
 from __future__ import annotations
@@ -42,6 +43,7 @@ class ScoreInput:
     fcf_margin: float | None
     net_debt_to_ebitda: float | None
     ret_3m: float | None
+    fcf_yield: float | None = None
 
 
 @dataclass(frozen=True)
@@ -66,7 +68,8 @@ def unit_ranks(values: Sequence[float | None]) -> list[float | None]:
 
 
 def score_universe(rows: Sequence[ScoreInput]) -> list[ScoredName]:
-    quality = _fill(unit_ranks([row.fcf_margin for row in rows]))
+    quality_m = unit_ranks([row.fcf_margin for row in rows])
+    quality_y = unit_ranks([row.fcf_yield for row in rows])
     change = _fill(unit_ranks([row.ebitda_growth_1y for row in rows]))
     setup = _fill(unit_ranks([row.ret_3m for row in rows]))
     scored: list[ScoredName] = []
@@ -74,9 +77,10 @@ def score_universe(rows: Sequence[ScoreInput]) -> list[ScoredName]:
         cheap = _cheap(row.pctile_5y)
         trap = cheap >= CHEAP_TRAP and row.ebitda_growth_1y is not None and row.ebitda_growth_1y < 0
         risk = _risk(trap, row.net_debt_to_ebitda)
+        quality = _blend(quality_m[index], quality_y[index])
         total = (
             WEIGHTS["cheap"] * cheap
-            + WEIGHTS["quality"] * quality[index]
+            + WEIGHTS["quality"] * quality
             + WEIGHTS["change"] * change[index]
             + WEIGHTS["setup"] * setup[index]
             + WEIGHTS["insider"] * INSIDER_NEUTRAL
@@ -88,7 +92,7 @@ def score_universe(rows: Sequence[ScoreInput]) -> list[ScoredName]:
                 rank=0,
                 total=total,
                 cheap=cheap,
-                quality=quality[index],
+                quality=quality,
                 change=change[index],
                 setup=setup[index],
                 insider=INSIDER_NEUTRAL,
@@ -130,3 +134,10 @@ def _risk(trap: bool, net_debt_to_ebitda: float | None) -> float:
 
 def _fill(values: Sequence[float | None]) -> list[float]:
     return [MISSING_NEUTRAL if item is None else item for item in values]
+
+
+def _blend(*values: float | None) -> float:
+    parts = [item for item in values if item is not None]
+    if not parts:
+        return MISSING_NEUTRAL
+    return sum(parts) / len(parts)

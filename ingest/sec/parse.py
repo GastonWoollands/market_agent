@@ -6,7 +6,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from ingest.sec.errors import SecParseError
-from store.canonical import MetricTtm, SecTicker
+from store.canonical import MetricFy, MetricTtm, SecTicker
 
 ALLOWED_EXCHANGES = {
     "NYSE": "NYSE",
@@ -60,6 +60,41 @@ WEIGHTED_SHARE_CONCEPTS = (
     ("us-gaap", "WeightedAverageNumberOfSharesOutstandingBasic"),
     ("us-gaap", "WeightedAverageNumberOfDilutedSharesOutstanding"),
 )
+NI_CONCEPTS = (
+    ("us-gaap", "NetIncomeLoss"),
+    ("us-gaap", "ProfitLoss"),
+    ("ifrs-full", "ProfitLoss"),
+)
+GROSS_PROFIT_CONCEPTS = (("us-gaap", "GrossProfit"), ("ifrs-full", "GrossProfit"))
+COGS_CONCEPTS = (
+    ("us-gaap", "CostOfGoodsAndServicesSold"),
+    ("us-gaap", "CostOfRevenue"),
+    ("us-gaap", "CostOfGoodsSold"),
+)
+ASSETS_CONCEPTS = (("us-gaap", "Assets"), ("ifrs-full", "Assets"))
+CURRENT_ASSETS_CONCEPTS = (("us-gaap", "AssetsCurrent"), ("ifrs-full", "CurrentAssets"))
+CURRENT_LIAB_CONCEPTS = (
+    ("us-gaap", "LiabilitiesCurrent"),
+    ("ifrs-full", "CurrentLiabilities"),
+)
+LTD_CONCEPTS = (
+    ("us-gaap", "LongTermDebtNoncurrent"),
+    ("us-gaap", "LongTermDebt"),
+    ("us-gaap", "LongTermDebtAndCapitalLeaseObligations"),
+)
+LIABILITIES_CONCEPTS = (("us-gaap", "Liabilities"), ("ifrs-full", "Liabilities"))
+RETAINED_CONCEPTS = (
+    ("us-gaap", "RetainedEarningsAccumulatedDeficit"),
+    ("us-gaap", "RetainedEarnings"),
+)
+EQUITY_CONCEPTS = (
+    ("us-gaap", "StockholdersEquity"),
+    ("us-gaap", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"),
+    ("ifrs-full", "Equity"),
+)
+ANNUAL_DAYS = (320, 400)
+FY_YEARS = 6
+INSTANT_SLACK_DAYS = 45
 TTM_MAX_AGE_DAYS = 548
 
 
@@ -167,6 +202,159 @@ def ttm_history_from_facts(
         out.append(metric)
     out.sort(key=lambda item: item.as_of)
     return out
+
+
+def fy_history_from_facts(
+    payload: dict[str, Any],
+    *,
+    today: date | None = None,
+    years: int = FY_YEARS,
+) -> list[MetricFy]:
+    """Annual 10-K snapshots for Piotroski / Altman. Newest years last."""
+    facts = payload.get("facts")
+    if not isinstance(facts, dict):
+        return []
+    raw_cik = payload.get("cik")
+    if raw_cik is None:
+        return []
+    cik = pad_cik(raw_cik)
+    start = (today or date.today()) - timedelta(days=years * 365 + 30)
+    ends = _annual_ends(
+        facts,
+        REVENUE_CONCEPTS + NI_CONCEPTS + ASSETS_CONCEPTS,
+    )
+    out: list[MetricFy] = []
+    seen: set[date] = set()
+    for end in ends:
+        if end < start or end in seen:
+            continue
+        snapshot = _fy_at(facts, cik, end)
+        if snapshot is None:
+            continue
+        seen.add(end)
+        out.append(snapshot)
+    out.sort(key=lambda item: item.as_of)
+    return out
+
+
+def _fy_at(facts: dict[str, Any], cik: str, as_of: date) -> MetricFy | None:
+    revenue = _annual_flow(facts, REVENUE_CONCEPTS, as_of)
+    net_income = _annual_flow(facts, NI_CONCEPTS, as_of)
+    cfo = _annual_flow(facts, CFO_CONCEPTS, as_of)
+    ebit = _annual_flow(facts, EBIT_CONCEPTS, as_of)
+    gross_profit = _annual_flow(facts, GROSS_PROFIT_CONCEPTS, as_of)
+    if gross_profit is None and revenue is not None:
+        cogs = _annual_flow(facts, COGS_CONCEPTS, as_of)
+        if cogs is not None:
+            gross_profit = revenue - cogs
+    total_assets = _instant_on(facts, ASSETS_CONCEPTS, as_of)
+    current_assets = _instant_on(facts, CURRENT_ASSETS_CONCEPTS, as_of)
+    current_liabilities = _instant_on(facts, CURRENT_LIAB_CONCEPTS, as_of)
+    long_term_debt = _instant_on(facts, LTD_CONCEPTS, as_of)
+    total_liabilities = _instant_on(facts, LIABILITIES_CONCEPTS, as_of)
+    retained_earnings = _instant_on(facts, RETAINED_CONCEPTS, as_of)
+    equity = _instant_on(facts, EQUITY_CONCEPTS, as_of)
+    shares = _latest_shares(facts, as_of)
+    if all(
+        item is None
+        for item in (
+            revenue,
+            net_income,
+            cfo,
+            gross_profit,
+            ebit,
+            total_assets,
+            current_assets,
+            current_liabilities,
+            long_term_debt,
+            total_liabilities,
+            retained_earnings,
+            equity,
+        )
+    ):
+        return None
+    return MetricFy(
+        cik=cik,
+        as_of=as_of,
+        fiscal_year=as_of.year,
+        revenue=revenue,
+        net_income=net_income,
+        cfo=cfo,
+        gross_profit=gross_profit,
+        ebit=ebit,
+        total_assets=total_assets,
+        current_assets=current_assets,
+        current_liabilities=current_liabilities,
+        long_term_debt=long_term_debt,
+        total_liabilities=total_liabilities,
+        retained_earnings=retained_earnings,
+        equity=equity,
+        shares=shares,
+    )
+
+
+def _annual_ends(
+    facts: dict[str, Any], concepts: tuple[tuple[str, str], ...]
+) -> list[date]:
+    ends: set[date] = set()
+    lo, hi = ANNUAL_DAYS
+    for taxonomy, concept in concepts:
+        for days, end, _value in _duration_points(facts, taxonomy, concept):
+            if lo <= days <= hi:
+                ends.add(end)
+    return sorted(ends)
+
+
+def _annual_flow(
+    facts: dict[str, Any],
+    concepts: tuple[tuple[str, str], ...],
+    as_of: date,
+) -> Decimal | None:
+    lo, hi = ANNUAL_DAYS
+    best: tuple[int, Decimal] | None = None
+    for taxonomy, concept in concepts:
+        for days, end, value in _duration_points(facts, taxonomy, concept):
+            if not (lo <= days <= hi):
+                continue
+            slack = abs((end - as_of).days)
+            if slack > INSTANT_SLACK_DAYS:
+                continue
+            if best is None or slack < best[0]:
+                best = (slack, value)
+    return None if best is None else best[1]
+
+
+def _instant_on(
+    facts: dict[str, Any],
+    concepts: tuple[tuple[str, str], ...],
+    as_of: date,
+    *,
+    units: tuple[str, ...] = ("USD",),
+) -> Decimal | None:
+    """First matching concept wins (LTD prefers Noncurrent over the broader total)."""
+    for taxonomy, concept in concepts:
+        exact: Decimal | None = None
+        near: tuple[int, Decimal] | None = None
+        for row in _unit_rows(facts, taxonomy, concept, units):
+            if row.get("start"):
+                continue
+            end = _as_date(row.get("end"))
+            value = _as_decimal(row.get("val"))
+            if end is None or value is None:
+                continue
+            if end == as_of:
+                exact = value
+                continue
+            slack = (as_of - end).days
+            if slack < 0 or slack > INSTANT_SLACK_DAYS:
+                continue
+            if near is None or slack < near[0]:
+                near = (slack, value)
+        if exact is not None:
+            return exact
+        if near is not None:
+            return near[1]
+    return None
 
 
 def usable_ttm(metric: MetricTtm) -> bool:

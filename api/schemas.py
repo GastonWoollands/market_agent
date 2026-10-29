@@ -30,9 +30,11 @@ class HealthResponse(BaseModel):
     outlook_reports: int = 0
     valuation_instruments: int = 0
     metric_ttm: int = 0
+    metric_fy: int = 0
     valuation_daily: int = 0
     opportunity_scores: int = 0
     opportunity_memos: int = 0
+    quant_score: int = 0
     intraday_bars: int = 0
     jobs: list[JobStatus] = []
 
@@ -104,6 +106,7 @@ class LiveOddsOutcome(BaseModel):
 
 
 class LiveOdds(BaseModel):
+    slot: str
     slug: str
     label: str
     category: str
@@ -315,6 +318,7 @@ class OutlookOddsOutcome(BaseModel):
 
 
 class OutlookOdds(BaseModel):
+    slot: str | None = None
     slug: str
     label: str | None = None
     category: str | None = None
@@ -470,6 +474,9 @@ class ValuationMember(BaseModel):
     pctile_5y: float | None = None
     ebitda_growth_1y: float | None = None
     multiple_change_1y: float | None = None
+    fcf_yield: float | None = None
+    nd_ebitda: float | None = None
+    accrual: bool | None = None
     comparable: bool = False
 
 
@@ -513,6 +520,9 @@ class OpportunityMember(BaseModel):
     ev_ebitda: float | None = None
     ebitda_growth_1y: float | None = None
     fcf_margin: float | None = None
+    fcf_yield: float | None = None
+    nd_ebitda: float | None = None
+    accrual: bool | None = None
     ret_3m: float | None = None
     memo: OpportunityMemo | None = None
 

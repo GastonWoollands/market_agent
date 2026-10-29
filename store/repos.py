@@ -18,9 +18,8 @@ from store.canonical import (
     PolicyDoc,
     QuoteSnapshot,
 )
-from store.canonical import (
-    MetricTtm as TtmSnapshot,
-)
+from store.canonical import MetricFy as FySnapshot
+from store.canonical import MetricTtm as TtmSnapshot
 from store.catalog import CatalogInstrument, FredSeriesItem
 from store.models import (
     BarDaily,
@@ -31,6 +30,7 @@ from store.models import (
     JobRun,
     MacroObservation,
     MacroSeries,
+    MetricFy,
     MetricTtm,
     NewsItem,
     OddsSnapshot,
@@ -38,6 +38,7 @@ from store.models import (
     OpportunityScore,
     OutlookReport,
     PolicyItem,
+    QuantScore,
     QuoteLatest,
     RegimeSnapshot,
     ReturnStats,
@@ -183,8 +184,7 @@ def latest_jobs(session: Session) -> list[JobRun]:
         select(JobRun)
         .join(
             latest,
-            (JobRun.job_name == latest.c.job_name)
-            & (JobRun.started_at == latest.c.started_at),
+            (JobRun.job_name == latest.c.job_name) & (JobRun.started_at == latest.c.started_at),
         )
         .order_by(JobRun.job_name)
     )
@@ -527,14 +527,12 @@ def live_macro_rows(session: Session) -> list[LiveMacroRow]:
     ).subquery()
     last_obs = select(ranked).where(ranked.c.rn == 1).subquery()
     prev_obs = select(ranked).where(ranked.c.rn == 2).subquery()
-    stmt = (
-        select(
-            last_obs.c.series_id,
-            last_obs.c.value,
-            prev_obs.c.value,
-            last_obs.c.date,
-        ).outerjoin(prev_obs, prev_obs.c.series_id == last_obs.c.series_id)
-    )
+    stmt = select(
+        last_obs.c.series_id,
+        last_obs.c.value,
+        prev_obs.c.value,
+        last_obs.c.date,
+    ).outerjoin(prev_obs, prev_obs.c.series_id == last_obs.c.series_id)
     return [
         LiveMacroRow(
             series_id=series_id,
@@ -603,9 +601,12 @@ def closes_for_tickers(
 
 
 def upsert_odds(session: Session, point: OddsPoint) -> None:
+    if not point.slot:
+        raise ValueError("odds slot is required")
     stmt = (
         insert(OddsSnapshot)
         .values(
+            slot=point.slot,
             slug=point.slug,
             as_of=point.as_of,
             question=point.question,
@@ -614,8 +615,9 @@ def upsert_odds(session: Session, point: OddsPoint) -> None:
             raw=point.raw,
         )
         .on_conflict_do_update(
-            index_elements=[OddsSnapshot.slug],
+            index_elements=[OddsSnapshot.slot],
             set_={
+                "slug": point.slug,
                 "as_of": point.as_of,
                 "question": point.question,
                 "implied_yes": point.implied_yes,
@@ -628,7 +630,7 @@ def upsert_odds(session: Session, point: OddsPoint) -> None:
 
 
 def latest_odds(session: Session) -> list[OddsSnapshot]:
-    stmt = select(OddsSnapshot).order_by(OddsSnapshot.slug)
+    stmt = select(OddsSnapshot).order_by(OddsSnapshot.slot)
     return list(session.execute(stmt).scalars())
 
 
@@ -688,8 +690,7 @@ def latest_rrg_points(
         .join(RrgPoint, RrgPoint.instrument_id == Instrument.id)
         .join(
             latest,
-            (RrgPoint.instrument_id == latest.c.instrument_id)
-            & (RrgPoint.as_of == latest.c.as_of),
+            (RrgPoint.instrument_id == latest.c.instrument_id) & (RrgPoint.as_of == latest.c.as_of),
         )
         .order_by(Instrument.ticker)
     )
@@ -1001,6 +1002,63 @@ def upsert_metric_ttm(session: Session, instrument_id: int, item: TtmSnapshot) -
     session.execute(stmt)
 
 
+def upsert_metric_fy(session: Session, instrument_id: int, item: FySnapshot) -> None:
+    stmt = insert(MetricFy).values(
+        instrument_id=instrument_id,
+        as_of=item.as_of,
+        fiscal_year=item.fiscal_year,
+        revenue=item.revenue,
+        net_income=item.net_income,
+        cfo=item.cfo,
+        gross_profit=item.gross_profit,
+        ebit=item.ebit,
+        total_assets=item.total_assets,
+        current_assets=item.current_assets,
+        current_liabilities=item.current_liabilities,
+        long_term_debt=item.long_term_debt,
+        total_liabilities=item.total_liabilities,
+        retained_earnings=item.retained_earnings,
+        equity=item.equity,
+        shares=item.shares,
+        source="sec",
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["instrument_id", "as_of"],
+        set_={
+            "fiscal_year": stmt.excluded.fiscal_year,
+            "revenue": stmt.excluded.revenue,
+            "net_income": stmt.excluded.net_income,
+            "cfo": stmt.excluded.cfo,
+            "gross_profit": stmt.excluded.gross_profit,
+            "ebit": stmt.excluded.ebit,
+            "total_assets": stmt.excluded.total_assets,
+            "current_assets": stmt.excluded.current_assets,
+            "current_liabilities": stmt.excluded.current_liabilities,
+            "long_term_debt": stmt.excluded.long_term_debt,
+            "total_liabilities": stmt.excluded.total_liabilities,
+            "retained_earnings": stmt.excluded.retained_earnings,
+            "equity": stmt.excluded.equity,
+            "shares": stmt.excluded.shares,
+            "source": stmt.excluded.source,
+        },
+    )
+    session.execute(stmt)
+
+
+def metric_fy_history(session: Session, instrument_ids: Sequence[int]) -> dict[int, list[MetricFy]]:
+    if not instrument_ids:
+        return {}
+    stmt = (
+        select(MetricFy)
+        .where(MetricFy.instrument_id.in_(list(instrument_ids)))
+        .order_by(MetricFy.instrument_id, MetricFy.as_of)
+    )
+    out: dict[int, list[MetricFy]] = {int(item): [] for item in instrument_ids}
+    for row in session.execute(stmt).scalars():
+        out.setdefault(row.instrument_id, []).append(row)
+    return out
+
+
 def latest_metric_ttm(
     session: Session, universe: str = "valuation"
 ) -> list[tuple[Instrument, MetricTtm]]:
@@ -1085,6 +1143,54 @@ def upsert_valuation_daily(session: Session, rows: Sequence[dict[str, object]]) 
     return len(rows)
 
 
+def latest_metric_ttm_map(
+    session: Session, instrument_ids: Sequence[int], as_of: date | None = None
+) -> dict[int, MetricTtm]:
+    if not instrument_ids:
+        return {}
+    filters = [MetricTtm.instrument_id.in_(list(instrument_ids))]
+    if as_of is not None:
+        filters.append(MetricTtm.as_of <= as_of)
+    ranked = (
+        select(
+            MetricTtm.instrument_id,
+            func.max(MetricTtm.as_of).label("as_of"),
+        )
+        .where(*filters)
+        .group_by(MetricTtm.instrument_id)
+        .subquery()
+    )
+    stmt = select(MetricTtm).join(
+        ranked,
+        (MetricTtm.instrument_id == ranked.c.instrument_id) & (MetricTtm.as_of == ranked.c.as_of),
+    )
+    return {int(row.instrument_id): row for row in session.execute(stmt).scalars()}
+
+
+def latest_metric_fy_map(
+    session: Session, instrument_ids: Sequence[int], as_of: date | None = None
+) -> dict[int, MetricFy]:
+    if not instrument_ids:
+        return {}
+    filters = [MetricFy.instrument_id.in_(list(instrument_ids))]
+    if as_of is not None:
+        filters.append(MetricFy.as_of <= as_of)
+    ranked = (
+        select(
+            MetricFy.instrument_id,
+            func.max(MetricFy.as_of).label("as_of"),
+        )
+        .where(*filters)
+        .group_by(MetricFy.instrument_id)
+        .subquery()
+    )
+    stmt = select(MetricFy).join(
+        ranked,
+        (MetricFy.instrument_id == ranked.c.instrument_id) & (MetricFy.as_of == ranked.c.as_of),
+    )
+    return {int(row.instrument_id): row for row in session.execute(stmt).scalars()}
+
+
 def latest_valuation_rows(
     session: Session, universe: str = "valuation"
 ) -> list[tuple[Instrument, MetricTtm, ValuationDaily]]:
@@ -1126,9 +1232,7 @@ def latest_valuation_rows(
     return list(session.execute(stmt).all())
 
 
-def comparable_valuation_counts(
-    session: Session, universe: str = "valuation"
-) -> tuple[int, int]:
+def comparable_valuation_counts(session: Session, universe: str = "valuation") -> tuple[int, int]:
     latest = (
         select(
             ValuationDaily.instrument_id,
@@ -1170,6 +1274,30 @@ def upsert_opportunity_scores(session: Session, rows: Sequence[dict[str, object]
             "trap": stmt.excluded.trap,
             "fcf_margin": stmt.excluded.fcf_margin,
             "ret_3m": stmt.excluded.ret_3m,
+        },
+    )
+    session.execute(stmt)
+    return len(rows)
+
+
+def upsert_quant_scores(session: Session, rows: Sequence[dict[str, object]]) -> int:
+    if not rows:
+        return 0
+    stmt = insert(QuantScore).values(list(rows))
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["instrument_id", "as_of"],
+        set_={
+            "fy_as_of": stmt.excluded.fy_as_of,
+            "f_score": stmt.excluded.f_score,
+            "z_score": stmt.excluded.z_score,
+            "z_inapplicable": stmt.excluded.z_inapplicable,
+            "market_cap": stmt.excluded.market_cap,
+            "revenue_growth_yoy": stmt.excluded.revenue_growth_yoy,
+            "fcf_yield": stmt.excluded.fcf_yield,
+            "debt_to_equity": stmt.excluded.debt_to_equity,
+            "is_gem_candidate": stmt.excluded.is_gem_candidate,
+            "f_tests": stmt.excluded.f_tests,
+            "z_components": stmt.excluded.z_components,
         },
     )
     session.execute(stmt)
