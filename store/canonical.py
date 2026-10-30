@@ -73,6 +73,7 @@ class NewsHeadline(BaseModel):
     published_at: datetime
     category: str
     query: str
+    summary: str | None = None
 
 
 class CalendarEvent(BaseModel):

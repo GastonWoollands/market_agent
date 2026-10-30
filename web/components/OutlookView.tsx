@@ -791,6 +791,9 @@ function NewsRow({ item, last }: { item: OutlookNews; last: boolean }) {
       )}
     >
       <p className="text-[13px] leading-5 text-slate-300">{item.title}</p>
+      {item.summary ? (
+        <p className="mt-1 text-[12px] leading-5 text-slate-500 line-clamp-3">{item.summary}</p>
+      ) : null}
       <p className="mt-1.5 text-[11px] text-slate-600">
         {item.publisher}
         <span className="mx-2 text-slate-800">·</span>

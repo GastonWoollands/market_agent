@@ -24,7 +24,7 @@ from store.models import EventItem, EvidencePack, NewsItem, OutlookReport
 from store.repos import (
     latest_evidence_pack,
     latest_jobs,
-    latest_news,
+    latest_news_by_bucket,
     latest_outlook_report,
     upcoming_events,
 )
@@ -32,7 +32,8 @@ from store.repos import (
 ET = ZoneInfo("America/New_York")
 STALE_AFTER = timedelta(days=2)
 NEWS_SINCE = timedelta(days=3)
-NEWS_LIMIT = 40
+NEWS_PER_BUCKET = 3
+NEWS_BUCKET_CAPS = {"wire": 6}
 
 
 def build_outlook(
@@ -93,6 +94,7 @@ def build_outlook(
                 published_at=item.published_at,
                 category=item.category,
                 url=item.url,
+                summary=item.summary,
             )
             for item in news
         ],
@@ -259,7 +261,12 @@ def outlook_from_store(
     return build_outlook(
         as_of=day,
         now=clock,
-        news=latest_news(session, since=clock - NEWS_SINCE, limit=NEWS_LIMIT),
+        news=latest_news_by_bucket(
+            session,
+            since=clock - NEWS_SINCE,
+            per_bucket=NEWS_PER_BUCKET,
+            bucket_caps=NEWS_BUCKET_CAPS,
+        ),
         events=upcoming_events(
             session,
             start=day - timedelta(days=EVENTS_LOOKBACK_DAYS),

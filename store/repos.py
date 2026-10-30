@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import case, delete, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -744,6 +744,7 @@ def upsert_news(session: Session, headlines: Sequence[NewsHeadline]) -> int:
             "published_at": item.published_at,
             "category": item.category,
             "query": item.query,
+            "summary": item.summary,
         }
         for item in headlines
     ]
@@ -757,22 +758,49 @@ def upsert_news(session: Session, headlines: Sequence[NewsHeadline]) -> int:
             "published_at": stmt.excluded.published_at,
             "category": stmt.excluded.category,
             "query": stmt.excluded.query,
+            "summary": func.coalesce(stmt.excluded.summary, NewsItem.summary),
         },
     )
     session.execute(stmt)
     return len(rows)
 
 
-def latest_news(
+def latest_news_by_bucket(
     session: Session,
     *,
-    since: datetime | None = None,
-    limit: int = 40,
+    since: datetime,
+    per_bucket: int,
+    bucket_caps: dict[str, int] | None = None,
 ) -> list[NewsItem]:
-    stmt = select(NewsItem)
-    if since is not None:
-        stmt = stmt.where(NewsItem.published_at >= since)
-    stmt = stmt.order_by(NewsItem.published_at.desc()).limit(limit)
+    """Newest rows per bucket. Bucket = category, or category + ticker for `company` rows.
+
+    One busy feed (Finnhub wire returns ~100 rows) cannot crowd the RSS buckets out.
+    """
+    caps = bucket_caps or {}
+    ticker = case((NewsItem.category == "company", NewsItem.query), else_="")
+    rank = (
+        func.row_number()
+        .over(
+            partition_by=(NewsItem.category, ticker),
+            order_by=NewsItem.published_at.desc(),
+        )
+        .label("rn")
+    )
+    ranked = (
+        select(NewsItem.guid, NewsItem.category, rank)
+        .where(NewsItem.published_at >= since)
+        .subquery()
+    )
+    cap = case(
+        *[(ranked.c.category == name, value) for name, value in caps.items()],
+        else_=per_bucket,
+    ) if caps else per_bucket
+    stmt = (
+        select(NewsItem)
+        .join(ranked, ranked.c.guid == NewsItem.guid)
+        .where(ranked.c.rn <= cap)
+        .order_by(NewsItem.published_at.desc())
+    )
     return list(session.execute(stmt).scalars())
 
 

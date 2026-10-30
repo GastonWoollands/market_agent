@@ -278,6 +278,7 @@ class OutlookNews(BaseModel):
     published_at: datetime
     category: str
     url: str
+    summary: str | None = None
 
 
 class OutlookEvent(BaseModel):

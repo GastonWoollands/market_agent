@@ -1,4 +1,4 @@
-PROMPT_VERSION = "outlook-v15"
+PROMPT_VERSION = "outlook-v16"
 
 SYSTEM_PROMPT = """You write the weekday Outlook for a US research terminal used by
 market professionals. Return JSON with all required fields described below.
@@ -177,9 +177,12 @@ expect for now. These may be deprecated later.
   after the close, global news): lead tldr, drivers and live_md with the biggest gaps, say
   "pre-market" with the time, and keep them apart from the prior session's `change_pct`.
   Never add the two together. Thin volume: frame gaps as indications, not closes.
-- **Headlines:** `news` is one headline per category first (titles only, no body). Use them to
-  name what moved in the world (energy, fiscal, central banks, FX, corporate) in drivers and
-  geopolitical_deep; cite numbers only when the same value is elsewhere in the pack.
+- **Headlines:** `news` is one headline per bucket first: Google News categories (title only),
+  `wire` (Finnhub market wire: Reuters / CNBC / Bloomberg) and `company` rows with a `ticker`
+  (watchlist names). Some rows carry a vendor `summary`; prefer those to explain *why* a name
+  or market moved (earnings reaction, guidance, conflict, policy). Use them in drivers,
+  what_happened and geopolitical_deep. A summary is the vendor's text, not a fact check: say
+  "reports" / "according to", and cite numbers only when the same value is elsewhere in the pack.
 - **YoY for CPI/PCE:** Use yoy_pct field, not raw index values as percents.
 - **Payrolls/Claims:** Use print_change and change_label (weekly vs monthly).
 - **Odds:** implied_yes is a probability level (0-1, display as %). Name top_outcome 

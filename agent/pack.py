@@ -42,7 +42,7 @@ from store.repos import (
     event_count_for_source,
     intraday_closes_for_tickers,
     latest_jobs,
-    latest_news,
+    latest_news_by_bucket,
     latest_odds,
     latest_policy_items,
     latest_return_stats,
@@ -59,6 +59,7 @@ SOURCE_KEYS = (
     ("fred", "ingest_fred", "macro_observations"),
     ("polymarket", "ingest_polymarket", "odds_snapshots"),
     ("google_news", "ingest_news", "news_items"),
+    ("finnhub_news", "ingest_finnhub_news", "news_items"),
     ("fed_rss", "ingest_fed_rss", "policy_items"),
     ("finnhub", "ingest_calendar", "earnings_events"),
     ("catalysts", "ingest_calendar", "yaml_events"),
@@ -71,8 +72,9 @@ EVENTS_LOOKBACK_DAYS = 2
 LIVE_NEAR_DAYS = 2
 NEAR_CATALYST_KINDS = frozenset({"fomc", "cpi", "pce", "nfp", "central_bank", "speech"})
 LIVE_NEAR_CATALYST_KINDS = frozenset({"fomc", "cpi", "pce", "nfp", "speech"})
-NEWS_LIMIT = 80
+NEWS_WINDOW = timedelta(hours=48)
 NEWS_PER_CATEGORY = 3
+NEWS_BUCKET_CAPS = {"wire": 6}
 POLICY_WINDOW_HOURS = 72
 POLICY_PACK_CAP = 8
 WRITER_POLICY_CAP = 3
@@ -264,7 +266,14 @@ def pack_from_store(
     liquidity = compute_net_liquidity(macro)
     
     odds = _odds_dicts(latest_odds(session))
-    news = _news_dicts(latest_news(session, limit=NEWS_LIMIT))
+    news = _news_dicts(
+        latest_news_by_bucket(
+            session,
+            since=(now or datetime.now(UTC)) - NEWS_WINDOW,
+            per_bucket=NEWS_PER_CATEGORY,
+            bucket_caps=NEWS_BUCKET_CAPS,
+        )
+    )
     policy_items = _policy_dicts(
         latest_policy_items(session, since=policy_cutoff(as_of), limit=POLICY_PACK_CAP)
     )
@@ -596,7 +605,9 @@ WRITER_SERIES = frozenset(
 )
 STALE_FOREIGN_LAG = 60
 WRITER_ANOMALY_CAP = 3
-WRITER_NEWS_CAP = 10
+WRITER_NEWS_CAP = 16
+# The Finnhub wire is the broadest world feed; it gets three slots per round.
+WRITER_NEWS_PER_PASS = {"wire": 3}
 WRITER_EXTENDED_CAP = 8
 
 
@@ -632,18 +643,21 @@ def writer_pack(pack: dict[str, Any]) -> dict[str, Any]:
 
 
 def _diverse_news(rows: Any) -> list[dict[str, Any]]:
-    """Newest headline per category first, then second ones, up to the cap.
+    """Newest headline per category (per ticker for `company`) first, then second ones.
 
     Plain recency let one busy bucket (e.g. three BoJ headlines) crowd out the world.
     """
-    buckets: dict[str, list[dict[str, Any]]] = {}
+    buckets: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for row in rows or []:
         if isinstance(row, dict):
-            buckets.setdefault(str(row.get("category")), []).append(row)
+            key = (str(row.get("category")), str(row.get("ticker") or ""))
+            buckets.setdefault(key, []).append(row)
     out: list[dict[str, Any]] = []
     depth = 0
     while len(out) < WRITER_NEWS_CAP and any(len(items) > depth for items in buckets.values()):
-        out.extend(items[depth] for items in buckets.values() if len(items) > depth)
+        for (category, _), items in buckets.items():
+            take = WRITER_NEWS_PER_PASS.get(category, 1)
+            out.extend(items[depth * take : (depth + 1) * take])
         depth += 1
     return out[:WRITER_NEWS_CAP]
 
@@ -754,22 +768,20 @@ def _policy_dicts(items: list[Any]) -> list[dict[str, Any]]:
 
 
 def _news_dicts(items: list[Any]) -> list[dict[str, Any]]:
-    counts: dict[str, int] = {}
     out: list[dict[str, Any]] = []
     for item in items:
-        used = counts.get(item.category, 0)
-        if used >= NEWS_PER_CATEGORY:
-            continue
-        counts[item.category] = used + 1
-        out.append(
-            {
-                "title": item.title,
-                "publisher": item.publisher,
-                "published_at": item.published_at.isoformat(),
-                "category": item.category,
-                "url": item.url,
-            }
-        )
+        row = {
+            "title": item.title,
+            "publisher": item.publisher,
+            "published_at": item.published_at.isoformat(),
+            "category": item.category,
+            "url": item.url,
+        }
+        if item.category == "company":
+            row["ticker"] = item.query
+        if item.summary:
+            row["summary"] = item.summary
+        out.append(row)
     return out
 
 

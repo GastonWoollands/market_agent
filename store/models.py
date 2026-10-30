@@ -239,6 +239,8 @@ class NewsItem(Base):
     )
     category: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     query: Mapped[str] = mapped_column(Text, nullable=False)
+    # Vendor summary (Finnhub); NULL for Google News RSS, which ships title + link only.
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class EventItem(Base):

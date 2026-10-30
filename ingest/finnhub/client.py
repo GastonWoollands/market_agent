@@ -6,16 +6,26 @@ from typing import Any
 import httpx
 
 from ingest.finnhub.errors import FinnhubError, FinnhubHttpError, FinnhubParseError
-from ingest.finnhub.parse import events_from_earnings
+from ingest.finnhub.parse import (
+    COMPANY_CATEGORY,
+    WIRE_CATEGORY,
+    events_from_earnings,
+    headlines_from_news,
+)
 from ingest.retry import http_get
 from ingest.yahoo.rate_limit import TokenBucket
-from store.canonical import CalendarEvent
+from store.canonical import CalendarEvent, NewsHeadline
 
 FINNHUB_EARNINGS_URL = "https://finnhub.io/api/v1/calendar/earnings"
+FINNHUB_NEWS_URL = "https://finnhub.io/api/v1/news"
+FINNHUB_COMPANY_NEWS_URL = "https://finnhub.io/api/v1/company-news"
 
 
 class FinnhubClient:
-    """Official Finnhub earnings calendar. Do not scrape calendars or add finnhub-python."""
+    """Official Finnhub REST: earnings calendar, market and company news.
+
+    Do not scrape article pages or add finnhub-python.
+    """
 
     def __init__(
         self,
@@ -67,26 +77,44 @@ class FinnhubClient:
             out.extend(events_from_earnings(payload, allowed={symbol}))
         return out
 
+    def fetch_market_news(self, *, category: str = "general") -> list[NewsHeadline]:
+        """Finnhub market news (Reuters / CNBC / Bloomberg wire), newest ~100 rows."""
+        payload = self._get(FINNHUB_NEWS_URL, {"category": category}, "news")
+        return headlines_from_news(payload, category=WIRE_CATEGORY, query=category)
+
+    def fetch_company_news(
+        self, symbol: str, *, start: date, end: date, cap: int
+    ) -> list[NewsHeadline]:
+        """Company news for one symbol; keeps the newest `cap` rows that carry a real summary."""
+        params = {"symbol": symbol.upper(), "from": start.isoformat(), "to": end.isoformat()}
+        payload = self._get(FINNHUB_COMPANY_NEWS_URL, params, f"company-news {symbol}")
+        rows = headlines_from_news(payload, category=COMPANY_CATEGORY, query=symbol.upper())
+        rows.sort(key=lambda item: item.published_at, reverse=True)
+        return [item for item in rows if item.summary][:cap]
+
     def _calendar(self, params: dict[str, Any]) -> dict[str, Any]:
-        try:
-            response = http_get(self._http, self._bucket, FINNHUB_EARNINGS_URL, params=params)
-        except httpx.HTTPError as exc:
-            raise FinnhubHttpError(
-                f"earnings: request failed ({exc.__class__.__name__})"
-            ) from exc
-        if response.status_code == 429:
-            raise FinnhubHttpError("earnings: Finnhub rate limited", status_code=429)
-        if response.status_code == 401:
-            raise FinnhubHttpError("earnings: unauthorized", status_code=401)
-        if response.status_code >= 400:
-            raise FinnhubHttpError(
-                f"earnings: HTTP {response.status_code}",
-                status_code=response.status_code,
-            )
-        try:
-            payload = response.json()
-        except ValueError as exc:
-            raise FinnhubParseError("earnings: response is not JSON") from exc
+        payload = self._get(FINNHUB_EARNINGS_URL, params, "earnings")
         if not isinstance(payload, dict):
             raise FinnhubParseError("earnings: unexpected JSON payload")
         return payload
+
+    def _get(self, url: str, params: dict[str, Any], label: str) -> Any:
+        try:
+            response = http_get(self._http, self._bucket, url, params=params)
+        except httpx.HTTPError as exc:
+            raise FinnhubHttpError(
+                f"{label}: request failed ({exc.__class__.__name__})"
+            ) from exc
+        if response.status_code == 429:
+            raise FinnhubHttpError(f"{label}: Finnhub rate limited", status_code=429)
+        if response.status_code == 401:
+            raise FinnhubHttpError(f"{label}: unauthorized", status_code=401)
+        if response.status_code >= 400:
+            raise FinnhubHttpError(
+                f"{label}: HTTP {response.status_code}",
+                status_code=response.status_code,
+            )
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise FinnhubParseError(f"{label}: response is not JSON") from exc

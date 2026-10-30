@@ -131,7 +131,8 @@ Frozen for v1. A new vendor is a contract change: update this section first. Cat
 | Pre/post 5m gaps | Yahoo 5m | ~07:30 ET, **tape + watchlist only** |
 | Yields, VIX, CPI/PCE (as indexes; pack computes YoY/MoM), OAS, DXY (spine), WTI/Brent/copper, real yield, breakevens, payrolls, claims, durable goods, debt/GDP, ECB/BOJ/PBOC policy, dollar crosses (EUR/JPY/GBP/MXN/BRL/CNY), lag-stamped foreign 10Ys | FRED (`config/fred_series.yaml`) | 06:00 ET |
 | Fed / inflation / recession / geo odds | Polymarket Gamma API (`config/polymarket_slugs.yaml` slots + match rules; ingest resolves the current slug) | 15–60 min in session |
-| Headlines | Google News RSS (`config/news_queries.yaml`) | 30 min |
+| Headlines | Google News RSS (`config/news_queries.yaml`), title + link only | 30 min |
+| Market wire + watchlist company news, with vendor summaries | Finnhub free REST (`/news?category=general`, `/company-news` per watchlist symbol, ≤5 per name, 2-day window); summary stored only when it is not a copy of the headline; no article fetching | 30–60 min in session, ~07:30 ET |
 | FOMC statements, minutes, Chair speeches, testimony | Fed Board RSS (`press_monetary`, `speeches`, `testimony`) via `ingest/fed_rss`, plus the official `www.federalreserve.gov` article each recent item links to when the RSS text is only a title or venue line (capped body text, ≤2500 chars, 14-day lookback; no crawling, no other hosts) | 30–60 min in session |
 | Earnings calendar + EPS/rev est. | Finnhub free | 07:00 ET |
 | FOMC, CPI, PCE, NFP, GDP, JOLTS, Chair/Jackson Hole speeches, FOMC minutes, Beige Book, ISM, Treasury refunding, ECB/BoE/BoJ, elections | curated `config/catalysts.yaml` | hand, yearly |
@@ -175,7 +176,7 @@ Keep vendor payloads out of hot tables. Polymarket `raw` JSONB is the exception.
 | Macro | `macro_series`, `macro_observation`, `odds_snapshot`, `regime_snapshot` | FRED prints; Polymarket implied yes keyed by catalog slot; daily growth / inflation / policy / volatility classification from stored FRED |
 | Fundamentals | `metric_ttm`, `metric_fy` | Point-in-time TTM and fiscal-year facts from SEC companyfacts (no `financial_fact` warehouse). FY is for growth, accrual, gems — not an on-screen F/Z |
 | Derived | `valuation_daily`, `rrg_point`, `return_stats`, `opportunity_score`, `quant_score` | Python → Postgres; the writer never computes these. `quant_score` holds a gem flag and ratio snapshot; legacy `f_score` / `z_score` columns stay NULL |
-| News / calendar | `news_item`, `event_item`, `policy_item` | RSS headlines; YAML catalysts (FOMC/CPI/PCE/NFP/GDP/JOLTS/speeches/minutes/Beige Book/ISM/Treasury/central banks) + Finnhub earnings; official Fed Board RSS (speech/statement/minutes/testimony excerpts) |
+| News / calendar | `news_item`, `event_item`, `policy_item` | RSS headlines plus Finnhub `wire` / `company` rows (`summary` nullable, `query` = ticker for company); YAML catalysts (FOMC/CPI/PCE/NFP/GDP/JOLTS/speeches/minutes/Beige Book/ISM/Treasury/central banks) + Finnhub earnings; official Fed Board RSS (speech/statement/minutes/testimony excerpts) |
 | Agent | `evidence_pack`, `outlook_report`, `opportunity_memo`, `job_run` | Pack JSONB, briefs, memos, run log |
 
 ---
@@ -228,7 +229,7 @@ Do not show sleeve unit-ranks (0–1) as the primary columns once those fields a
 
 Unattended local = `cron` / `launchd` → Python job → Anthropic or Gemini (official SDKs). Template fallback when the API is down. No in-process scheduler. Ollama can wait.
 
-**Evidence pack** (Python, stored JSONB) includes index/sector returns, a precomputed macro snapshot (levels, bp/YoY deltas, `lag_days`, named facts), a `judgment` object (takeaways, tensions, watch, invalidation, outliers, co_moves, `policy_comms`), Risk-On, RRG, labeled Polymarket odds, stored headlines (capped per bucket), last-72h official Fed `policy_items[]`, near vs later events, watchlist outliers, top opportunity rows, `regime`, `liquidity`, `anomalies`, same-day `yields_live` (Yahoo levels + bp), `extended_hours` (pre/post-market gaps from stored 5m bars vs the last daily close, outside the cash session only), `session.phase` (pre_open / intraday / after_close / closed, ET clock at build time), and a `sources[]` freshness table. `agent/pack.py`; the writer receives the compact `writer_pack` slice of it (headlines spread one per category first, up to 10). Writer may quote packed policy excerpts only.
+**Evidence pack** (Python, stored JSONB) includes index/sector returns, a precomputed macro snapshot (levels, bp/YoY deltas, `lag_days`, named facts), a `judgment` object (takeaways, tensions, watch, invalidation, outliers, co_moves, `policy_comms`), Risk-On, RRG, labeled Polymarket odds, stored headlines (newest 3 per bucket over 48h, 6 for the Finnhub wire; bucket = category, or category + ticker for company news) with vendor `summary` when present, last-72h official Fed `policy_items[]`, near vs later events, watchlist outliers, top opportunity rows, `regime`, `liquidity`, `anomalies`, same-day `yields_live` (Yahoo levels + bp), `extended_hours` (pre/post-market gaps from stored 5m bars vs the last daily close, outside the cash session only), `session.phase` (pre_open / intraday / after_close / closed, ET clock at build time), and a `sources[]` freshness table. `agent/pack.py`; the writer receives the compact `writer_pack` slice of it (headlines spread one per category first, up to 10). Writer may quote packed policy excerpts only.
 
 **Generation rules**
 

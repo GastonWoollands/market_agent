@@ -66,6 +66,7 @@ python -m jobs.compute_regime
 python -m jobs.ingest_intraday      # pre/post 5m bars -> pack extended_hours
 python -m jobs.ingest_polymarket
 python -m jobs.ingest_news
+python -m jobs.ingest_finnhub_news
 python -m jobs.ingest_fed_rss
 python -m jobs.ingest_calendar
 python -m jobs.build_pack
@@ -103,6 +104,7 @@ No vendor call. Re-run after a fresh Yahoo daily ingest.
 | # | Command | Why |
 |---|---------|-----|
 | 6 | `python -m jobs.ingest_news` | Google News RSS (`config/news_queries.yaml`: rates/inflation/growth/fx/commodities/trade/treasury/corporate/energy/central banks/geopolitics) |
+| 6b | `python -m jobs.ingest_finnhub_news` | Finnhub market wire (Reuters/CNBC/Bloomberg) + watchlist company news (≤5 per name), with vendor summaries; needs `FINNHUB_API_KEY` |
 | 7 | `python -m jobs.ingest_fed_rss` | Fed Board RSS (statements, speeches, testimony); thin items get the official article body (capped) |
 | 8 | `python -m jobs.ingest_calendar` | YAML catalysts (FOMC/CPI/PCE/NFP/GDP/JOLTS/speeches/minutes/Beige Book/ISM/Treasury/CBs) + Finnhub watchlist earnings |
 | 9 | `python -m jobs.build_pack` | JSON evidence pack from **Postgres only** |
@@ -179,7 +181,7 @@ Intended times if you automate later. Until then, run the same commands by hand.
 4. `python -m jobs.compute_regime` — classify macro regime from FRED
 5. `python -m jobs.ingest_intraday` — pre/post 5m gaps
 6. `python -m jobs.ingest_polymarket` — Fed / CPI / recession odds
-7. `python -m jobs.ingest_news`
+7. `python -m jobs.ingest_news` and `python -m jobs.ingest_finnhub_news` (wire + watchlist company news with summaries)
 8. `python -m jobs.ingest_fed_rss`
 9. `python -m jobs.ingest_calendar` — Finnhub ~07:00
 10. `python -m jobs.build_pack` — before 09:30 ET the pack carries `extended_hours` (pre-market gaps)
@@ -214,6 +216,7 @@ python -m jobs.compute_regime
 python -m jobs.ingest_intraday      # after 16:00 ET: post-market gaps (earnings)
 python -m jobs.ingest_polymarket
 python -m jobs.ingest_news
+python -m jobs.ingest_finnhub_news
 python -m jobs.ingest_fed_rss
 python -m jobs.ingest_calendar
 python -m jobs.build_pack
@@ -225,6 +228,7 @@ python -m jobs.build_pack
 ```bash
 python -m jobs.ingest_polymarket     # every 15–60 min
 python -m jobs.ingest_news           # every ~30 min
+python -m jobs.ingest_finnhub_news   # wire + watchlist company news (summaries)
 python -m jobs.ingest_fed_rss        # every ~30 min with news
 python -m jobs.ingest_yahoo          # quotes when you want a fresher tape
 python -m jobs.ingest_yahoo --universe watchlist   # same for watchlist names
@@ -243,6 +247,7 @@ After a Chair speech (same stored Outlook slice; no Live-time LLM):
 ```bash
 python -m jobs.ingest_fed_rss
 python -m jobs.ingest_news
+python -m jobs.ingest_finnhub_news
 python -m jobs.ingest_yahoo
 python -m jobs.ingest_yahoo --universe watchlist
 python -m jobs.ingest_fred
@@ -332,6 +337,7 @@ Both write to `outlook_report` table. UI displays latest for the date.
 | `jobs.ingest_polymarket` | `odds_snapshot` | `--slots front_fomc,core_cpi_yoy`, `--slugs slug-a,slug-b` |
 | `jobs.compute_dynamics` | `rrg_point`, `return_stats` | — |
 | `jobs.ingest_news` | `news_item` | `--categories macro,fed` |
+| `jobs.ingest_finnhub_news` | `news_item` (`wire`, `company`) | `--skip-company` |
 | `jobs.ingest_fed_rss` | `policy_item` (RSS + capped federalreserve.gov body for recent thin items) | `--kinds speech,statement` |
 | `jobs.ingest_calendar` | `event_item` | `--skip-finnhub` |
 | `jobs.build_pack` | `evidence_pack` | `--as-of YYYY-MM-DD` |
