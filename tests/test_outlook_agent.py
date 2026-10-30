@@ -136,7 +136,7 @@ def test_narrate_keeps_cited_agent_output() -> None:
     assert written.status == "ok"
     assert written.model == "gemini/gemini-2.5-flash"
     assert written.prompt_version == PROMPT_VERSION
-    assert PROMPT_VERSION == "outlook-v14"
+    assert PROMPT_VERSION == "outlook-v15"
     assert "## TL;DR" in written.body_md
     assert "## Abstract" in written.body_md
     assert written.body_json["abstract"]

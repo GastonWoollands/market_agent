@@ -40,6 +40,7 @@ from store.models import (
 from store.repos import (
     closes_for_tickers,
     event_count_for_source,
+    intraday_closes_for_tickers,
     latest_jobs,
     latest_news,
     latest_odds,
@@ -283,13 +284,14 @@ def pack_from_store(
         )
     ]
     events, events_later = partition_events(rows, as_of)
+    watchlist_rows = live_tape_rows(session, "watchlist")
     watchlist = [
         {
             "ticker": row.ticker,
             "change_pct": _num(row.quote_change_pct),
             "price": _num(row.quote_price or row.last_close),
         }
-        for row in live_tape_rows(session, "watchlist")
+        for row in watchlist_rows
     ]
     sources = source_dicts(sources_from_counts(latest_jobs(session), store_counts(session)))
     risk_on = _risk_on(session, as_of)
@@ -297,6 +299,12 @@ def pack_from_store(
     outliers, co_moves = as_dicts(*rank_drivers(_driver_series(session, as_of)))
     drivers = [_quote_dict(tape[ticker]) for ticker in DRIVER_TAPE_IDS if ticker in tape]
     yields_live = yields_live_rows(tape, load_universes().live.yields_section)
+    clock = session_phase(as_of, now or datetime.now(UTC))
+    extended_hours = (
+        _extended_hours(session, tape, watchlist_rows)
+        if clock["phase"] in EXTENDED_PHASES
+        else []
+    )
 
     # Load regime classification
     from store.models import RegimeSnapshot
@@ -368,7 +376,9 @@ def pack_from_store(
         pack["anomalies"] = anomalies_data
     if yields_live:
         pack["yields_live"] = yields_live
-    pack["session"] = session_phase(as_of, now or datetime.now(UTC))
+    if extended_hours:
+        pack["extended_hours"] = extended_hours
+    pack["session"] = clock
     
     return pack
 
@@ -402,6 +412,61 @@ def session_phase(as_of: date, now: datetime) -> dict[str, str]:
     else:
         phase = "after_close"
     return {"phase": phase, "built_at_et": local.strftime("%Y-%m-%d %H:%M")}
+
+
+EXTENDED_PHASES = frozenset({"pre_open", "after_close", "closed"})
+
+
+def _extended_hours(
+    session: Session, tape: dict[str, Any], watchlist_rows: list[Any]
+) -> list[dict[str, Any]]:
+    rows = [tape[ticker] for ticker in (*HEADER_TICKERS, *DRIVER_TAPE_IDS) if ticker in tape]
+    rows += [row for row in watchlist_rows if row.ticker not in tape]
+    rows = [row for row in rows if not row.ticker.startswith("^")]
+    days = [row.last_date for row in rows if row.last_date is not None]
+    if not days:
+        return []
+    since = datetime.combine(min(days), SESSION_CLOSE, ET)
+    bars = intraday_closes_for_tickers(session, [row.ticker for row in rows], since=since)
+    return extended_hours_rows(rows, bars)
+
+
+def _regular_session(ts: datetime) -> bool:
+    local = ts.astimezone(ET)
+    return local.weekday() < 5 and SESSION_OPEN <= local.time() < SESSION_CLOSE
+
+
+def extended_hours_rows(
+    rows: list[Any], bars: dict[str, list[tuple[datetime, Decimal]]]
+) -> list[dict[str, Any]]:
+    """Pre/post-market move from stored 5m bars vs the last official daily close.
+
+    Skips a name once a regular-session bar follows that close (the reference is stale).
+    Sorted by absolute gap, largest first.
+    """
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        if row.last_close is None or row.last_date is None or not row.last_close:
+            continue
+        close_at = datetime.combine(row.last_date, SESSION_CLOSE, ET)
+        later = [(ts, price) for ts, price in bars.get(row.ticker, []) if ts >= close_at]
+        if not later or any(_regular_session(ts) for ts, _ in later):
+            continue
+        ts, price = later[-1]
+        local = ts.astimezone(ET)
+        out.append(
+            {
+                "ticker": row.ticker,
+                "side": "pre" if local.date() > row.last_date else "post",
+                "ref_close": _num(row.last_close),
+                "ref_date": row.last_date.isoformat(),
+                "last": _num(price),
+                "gap_pct": _num((price / row.last_close - 1) * 100) or 0.0,
+                "as_of_et": local.strftime("%Y-%m-%d %H:%M"),
+            }
+        )
+    out.sort(key=lambda item: abs(item["gap_pct"] or 0), reverse=True)
+    return out
 
 
 def yields_live_rows(tape: dict[str, Any], section: list[Any]) -> list[dict[str, Any]]:
@@ -531,6 +596,8 @@ WRITER_SERIES = frozenset(
 )
 STALE_FOREIGN_LAG = 60
 WRITER_ANOMALY_CAP = 3
+WRITER_NEWS_CAP = 10
+WRITER_EXTENDED_CAP = 8
 
 
 def writer_pack(pack: dict[str, Any]) -> dict[str, Any]:
@@ -553,14 +620,32 @@ def writer_pack(pack: dict[str, Any]) -> dict[str, Any]:
         "rrg": pack.get("rrg") or [],
         "header": pack.get("header") or [],
         "drivers": pack.get("drivers") or [],
-        "news": (pack.get("news") or [])[:5],
+        "news": _diverse_news(pack.get("news")),
         "regime": pack.get("regime"),
         "liquidity": pack.get("liquidity"),
         "anomalies": _top_anomalies(pack.get("anomalies")),
         "watchlist": pack.get("watchlist") or [],
         "yields_live": pack.get("yields_live") or [],
+        "extended_hours": (pack.get("extended_hours") or [])[:WRITER_EXTENDED_CAP],
         "session": pack.get("session"),
     }
+
+
+def _diverse_news(rows: Any) -> list[dict[str, Any]]:
+    """Newest headline per category first, then second ones, up to the cap.
+
+    Plain recency let one busy bucket (e.g. three BoJ headlines) crowd out the world.
+    """
+    buckets: dict[str, list[dict[str, Any]]] = {}
+    for row in rows or []:
+        if isinstance(row, dict):
+            buckets.setdefault(str(row.get("category")), []).append(row)
+    out: list[dict[str, Any]] = []
+    depth = 0
+    while len(out) < WRITER_NEWS_CAP and any(len(items) > depth for items in buckets.values()):
+        out.extend(items[depth] for items in buckets.values() if len(items) > depth)
+        depth += 1
+    return out[:WRITER_NEWS_CAP]
 
 
 def _top_anomalies(rows: Any) -> list[dict[str, Any]]:
