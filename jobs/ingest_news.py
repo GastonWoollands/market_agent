@@ -25,12 +25,17 @@ def ingest(*, categories: set[str] | None = None) -> dict[str, int | list[str]]:
         raise RuntimeError("news query catalog is empty")
 
     failures: list[str] = []
+    empty: list[str] = []
     written = 0
     with NewsClient() as client:
         for bucket in buckets:
             for query in bucket.queries:
                 try:
-                    headlines = client.fetch_query(query, category=bucket.category)
+                    headlines = client.fetch_query(
+                        query,
+                        category=bucket.category,
+                        freshness_days=catalog.freshness_days,
+                    )
                 except NewsHttpError as exc:
                     log.warning("%s %s failed: %s", bucket.category, query, exc)
                     failures.append(f"{bucket.category}:{query}: {exc}")
@@ -41,12 +46,17 @@ def ingest(*, categories: set[str] | None = None) -> dict[str, int | list[str]]:
                     log.warning("%s %s failed: %s", bucket.category, query, exc)
                     failures.append(f"{bucket.category}:{query}: {exc}")
                     continue
+                if not headlines:
+                    empty.append(f"{bucket.category}:{query}")
+                    continue
                 with session_scope() as session:
                     written += upsert_news(session, headlines)
 
     if written == 0:
         raise RuntimeError(f"no news rows written; failures={failures}")
-    return {"news_rows": written, "failures": failures}
+    if empty:
+        log.info("no rows inside the %sd window: %s", catalog.freshness_days, ", ".join(empty))
+    return {"news_rows": written, "failures": failures, "empty_queries": empty}
 
 
 def main() -> None:
@@ -77,7 +87,11 @@ def main() -> None:
         JOB_NAME,
         status="ok",
         rows_written=int(result["news_rows"]),
-        extra={"failures": result["failures"], "source": "google_news"},
+        extra={
+            "failures": result["failures"],
+            "empty_queries": result.get("empty_queries", []),
+            "source": "google_news",
+        },
     )
     log.info(
         "ingest_news rows=%s failures=%s",

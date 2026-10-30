@@ -1,0 +1,90 @@
+# Read-time headline selection for every news source (Google News RSS, Finnhub).
+# Applied by analytics/news_rank.py in the evidence pack and GET /outlook.
+# Nothing is filtered at ingest: edit this file and the next pack/API read uses it.
+#
+# Publisher names are matched after normalization: lowercase, drop a leading "www."
+# and a trailing ".com", keep letters and digits only ("Bloomberg.com" -> "bloomberg",
+# "Seeking Alpha" -> "seekingalpha"). Matching is exact; list each spelling seen.
+# Unknown publishers rank after tier 2 and are never blocked.
+
+tiers:
+  # Wires and papers of record for markets and policy.
+  1:
+    - Reuters
+    - Bloomberg
+    - WSJ
+    - The Wall Street Journal
+    - Financial Times
+    - FT
+    - CNBC
+    - Associated Press
+    - AP News
+    - The New York Times
+    - The Washington Post
+    - Barron's
+    - The Economist
+    - Nikkei Asia
+  # Established outlets with useful market or policy coverage.
+  2:
+    - MarketWatch
+    - Yahoo Finance
+    - Yahoo
+    - Yahoo Finance UK
+    - Yahoo Finance Canada
+    - Yahoo! Finance Canada
+    - Fortune
+    - Business Insider
+    - Axios
+    - Politico
+    - CNN
+    - BBC
+    - CBS News
+    - NBC News
+    - Fox Business
+    - The Guardian
+    - The Times
+    - France 24
+    - Euronews
+    - South China Morning Post
+    - The Economic Times
+    - Livemint
+    - Kitco
+    - S&P Global
+    - ING Think
+    - FXStreet
+    - Investing.com
+    - Seeking Alpha
+    - gCaptain
+
+# Never selected: SEO explainers, broker marketing, retail rate tables, price-prediction sites.
+blocked:
+  - Admirals
+  - Mitrade
+  - FXEmpire
+  - CurrencyNews.co.uk
+  - TradingKey
+  - TradingPedia
+  - Economies.com
+  - tmgm.com
+  - EBC Financial Group
+  - Simply Wall St
+  - BigGo Finance
+  - Daily Pakistan
+  - Coinpaper
+  - Investopedia
+  - RealMoney Pro
+
+# Case-insensitive regexes on the title with the trailing " - Publisher" removed.
+# Keep them anchored or specific: a bare "forecast" would also drop real news
+# ("Brent 2026 view tops $90 ...").
+reject_title_patterns:
+  - '^(what (is|are)|how (to|does|do))\b'          # evergreen explainers
+  - 'charts?,? data (and|&) news'                   # quote pages
+  - '\bexchange rates?\b.*\btoday\b'                # retail FX rate tables
+  - '\brate today\b'
+  - '\bpaise\b'                                     # INR intraday rate blurbs
+  - '\bprice (forecast|prediction)s?\b'
+  - '\bforecast:'                                   # "Pound Sterling Forecast: ..."
+  - '^buy, sell,? or hold\b'
+  - '\b\d+ (stocks|shares) to (watch|buy)\b'
+  - 'press releases? - investor relations'          # IR landing pages

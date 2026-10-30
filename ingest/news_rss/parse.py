@@ -21,6 +21,9 @@ def headlines_from_rss(
     items = list(root.findall("./channel/item"))
     if not items:
         items = list(root.findall(".//{*}item"))
+    if not items:
+        # A valid feed with no items: nothing matched inside the `when:` window.
+        return []
     out: list[NewsHeadline] = []
     seen: set[str] = set()
     for item in items:
@@ -45,7 +48,7 @@ def headlines_from_rss(
             )
         )
     if not out:
-        raise NewsParseError(f"{category}: no usable items")
+        raise NewsParseError(f"{category}: {len(items)} items, none usable")
     return out
 
 

@@ -1,3 +1,4 @@
+import re
 from datetime import date
 from typing import Literal, Self
 
@@ -142,6 +143,7 @@ class NewsBucket(BaseModel):
 
 
 class NewsQueriesFile(BaseModel):
+    freshness_days: int = Field(default=2, ge=1, le=30)
     buckets: list[NewsBucket] = Field(default_factory=list)
 
 
@@ -150,6 +152,58 @@ def load_news_queries() -> NewsQueriesFile:
     with path.open(encoding="utf-8") as handle:
         raw = safe_load(handle)
     return NewsQueriesFile.model_validate(raw)
+
+
+def publisher_key(name: str) -> str:
+    """Normalized publisher identity shared by the catalog and stored rows."""
+    text = name.strip().lower()
+    text = text.removeprefix("www.").removesuffix(".com")
+    return re.sub(r"[^a-z0-9]", "", text)
+
+
+class NewsSourcesFile(BaseModel):
+    """Read-time headline rules (`config/news_sources.yaml`)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    tiers: dict[int, list[str]] = Field(default_factory=dict)
+    blocked: list[str] = Field(default_factory=list)
+    reject_title_patterns: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        seen: dict[str, str] = {}
+        for label, names in [*((f"tier {k}", v) for k, v in self.tiers.items()),
+                             ("blocked", self.blocked)]:
+            for name in names:
+                key = publisher_key(name)
+                if not key:
+                    raise ValueError(f"{label}: empty publisher name {name!r}")
+                if key in seen and seen[key] != label:
+                    raise ValueError(f"{name!r} listed in both {seen[key]} and {label}")
+                seen[key] = label
+        for pattern in self.reject_title_patterns:
+            try:
+                re.compile(pattern, re.IGNORECASE)
+            except re.error as exc:
+                raise ValueError(f"bad reject_title_patterns entry {pattern!r}: {exc}") from exc
+        return self
+
+    def tier_of(self) -> dict[str, int]:
+        return {publisher_key(name): tier for tier, names in self.tiers.items() for name in names}
+
+    def blocked_keys(self) -> frozenset[str]:
+        return frozenset(publisher_key(name) for name in self.blocked)
+
+    def title_patterns(self) -> list[re.Pattern[str]]:
+        return [re.compile(pattern, re.IGNORECASE) for pattern in self.reject_title_patterns]
+
+
+def load_news_sources() -> NewsSourcesFile:
+    path = CONFIG_DIR / "news_sources.yaml"
+    with path.open(encoding="utf-8") as handle:
+        raw = safe_load(handle)
+    return NewsSourcesFile.model_validate(raw or {})
 
 
 class CatalystItem(BaseModel):
