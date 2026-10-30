@@ -1,6 +1,11 @@
 # Hand-curated calendar. Refresh yearly. Do not scrape this.
 # Times are America/New_York. Earnings come from Finnhub at runtime, not this file.
-# Remaining 2026 dates as of 2026-08-27. Decision day = second day of two-day meetings.
+# Decision day = second (last) day of two-day meetings.
+# Only dates published on the official calendar are listed; never estimate one.
+# 2027 dates read from the official pages on 2026-10-30. Not yet published then
+# (add when they are): JOLTS, FOMC minutes, Beige Book, Jackson Hole, Treasury
+# refunding. ISM's calendar sits behind a login, so ISM 2027 is not listed.
+# ingest_calendar warns when a kind's last listed date is near.
 
 timezone: America/New_York
 
@@ -20,7 +25,9 @@ default_times:
 
 fomc:
   # Decision day (second day of the meeting). Statement ~14:00 ET, presser ~14:30.
-  # Source: Federal Reserve tentative 2026 schedule.
+  # Source: federalreserve.gov/monetarypolicy/fomccalendars.htm (2026; 2027 read 2026-10-30).
+  # 2027 is tentative: "Each meeting date is tentative until confirmed at the meeting
+  # immediately preceding it."
   - { date: 2026-01-28, title: FOMC decision, sep: false }
   - { date: 2026-03-18, title: FOMC decision + SEP, sep: true }
   - { date: 2026-04-29, title: FOMC decision, sep: false }
@@ -29,37 +36,93 @@ fomc:
   - { date: 2026-09-16, title: FOMC decision + SEP, sep: true }
   - { date: 2026-10-28, title: FOMC decision, sep: false }
   - { date: 2026-12-09, title: FOMC decision + SEP, sep: true }
+  - { date: 2027-01-27, title: FOMC decision, sep: false }
+  - { date: 2027-03-17, title: FOMC decision + SEP, sep: true }
+  - { date: 2027-04-28, title: FOMC decision, sep: false }
+  - { date: 2027-06-09, title: FOMC decision + SEP, sep: true }
+  - { date: 2027-07-28, title: FOMC decision, sep: false }
+  - { date: 2027-09-15, title: FOMC decision + SEP, sep: true }
+  - { date: 2027-10-27, title: FOMC decision, sep: false }
+  - { date: 2027-12-08, title: FOMC decision + SEP, sep: true }
 
 cpi:
-  # BLS CPI release 08:30 ET. Remaining 2026 dates.
+  # BLS CPI release 08:30 ET. Source: bls.gov/schedule/news_release/cpi.htm
   - { date: 2026-09-11, title: CPI (August) }
   - { date: 2026-10-14, title: CPI (September) }
   - { date: 2026-11-10, title: CPI (October) }
   - { date: 2026-12-10, title: CPI (November) }
+  - { date: 2027-01-13, title: CPI (December) }
+  - { date: 2027-02-11, title: CPI (January) }
+  - { date: 2027-03-10, title: CPI (February) }
+  - { date: 2027-04-13, title: CPI (March) }
+  - { date: 2027-05-12, title: CPI (April) }
+  - { date: 2027-06-10, title: CPI (May) }
+  - { date: 2027-07-14, title: CPI (June) }
+  - { date: 2027-08-11, title: CPI (July) }
+  - { date: 2027-09-14, title: CPI (August) }
+  - { date: 2027-10-14, title: CPI (September) }
+  - { date: 2027-11-10, title: CPI (October) }
+  - { date: 2027-12-10, title: CPI (November) }
 
 pce:
-  # BEA Personal Income and Outlays 08:30 ET. Remaining 2026 dates.
+  # BEA Personal Income and Outlays 08:30 ET. Source: bea.gov/news/schedule (2027: /next-year)
   - { date: 2026-09-30, title: PCE (August) }
   - { date: 2026-10-29, title: PCE (September) }
   - { date: 2026-11-25, title: PCE (October) }
   - { date: 2026-12-23, title: PCE (November) }
+  - { date: 2027-01-28, title: PCE (December) }
+  - { date: 2027-02-25, title: PCE (January) }
+  - { date: 2027-03-31, title: PCE (February) }
+  - { date: 2027-04-29, title: PCE (March) }
+  - { date: 2027-05-27, title: PCE (April) }
+  - { date: 2027-06-25, title: PCE (May) }
+  - { date: 2027-07-29, title: PCE (June) }
+  - { date: 2027-08-25, title: PCE (July) }
+  - { date: 2027-09-30, title: PCE (August) }
+  - { date: 2027-10-28, title: PCE (September) }
+  - { date: 2027-11-24, title: PCE (October) }
+  - { date: 2027-12-22, title: PCE (November) }
 
 nfp:
-  # BLS Employment Situation 08:30 ET.
+  # BLS Employment Situation 08:30 ET. Source: bls.gov/schedule/news_release/empsit.htm
   - { date: 2026-09-04, title: Employment Situation (August) }
   - { date: 2026-10-02, title: Employment Situation (September) }
   - { date: 2026-11-06, title: Employment Situation (October) }
   - { date: 2026-12-04, title: Employment Situation (November) }
+  - { date: 2027-01-08, title: Employment Situation (December) }
+  - { date: 2027-02-05, title: Employment Situation (January) }
+  - { date: 2027-03-05, title: Employment Situation (February) }
+  - { date: 2027-04-02, title: Employment Situation (March) }
+  - { date: 2027-05-07, title: Employment Situation (April) }
+  - { date: 2027-06-04, title: Employment Situation (May) }
+  - { date: 2027-07-02, title: Employment Situation (June) }
+  - { date: 2027-08-06, title: Employment Situation (July) }
+  - { date: 2027-09-03, title: Employment Situation (August) }
+  - { date: 2027-10-08, title: Employment Situation (September) }
+  - { date: 2027-11-05, title: Employment Situation (October) }
+  - { date: 2027-12-03, title: Employment Situation (November) }
 
 gdp:
-  # BEA GDP 08:30 ET. Remaining 2026 dates.
+  # BEA GDP 08:30 ET. Source: bea.gov/news/schedule (2027: /next-year)
   - { date: 2026-09-30, title: GDP Q2 third estimate }
   - { date: 2026-10-29, title: GDP Q3 advance }
   - { date: 2026-11-25, title: GDP Q3 second estimate }
   - { date: 2026-12-23, title: GDP Q3 third estimate }
+  - { date: 2027-01-28, title: GDP Q4 advance }
+  - { date: 2027-02-25, title: GDP Q4 second estimate }
+  - { date: 2027-03-31, title: GDP Q4 third estimate }
+  - { date: 2027-04-29, title: GDP Q1 advance }
+  - { date: 2027-05-27, title: GDP Q1 second estimate }
+  - { date: 2027-06-25, title: GDP Q1 third estimate }
+  - { date: 2027-07-29, title: GDP Q2 advance }
+  - { date: 2027-08-25, title: GDP Q2 second estimate }
+  - { date: 2027-09-30, title: GDP Q2 third estimate }
+  - { date: 2027-10-28, title: GDP Q3 advance }
+  - { date: 2027-11-24, title: GDP Q3 second estimate }
+  - { date: 2027-12-22, title: GDP Q3 third estimate }
 
 jolts:
-  # BLS JOLTS 10:00 ET. Remaining 2026 dates.
+  # BLS JOLTS 10:00 ET. Source: bls.gov/schedule/news_release/jolts.htm (2027 not published 2026-10-30).
   - { date: 2026-09-01, title: JOLTS (July) }
   - { date: 2026-09-29, title: JOLTS (August) }
   - { date: 2026-11-03, title: JOLTS (September) }
@@ -104,12 +167,40 @@ treasury:
 
 other:
   - { date: 2026-11-03, title: US midterm elections, type: election }
+  # ECB decision = Day 2 ("followed by press conference").
+  # Source: ecb.europa.eu/press/calendars/mgcgc/html/index.en.html
   - { date: 2026-09-10, title: ECB decision, type: central_bank }
   - { date: 2026-10-29, title: ECB decision, type: central_bank }
   - { date: 2026-12-17, title: ECB decision, type: central_bank }
+  - { date: 2027-02-04, title: ECB decision, type: central_bank }
+  - { date: 2027-03-18, title: ECB decision, type: central_bank }
+  - { date: 2027-04-29, title: ECB decision, type: central_bank }
+  - { date: 2027-06-10, title: ECB decision, type: central_bank }
+  - { date: 2027-07-22, title: ECB decision, type: central_bank }
+  - { date: 2027-09-09, title: ECB decision, type: central_bank }
+  - { date: 2027-10-28, title: ECB decision, type: central_bank }
+  - { date: 2027-12-16, title: ECB decision, type: central_bank }
+  # BoE MPC Summary days. Source: bankofengland.co.uk/monetary-policy/upcoming-mpc-dates
   - { date: 2026-09-17, title: BoE decision, type: central_bank }
   - { date: 2026-11-05, title: BoE decision, type: central_bank }
   - { date: 2026-12-17, title: BoE decision, type: central_bank }
+  - { date: 2027-02-04, title: BoE decision, type: central_bank }
+  - { date: 2027-03-18, title: BoE decision, type: central_bank }
+  - { date: 2027-04-29, title: BoE decision, type: central_bank }
+  - { date: 2027-06-17, title: BoE decision, type: central_bank }
+  - { date: 2027-07-29, title: BoE decision, type: central_bank }
+  - { date: 2027-09-16, title: BoE decision, type: central_bank }
+  - { date: 2027-11-04, title: BoE decision, type: central_bank }
+  - { date: 2027-12-16, title: BoE decision, type: central_bank }
+  # BoJ decision = last day of the MPM. Source: boj.or.jp/en/mopo/mpmsche_minu/index.htm
   - { date: 2026-09-18, title: BoJ decision, type: central_bank }
   - { date: 2026-10-30, title: BoJ decision, type: central_bank }
   - { date: 2026-12-18, title: BoJ decision, type: central_bank }
+  - { date: 2027-01-22, title: BoJ decision, type: central_bank }
+  - { date: 2027-03-18, title: BoJ decision, type: central_bank }
+  - { date: 2027-04-28, title: BoJ decision, type: central_bank }
+  - { date: 2027-06-11, title: BoJ decision, type: central_bank }
+  - { date: 2027-07-22, title: BoJ decision, type: central_bank }
+  - { date: 2027-09-22, title: BoJ decision, type: central_bank }
+  - { date: 2027-10-29, title: BoJ decision, type: central_bank }
+  - { date: 2027-12-17, title: BoJ decision, type: central_bank }

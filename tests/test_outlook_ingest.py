@@ -2,7 +2,7 @@ from datetime import UTC, date, datetime
 
 from ingest.finnhub.parse import events_from_earnings
 from ingest.news_rss.parse import headlines_from_rss
-from jobs.ingest_calendar import events_from_yaml
+from jobs.ingest_calendar import events_from_yaml, short_horizons
 from store.catalog import load_catalysts, load_news_queries
 
 RSS = """<?xml version="1.0" encoding="UTF-8"?>
@@ -149,3 +149,52 @@ def test_yaml_events_carry_release_time() -> None:
     assert by_title["BoJ decision"].extra is None
     real = events_from_yaml(load_catalysts())
     assert all((event.extra or {}).get("time_et") for event in real if event.kind == "cpi")
+
+
+def test_catalysts_yaml_lists_published_2027_calendars() -> None:
+    events = events_from_yaml(load_catalysts())
+    by_kind: dict[str, set[date]] = {}
+    for item in events:
+        by_kind.setdefault(item.title if item.kind == "central_bank" else item.kind, set()).add(
+            item.date
+        )
+    assert date(2027, 1, 27) in by_kind["fomc"] and date(2027, 12, 8) in by_kind["fomc"]
+    assert date(2027, 1, 13) in by_kind["cpi"] and date(2027, 12, 10) in by_kind["cpi"]
+    assert date(2027, 1, 8) in by_kind["nfp"] and date(2027, 12, 3) in by_kind["nfp"]
+    assert date(2027, 1, 28) in by_kind["gdp"] and date(2027, 12, 22) in by_kind["pce"]
+    assert date(2027, 2, 4) in by_kind["ECB decision"]
+    assert date(2027, 2, 4) in by_kind["BoE decision"]
+    assert date(2027, 1, 22) in by_kind["BoJ decision"]
+    # Release days only: none of the official dates falls on a weekend.
+    assert not [item for item in events if item.date.weekday() >= 5]
+
+
+def test_catalysts_yaml_sections_are_sorted_without_repeats() -> None:
+    catalog = load_catalysts()
+    for name in ("fomc", "cpi", "pce", "nfp", "gdp", "jolts", "minutes", "beige_book", "ism"):
+        days = [item.date for item in getattr(catalog, name)]
+        assert days == sorted(days) and len(days) == len(set(days)), name
+    for title in ("ECB decision", "BoE decision", "BoJ decision"):
+        days = [item.date for item in catalog.other if item.title == title]
+        assert days == sorted(days) and len(days) == len(set(days)), title
+
+
+def test_short_horizons_flags_series_that_end_soon() -> None:
+    from store.canonical import CalendarEvent
+
+    def event(kind: str, day: date, title: str = "x") -> CalendarEvent:
+        return CalendarEvent(
+            slug=f"{kind}-{title}-{day}", date=day, title=title, kind=kind, source="yaml"
+        )
+
+    events = [
+        event("cpi", date(2027, 12, 10)),
+        event("jolts", date(2026, 12, 1)),
+        event("central_bank", date(2027, 12, 16), "ECB decision"),
+        event("central_bank", date(2026, 11, 20), "PBOC decision"),
+        event("election", date(2026, 11, 3)),
+    ]
+    assert short_horizons(events, date(2026, 10, 30)) == [
+        "PBOC decision (last 2026-11-20)",
+        "jolts (last 2026-12-01)",
+    ]

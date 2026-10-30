@@ -360,7 +360,7 @@ Catalogs you may edit without code:
 | `config/fred_series.yaml` | FRED ingest + Live insight templates + Outlook pack views |
 | `config/polymarket_slugs.yaml` | odds slots + match rules (ingest rotates Gamma slugs) |
 | `config/news_queries.yaml` | news ingest |
-| `config/catalysts.yaml` | FOMC / CPI / PCE / NFP / GDP / JOLTS / speeches / minutes / Beige Book / ISM / Treasury / CBs / elections (hand-maintained) |
+| `config/catalysts.yaml` | FOMC / CPI / PCE / NFP / GDP / JOLTS / speeches / minutes / Beige Book / ISM / Treasury / CBs / elections (hand-maintained from official calendars only; `ingest_calendar` warns and records `short_horizon` when a recurring series ends within 60 days) |
 
 ---
 

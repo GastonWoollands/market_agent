@@ -298,12 +298,12 @@ Operator / hygiene items found in the full review. Do these before or alongside 
 1. **Writer keys — decided 2026-10-29: leave as is.** Gemini keys invalid and `ANTHROPIC_API_KEY` empty on purpose; the operator generates the Outlook manually (`/generate-outlook-manual`) each morning and afternoon to iterate on it. Automated `generate_outlook` / `generate_memos` write template fallbacks meanwhile.
 2. **Backups — deferred until prod.** Not needed while the DB is local (decided 2026-10-29). Add nightly `make dump` when it moves to a hosted / Pi environment.
 3. **Unattended runs.** `launchd` plists calling the existing CLIs for the morning / close / nightly recipes in pipelines.md §4 (no in-process scheduler).
-4. **2027 catalysts.** `config/catalysts.yaml` ends 2026-12-30.
+4. ~~**2027 catalysts.**~~ Done 2026-10-30: FOMC, CPI, NFP, GDP, PCE, ECB, BoE, BoJ 2027 from the official calendars. Still unpublished then: JOLTS, FOMC minutes, Beige Book, Jackson Hole, Treasury refunding; ISM's calendar needs a login. `ingest_calendar` logs `short_horizon` (series ending within 60 days) so the gaps surface on each run.
 5. ~~**Writer model.**~~ Done 2026-10-29: Anthropic default `claude-sonnet-5-5` (no `temperature`, `max_tokens` 16000, refusal / truncation → template).
 6. ~~**Finnhub earnings = 0.**~~ Done 2026-10-29: the unfiltered calendar is capped at 1500 rows; watchlist earnings are now fetched per symbol.
 7. **Small cleanups.** `CORS_ORIGINS` parsed but unused (API hard-codes `*`); `ALPACA_*` in `.env.example` without a settings field; Polymarket month-guess slugs for non-monthly prefixes waste ~10 requests per slot.
 8. **Design question.** FCF yield is in the Quality sleeve while Cheap already weighs the multiple (partial double count).
-9. **Ship the branch.** `feat/desk-metrics-and-review` (renamed from `cursor/metric-fy-quant-scores`) carries Polymarket slots, desk metrics, memo-v2, docs; PR to `main`.
+9. ~~**Ship the branch.**~~ Done 2026-10-29: PR #5 merged.
 
 Next concrete PR: **Phase 3 Book**. Gems membership can parallel Book. Do not start Phase 7 until packs exist. Do not start a PR to “fix F-score for the UI.”
 
