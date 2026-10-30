@@ -355,8 +355,23 @@ def test_writer_pack_spreads_news_across_categories() -> None:
     payload = {"news": news}
     titles = [row["title"] for row in writer_pack(payload)["news"]]
     assert titles == ["boj 0", "energy 0", "fiscal 0", "boj 1", "energy 1", "boj 2"]
-    many = {"news": [{"title": f"n{i}", "category": f"c{i}"} for i in range(14)]}
-    assert len(writer_pack(many)["news"]) == 10
+    many = {"news": [{"title": f"n{i}", "category": f"c{i}"} for i in range(20)]}
+    assert len(writer_pack(many)["news"]) == 16
+    company = {
+        "news": [
+            {"title": "amzn 0", "category": "company", "ticker": "AMZN"},
+            {"title": "amzn 1", "category": "company", "ticker": "AMZN"},
+            {"title": "nvda 0", "category": "company", "ticker": "NVDA"},
+        ]
+    }
+    titles = [row["title"] for row in writer_pack(company)["news"]]
+    assert titles == ["amzn 0", "nvda 0", "amzn 1"]
+    wire = {
+        "news": [{"title": f"w{i}", "category": "wire"} for i in range(4)]
+        + [{"title": "rates 0", "category": "rates"}]
+    }
+    titles = [row["title"] for row in writer_pack(wire)["news"]]
+    assert titles == ["w0", "w1", "w2", "rates 0", "w3"]
 
 
 def test_extended_hours_rows_gap_vs_last_close() -> None:

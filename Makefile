@@ -1,4 +1,4 @@
-.PHONY: db migrate seed yahoo yahoo-watch fred poly dynamics regime news fed-rss calendar pack outlook outlook-manual sec yahoo-val valuation quant scores memos intraday backfill dump restore api web test
+.PHONY: db migrate seed yahoo yahoo-watch fred poly dynamics regime news finnhub-news fed-rss calendar pack outlook outlook-manual sec yahoo-val valuation quant scores memos intraday backfill dump restore api web test
 
 db:
 	docker compose up -d db
@@ -26,6 +26,9 @@ regime:
 
 news:
 	.venv/bin/python -m jobs.ingest_news
+
+finnhub-news:
+	.venv/bin/python -m jobs.ingest_finnhub_news
 
 fed-rss:
 	.venv/bin/python -m jobs.ingest_fed_rss

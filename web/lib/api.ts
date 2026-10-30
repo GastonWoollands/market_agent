@@ -323,6 +323,7 @@ export type OutlookNews = {
   published_at: string;
   category: string;
   url: string;
+  summary?: string | null;
 };
 
 export type OutlookEvent = {

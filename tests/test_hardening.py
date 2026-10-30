@@ -25,7 +25,7 @@ from store.repos import (
 def test_alembic_has_one_head() -> None:
     script = ScriptDirectory.from_config(Config("alembic.ini"))
     heads = script.get_heads()
-    assert heads == ["0017_odds_snapshot_slot"], heads
+    assert heads == ["0018_news_item_summary"], heads
 
 
 def test_schema_behind_error_maps_missing_table() -> None:

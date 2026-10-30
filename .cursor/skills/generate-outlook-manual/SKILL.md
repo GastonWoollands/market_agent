@@ -24,6 +24,7 @@ python -m jobs.compute_regime
 python -m jobs.ingest_intraday                     # pre/post 5m bars -> extended_hours
 python -m jobs.ingest_polymarket
 python -m jobs.ingest_news
+python -m jobs.ingest_finnhub_news                 # wire + watchlist news with summaries
 python -m jobs.ingest_fed_rss
 python -m jobs.ingest_calendar
 python -m jobs.build_pack
@@ -49,14 +50,18 @@ anomalies. Read `system.txt` and `user.txt` in full before writing.
 
 ## 3. Write `brief.json`
 
-Write the `OutlookBrief` JSON (`agent/brief.py`) following `system.txt` exactly. Checklist:
+Write the `OutlookBrief` JSON (`agent/brief.py`) following `system.txt` exactly. Write the file
+with the editor's Write tool or a quoted heredoc (`<<'EOF'`): an unquoted heredoc eats `$500`,
+`$100` and the check does not catch it. Checklist:
 
 - **Timing:** `pre_open` = last session is the story and `extended_hours` is the overnight
   reaction (lead with big gaps, e.g. post-earnings); `intraday` = say "so far today";
   `after_close` = today's full session plus post-market gaps.
-- **World:** use the headlines (one per category) for central banks, energy, fiscal, FX and
-  corporate news in `drivers` and `geopolitical_deep`. Headline numbers are not citable unless
-  the same value is elsewhere in the pack.
+- **World:** use the headlines (one per bucket) for central banks, energy, fiscal, FX and
+  corporate news in `drivers` and `geopolitical_deep`. `wire` rows are the Finnhub market wire;
+  `company` rows carry a `ticker`. Rows with a `summary` explain why something moved: attribute
+  them ("reports"). Headline/summary numbers are not citable unless the same value is elsewhere
+  in the pack.
 - **Rates:** `yields_live` for today's move (bp), FRED DGS* for curve facts with `as_of`.
 - **Dollar:** DXY for today, DTWEXBGS only with its `as_of`; never compare levels.
 - Every ticker and percent must be a pack value at the written precision.
