@@ -36,6 +36,25 @@ YAML_KINDS = {
     "other",
 }
 TITLE_SLUG_KINDS = frozenset({"speech", "ism", "treasury", "central_bank"})
+# Recurring series must stay listed this far ahead; below it the yaml needs its refresh.
+HORIZON_DAYS = 60
+# One-offs or event-driven slots: no horizon to keep.
+NO_HORIZON = frozenset({"speech", "election", "other"})
+
+
+def short_horizons(events: list[CalendarEvent], today: date) -> list[str]:
+    """Recurring series whose last listed date is within HORIZON_DAYS of `today`.
+
+    Central banks are tracked per bank (by title), the rest per kind.
+    """
+    last: dict[str, date] = {}
+    for item in events:
+        if item.kind in NO_HORIZON:
+            continue
+        key = item.title if item.kind == "central_bank" else item.kind
+        last[key] = max(last.get(key, item.date), item.date)
+    limit = today + timedelta(days=HORIZON_DAYS)
+    return [f"{key} (last {day.isoformat()})" for key, day in sorted(last.items()) if day < limit]
 
 
 def _slug_title(title: str) -> str:
@@ -100,6 +119,13 @@ def ingest(*, skip_finnhub: bool = False) -> dict[str, int | list[str]]:
     yaml_events = events_from_yaml(load_catalysts())
     if not yaml_events:
         raise RuntimeError("catalysts.yaml is empty")
+    horizon = short_horizons(yaml_events, datetime.now(ET).date())
+    if horizon:
+        log.warning(
+            "catalysts.yaml ends within %sd for: %s; add the next official dates",
+            HORIZON_DAYS,
+            ", ".join(horizon),
+        )
     with session_scope() as session:
         yaml_rows = upsert_events(session, yaml_events)
 
@@ -138,6 +164,7 @@ def ingest(*, skip_finnhub: bool = False) -> dict[str, int | list[str]]:
         "yaml_rows": yaml_rows,
         "earnings_rows": earnings_rows,
         "failures": failures,
+        "short_horizon": horizon,
     }
 
 
@@ -173,6 +200,7 @@ def main() -> None:
             "yaml_rows": result["yaml_rows"],
             "earnings_rows": result["earnings_rows"],
             "failures": result["failures"],
+            "short_horizon": result.get("short_horizon", []),
             "source": "calendar",
         },
     )
