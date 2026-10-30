@@ -17,6 +17,7 @@ from analytics.drivers import MACRO_IDS as DRIVER_MACRO_IDS
 from analytics.drivers import TAPE_IDS as DRIVER_TAPE_IDS
 from analytics.drivers import as_dicts, rank_drivers
 from analytics.macro_pack import named_facts, series_row
+from analytics.news_rank import NewsRules, select_news
 from analytics.outlook_judgment import build_judgment
 from analytics.risk_on import (
     CURVE_SERIES,
@@ -26,7 +27,7 @@ from analytics.risk_on import (
     VIX_SERIES,
     compute_risk_on,
 )
-from store.catalog import load_fred_series, load_polymarket, load_universes
+from store.catalog import load_fred_series, load_news_sources, load_polymarket, load_universes
 from store.display import resolve_price, resolve_yield_change_bp
 from store.models import (
     BarDaily,
@@ -42,13 +43,13 @@ from store.repos import (
     event_count_for_source,
     intraday_closes_for_tickers,
     latest_jobs,
-    latest_news_by_bucket,
     latest_odds,
     latest_policy_items,
     latest_return_stats,
     latest_rrg_points,
     live_tape_rows,
     macro_observations,
+    news_since,
     table_count,
     universe_size,
     upcoming_events,
@@ -73,8 +74,6 @@ LIVE_NEAR_DAYS = 2
 NEAR_CATALYST_KINDS = frozenset({"fomc", "cpi", "pce", "nfp", "central_bank", "speech"})
 LIVE_NEAR_CATALYST_KINDS = frozenset({"fomc", "cpi", "pce", "nfp", "speech"})
 NEWS_WINDOW = timedelta(hours=48)
-NEWS_PER_CATEGORY = 3
-NEWS_BUCKET_CAPS = {"wire": 6}
 POLICY_WINDOW_HOURS = 72
 POLICY_PACK_CAP = 8
 WRITER_POLICY_CAP = 3
@@ -267,11 +266,9 @@ def pack_from_store(
     
     odds = _odds_dicts(latest_odds(session))
     news = _news_dicts(
-        latest_news_by_bucket(
-            session,
-            since=(now or datetime.now(UTC)) - NEWS_WINDOW,
-            per_bucket=NEWS_PER_CATEGORY,
-            bucket_caps=NEWS_BUCKET_CAPS,
+        select_news(
+            news_since(session, since=(now or datetime.now(UTC)) - NEWS_WINDOW),
+            NewsRules.from_catalog(load_news_sources()),
         )
     )
     policy_items = _policy_dicts(
@@ -605,7 +602,8 @@ WRITER_SERIES = frozenset(
 )
 STALE_FOREIGN_LAG = 60
 WRITER_ANOMALY_CAP = 3
-WRITER_NEWS_CAP = 16
+# Enough for every bucket's best row (~27 today) plus a second round.
+WRITER_NEWS_CAP = 32
 # The Finnhub wire is the broadest world feed; it gets three slots per round.
 WRITER_NEWS_PER_PASS = {"wire": 3}
 WRITER_EXTENDED_CAP = 8

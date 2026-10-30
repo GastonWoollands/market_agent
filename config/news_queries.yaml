@@ -1,99 +1,114 @@
-# Google News RSS queries. One query per Outlook/Live news bucket.
-# URL shape: https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en
+# Google News RSS queries. One bucket per Outlook/Live news category.
+# URL shape: https://news.google.com/rss/search?q={query} when:{freshness_days}d&hl=en-US&gl=US&ceid=US:en
+#
+# Write queries the way a newsroom would title the story: two to four plain words.
+# Keyword lists ("WTI Brent crude oil price OPEC") match SEO pages and price tables, not news.
+# Event queries (Beige Book, Jackson Hole, FOMC minutes) return rows only around the event;
+# an empty result outside that window is expected.
+# Which rows reach the pack is decided at read time by config/news_sources.yaml.
+
+freshness_days: 2
 
 buckets:
   - category: rates
     queries:
-      - "US Treasury yields 10-year FOMC"
-      - "Federal Reserve interest rate decision"
-      - "Jackson Hole Federal Reserve"
-      - "Fed Chair speech"
+      - "Federal Reserve"
+      - "Fed rate decision"
+      - "Treasury yields"
+      - "Fed chair"
       - "FOMC minutes"
-      - "Beige Book Federal Reserve"
+      - "Beige Book"
+      - "Jackson Hole Fed"          # bare "Jackson Hole" returns the local paper
 
   - category: inflation
     queries:
-      - "US CPI inflation PCE price index"
+      - "US inflation"
+      - "CPI report"
+      - "PCE inflation"
 
   - category: growth
     queries:
-      - "US jobs payrolls unemployment claims"
+      - "US jobs report"
+      - "jobless claims"
+      - "US economy"
 
   - category: fiscal
     queries:
-      - "US federal debt Treasury deficit"
+      - "budget deficit"
+      - "national debt"
 
   - category: credit
     queries:
-      - "high yield credit spreads HYG"
+      - "junk bonds"
+      - "credit markets"
 
   - category: fx
     queries:
-      - "US dollar index DXY currency strength"
-      - "euro yen sterling exchange rate"
-      - "emerging market currencies EM FX"
+      - "dollar index"
+      - "yen dollar"
+      - "euro dollar"
+      - "emerging market currencies"
 
   - category: commodities
     queries:
-      - "WTI Brent crude oil price OPEC"
-      - "gold silver price inflation hedge"
-      - "copper industrial metals demand"
+      - "oil prices"
+      - "gold prices"
+      - "copper prices"
 
   - category: trade
     queries:
-      - "US tariffs trade war China Canada Mexico"
-      - "USMCA trade policy supply chain"
-      - "Section 232 steel aluminum tariffs"
+      - "tariffs"
+      - "US trade talks"            # bare "trade talks" returns sports trades
 
   - category: treasury
     queries:
-      - "Treasury Secretary buyback long bonds"
-      - "Treasury auction demand yield curve"
-      - "US fiscal policy government spending"
+      - "Treasury auction"
+      - "Treasury refunding"
+      - "Treasury Secretary"
 
   - category: corporate
     queries:
-      - "NVDA AAPL MSFT earnings results guidance"
-      - "tech earnings AI semiconductor revenue"
-      - "mega cap earnings outlook forward guidance"
+      - "earnings Wall Street"
+      - "stocks earnings guidance"
 
   - category: energy
     queries:
-      - "oil refining capacity crack spreads"
-      - "natural gas LNG exports storage"
-      - "energy infrastructure pipelines bottlenecks"
+      - "OPEC"
+      - "natural gas prices"
+      - "LNG"
 
   - category: sector
     queries:
-      - "US sector rotation stock market"
-      - "S&P 500 sectors XLK XLE XLF"
+      - "stock market today"
+      - "sector rotation"
 
   - category: thematic
     queries:
-      - "AI semiconductors software stocks"
+      - "AI stocks"
+      - "chip stocks"
 
   - category: ecb
     queries:
-      - "ECB interest rate Lagarde euro area inflation"
-      - "ECB Governing Council Schnabel de Guindos"
+      - "ECB"
+      - "Lagarde"
 
   - category: boe
     queries:
-      - "Bank of England interest rate UK inflation"
-      - "BoE Monetary Policy Committee Bailey"
+      - "Bank of England"
 
   - category: boj
     queries:
-      - "Bank of Japan interest rate yen"
-      - "BOJ Ueda monetary policy YCC intervention"
+      - "Bank of Japan"
 
   - category: pboc
     queries:
-      - "PBOC China monetary policy yuan CNY"
-      - "China central bank liquidity injection"
+      - "PBOC"
+      - "China economy"
 
   - category: geo
     queries:
-      - "geopolitics oil supply energy security"
-      - "Middle East conflict shipping trade routes"
-      - "US China Russia geopolitical risk markets"
+      - "Middle East conflict"
+      - "shipping attacks"
+      - "Russia Ukraine war"
+      - "China Taiwan"
+      - "sanctions"

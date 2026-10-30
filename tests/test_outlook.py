@@ -355,8 +355,8 @@ def test_writer_pack_spreads_news_across_categories() -> None:
     payload = {"news": news}
     titles = [row["title"] for row in writer_pack(payload)["news"]]
     assert titles == ["boj 0", "energy 0", "fiscal 0", "boj 1", "energy 1", "boj 2"]
-    many = {"news": [{"title": f"n{i}", "category": f"c{i}"} for i in range(20)]}
-    assert len(writer_pack(many)["news"]) == 16
+    many = {"news": [{"title": f"n{i}", "category": f"c{i}"} for i in range(40)]}
+    assert len(writer_pack(many)["news"]) == 32
     company = {
         "news": [
             {"title": "amzn 0", "category": "company", "ticker": "AMZN"},

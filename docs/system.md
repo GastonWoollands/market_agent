@@ -47,7 +47,8 @@ Edit yaml, not code, for lists:
 | `config/universes.yaml` | seed, Yahoo universes, Live header, valuation floor |
 | `config/fred_series.yaml` | FRED ingest + Live insight templates + Outlook pack views |
 | `config/polymarket_slugs.yaml` | odds slots + match rules (ingest rotates Gamma slugs) |
-| `config/news_queries.yaml` | news ingest |
+| `config/news_queries.yaml` | Google News ingest (queries, `freshness_days`) |
+| `config/news_sources.yaml` | read-time headline selection: publisher tiers, blocked publishers, junk title patterns (`analytics/news_rank.py`) |
 | `config/catalysts.yaml` | FOMC / CPI / PCE / NFP / GDP / JOLTS / speeches / minutes / Beige Book / ISM / Treasury / central banks / elections |
 
 ---

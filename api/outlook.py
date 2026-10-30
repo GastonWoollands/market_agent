@@ -8,6 +8,7 @@ from agent.pack import (
     sources_from_counts,
     store_counts,
 )
+from analytics.news_rank import NewsRules, select_news
 from api.schemas import (
     OutlookCalendarItem,
     OutlookEvent,
@@ -20,20 +21,19 @@ from api.schemas import (
     OutlookSource,
     OutlookWatchScenario,
 )
+from store.catalog import load_news_sources
 from store.models import EventItem, EvidencePack, NewsItem, OutlookReport
 from store.repos import (
     latest_evidence_pack,
     latest_jobs,
-    latest_news_by_bucket,
     latest_outlook_report,
+    news_since,
     upcoming_events,
 )
 
 ET = ZoneInfo("America/New_York")
 STALE_AFTER = timedelta(days=2)
 NEWS_SINCE = timedelta(days=3)
-NEWS_PER_BUCKET = 3
-NEWS_BUCKET_CAPS = {"wire": 6}
 
 
 def build_outlook(
@@ -261,11 +261,9 @@ def outlook_from_store(
     return build_outlook(
         as_of=day,
         now=clock,
-        news=latest_news_by_bucket(
-            session,
-            since=clock - NEWS_SINCE,
-            per_bucket=NEWS_PER_BUCKET,
-            bucket_caps=NEWS_BUCKET_CAPS,
+        news=select_news(
+            news_since(session, since=clock - NEWS_SINCE),
+            NewsRules.from_catalog(load_news_sources()),
         ),
         events=upcoming_events(
             session,

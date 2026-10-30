@@ -47,8 +47,12 @@ class NewsClient:
     def __exit__(self, *exc: object) -> None:
         self.close()
 
-    def fetch_query(self, query: str, *, category: str) -> list[NewsHeadline]:
-        params = {"q": query, "hl": "en-US", "gl": "US", "ceid": "US:en"}
+    def fetch_query(
+        self, query: str, *, category: str, freshness_days: int | None = None
+    ) -> list[NewsHeadline]:
+        """Search RSS. `freshness_days` adds Google's `when:Nd`; rows keep the plain query."""
+        search = f"{query} when:{freshness_days}d" if freshness_days else query
+        params = {"q": search, "hl": "en-US", "gl": "US", "ceid": "US:en"}
         try:
             response = http_get(self._http, self._bucket, NEWS_RSS_URL, params=params)
         except httpx.HTTPError as exc:
