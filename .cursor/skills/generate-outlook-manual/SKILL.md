@@ -5,31 +5,23 @@ description: Generate the Outlook with the coding agent (Cursor or Claude Code) 
 
 # Generate Outlook Manually
 
-Manual Outlook generation using Claude through Cursor. Use when you need superior reasoning on regime shifts, anomalies, or complex market narratives.
+The coding agent writes the Outlook from the stored evidence pack. This is the one sanctioned
+exception to the writer/coder split in `AGENTS.md`. Same rules as the SDK writer: narrate the
+pack only, no web, no outside facts, and the citation gate must pass before saving.
 
-## When to Use
+Current operating mode: the SDK writer keys are off on purpose; the operator runs this skill
+each weekday morning (pre-open) and afternoon (intraday or after the close).
 
-- Automated Gemini output was too generic
-- High-severity anomalies detected (correlation breaks, z-score extremes)
-- Regime classification changed (expansion → slowdown, etc.)
-- Testing prompt changes before deployment
-- Major market events requiring nuanced analysis
+## 1. Refresh data and build the pack
 
-## Prerequisites
-
-Evidence pack must exist for target date:
+Run from the repo root with `.venv` active. Order matters: regime needs FRED, the pack needs all.
 
 ```bash
-python -m jobs.build_pack
-```
-
-If pack is stale, refresh data first:
-
-```bash
-python -m jobs.ingest_yahoo
+python -m jobs.ingest_yahoo                        # tape quotes + daily bars
 python -m jobs.ingest_yahoo --universe watchlist   # default run is tape only
 python -m jobs.ingest_fred
 python -m jobs.compute_regime
+python -m jobs.ingest_intraday                     # pre/post 5m bars -> extended_hours
 python -m jobs.ingest_polymarket
 python -m jobs.ingest_news
 python -m jobs.ingest_fed_rss
@@ -37,169 +29,60 @@ python -m jobs.ingest_calendar
 python -m jobs.build_pack
 ```
 
-## Workflow
+`build_pack` stamps `session.phase` from the ET clock (`pre_open`, `intraday`, `after_close`,
+`closed`). Outside the cash session it also adds `extended_hours` (pre/post-market gaps vs the
+last daily close), so build the pack after `ingest_intraday`.
 
-1. **Load evidence pack** from Postgres (latest for today or specified date)
-2. **Display pack highlights** (regime, liquidity, anomalies, calendar)
-3. **Generate Outlook** with Claude using `SYSTEM_PROMPT` from `agent/prompts.py`
-4. **Validate citations** (no invented tickers, percents, or yields)
-5. **Store in `outlook_report`** table (overwrites existing for same date)
+If a job fails, say so to the operator and continue only if the pack still makes sense
+(e.g. Finnhub down = no earnings rows; FRED down = stale macro).
 
-## Implementation Steps
+## 2. Dump what the writer sees
 
-Execute the following Python code to generate the Outlook:
-
-```python
-from datetime import date, datetime
-from zoneinfo import ZoneInfo
-from agent.brief import OutlookBrief
-from agent.outlook import user_prompt, render_markdown
-from agent.prompts import SYSTEM_PROMPT, PROMPT_VERSION
-from agent.citations import citation_issues, coverage_issues, validate_brief_fields
-from store.engine import session_scope
-from store.repos import latest_evidence_pack, upsert_outlook_report
-
-# Stamp the real author, e.g. "manual/claude-opus-5-5" or "manual/cursor-<model>"
-MANUAL_MODEL = "manual/<agent-model>"
-
-# 1. Load evidence pack
-target_date = datetime.now(ZoneInfo("America/New_York")).date()  # or date.fromisoformat("2026-08-30")
-
-with session_scope() as session:
-    pack_row = latest_evidence_pack(session, target_date)
-    if not pack_row:
-        raise RuntimeError(f"No evidence pack for {target_date}. Run: python -m jobs.build_pack")
-    pack = dict(pack_row.pack)
-    pack_id = pack_row.id
-
-# 2. Show pack highlights
-print(f"📊 Evidence Pack: {pack['as_of']}")
-if 'regime' in pack:
-    r = pack['regime']
-    print(f"   Regime: {r['growth']}/{r['inflation']}/{r['policy']}/{r['volatility']}")
-    print(f"   Confidence: G={r['confidence']['growth']:.2f} I={r['confidence']['inflation']:.2f}")
-if 'liquidity' in pack:
-    liq = pack['liquidity']
-    wow = liq.get('wow_change_bn')
-    print(f"   Net Liquidity: ${liq['net_liquidity_bn']:.0f}B" + (f" (WoW {wow:+.0f}B)" if wow else ""))
-if 'anomalies' in pack and pack['anomalies']:
-    print(f"   Anomalies ({len(pack['anomalies'])}):")
-    for a in pack['anomalies'][:3]:
-        print(f"     • {a['description']} (severity: {a['severity']:.2f})")
-print(f"   Sources: {len(pack.get('news', []))} news, {len(pack.get('events', []))} events")
-
-# 3. Generate prompt
-prompt = user_prompt(pack)
-print(f"\n📝 System Prompt: {PROMPT_VERSION}")
-print(f"📝 User Prompt: {len(prompt)} chars")
-print("\n" + "="*80)
-print("SYSTEM PROMPT:")
-print("="*80)
-print(SYSTEM_PROMPT[:500] + "...\n")
-print("="*80)
-print("USER PROMPT (evidence pack JSON):")
-print("="*80)
-print(prompt[:500] + "...\n")
-
-# 4. Now call Claude via Cursor to generate OutlookBrief
-# The agent will use the above SYSTEM_PROMPT and prompt
-# and respond with structured JSON matching OutlookBrief schema
-
-# 5. After Claude responds, parse and validate
-# (This section will be filled by Claude's response)
-```
-
-## After Claude Generates
-
-Once Claude returns the JSON, execute validation and storage:
-
-```python
-# Parse Claude's response into OutlookBrief
-brief_json = {
-    # Claude's JSON response here
-}
-brief = OutlookBrief.model_validate(brief_json)
-
-# Render markdown
-text = render_markdown(brief)
-
-# Validate citations
-issues = (
-    citation_issues(pack, text) + 
-    coverage_issues(pack, text) + 
-    validate_brief_fields(brief_json)
-)
-
-if issues:
-    print(f"❌ Validation failed: {', '.join(issues)}")
-    print("\nFix these issues and regenerate.")
-else:
-    # Store in Postgres
-    with session_scope() as session:
-        upsert_outlook_report(
-            session,
-            as_of=target_date,
-            model=MANUAL_MODEL,
-            prompt_version=PROMPT_VERSION,
-            body_md=text,
-            body_json=brief.model_dump(),
-            pack_id=pack_id,
-            status="ok"
-        )
-    print(f"✅ Outlook saved (pack_id: {pack_id}, model: {MANUAL_MODEL})")
-    print(f"   View at: http://localhost:3000/outlook")
-```
-
-## Validation Rules
-
-Same as automated job (`agent/citations.py`):
-
-- **No invented tickers:** All tickers must exist in pack (tape, macro, or watchlist)
-- **No invented percents:** All percentages must be from pack (change_pct, yoy_pct, implied_yes)
-- **No invented yields:** All yield values must match pack (DGS2, DGS10, DGS30, etc.)
-- **Required fields:** All brief fields must be present (use "unavailable" if data missing)
-- **Coverage checks:** Spine series and judgment items must be mentioned
-
-## Notes
-
-- Written by whichever coding agent runs the skill (Cursor or Claude Code); no API key needed
-- Stamp `MANUAL_MODEL` with that agent's real model, e.g. `manual/claude-opus-5-5`
-- Overwrites existing Outlook for the same date
-- Markdown and JSON both stored in `outlook_report` table
-- UI reads latest report for the date (manual overrides automated)
-- Write from `writer_pack(pack)` (what the SDK writer sees); validate against the full pack
-
-## Comparison to Automated Job
-
-| Aspect | Automated (SDK writer) | Manual (coding agent) |
-|--------|-------------------|-----------------|
-| Model | `AGENT_PROVIDER` / `AGENT_MODEL` | the coding agent running the skill |
-| Speed | 5-10 seconds | 15-30 seconds |
-| Cost | provider API pricing | coding-agent subscription |
-| Quality | Good for routine days | Superior for complex days |
-| Iteration | No (one-shot) | Yes (can refine) |
-| Unattended | Yes (cron/launchd) | No (manual trigger) |
-| Streaming | No | Yes (see generation live) |
-
-## Troubleshooting
-
-**"No evidence pack for date"**
 ```bash
-python -m jobs.build_pack --as-of YYYY-MM-DD
+H=.claude/skills/generate-outlook-manual/outlook_manual.py
+python $H dump --out <scratchpad>/outlook
 ```
 
-**Citation validation fails**
-- Check pack JSON for the cited value
-- Verify ticker exists in pack.macro, pack.header, pack.drivers
-- Verify percent came from change_pct, yoy_pct, or implied_yes field
+Writes `system.txt` (SYSTEM_PROMPT), `user.txt` (exact SDK user prompt) and `writer.json`,
+and prints session phase, regime, the largest extended-hours gaps, headline categories and
+anomalies. Read `system.txt` and `user.txt` in full before writing.
 
-**Want to regenerate with same pack**
-- Just run the skill again
-- Latest Outlook overwrites previous for the same date
+## 3. Write `brief.json`
 
-## See Also
+Write the `OutlookBrief` JSON (`agent/brief.py`) following `system.txt` exactly. Checklist:
 
-- `agent/prompts.py` — system prompt and version
-- `agent/brief.py` — OutlookBrief schema
-- `agent/citations.py` — validation rules
-- `jobs/generate_outlook.py` — automated job equivalent
+- **Timing:** `pre_open` = last session is the story and `extended_hours` is the overnight
+  reaction (lead with big gaps, e.g. post-earnings); `intraday` = say "so far today";
+  `after_close` = today's full session plus post-market gaps.
+- **World:** use the headlines (one per category) for central banks, energy, fiscal, FX and
+  corporate news in `drivers` and `geopolitical_deep`. Headline numbers are not citable unless
+  the same value is elsewhere in the pack.
+- **Rates:** `yields_live` for today's move (bp), FRED DGS* for curve facts with `as_of`.
+- **Dollar:** DXY for today, DTWEXBGS only with its `as_of`; never compare levels.
+- Every ticker and percent must be a pack value at the written precision.
+
+## 4. Check and save
+
+```bash
+python $H check <scratchpad>/outlook/brief.json
+python $H save  <scratchpad>/outlook/brief.json --model manual/<agent-model>
+```
+
+`check` runs `citation_issues` + `coverage_issues` + `validate_brief_fields`; `save` reruns them
+and refuses on any issue, then `upsert_outlook_report` (overwrites the same `as_of`) with
+`PROMPT_VERSION` and the pack id. Stamp the real author, e.g. `manual/claude-opus-5-5`.
+`--as-of YYYY-MM-DD` targets another pack date (default: today in ET).
+
+Common issues:
+
+- `pct:X%` — percent not in the pack at that precision; copy the pack value.
+- `ticker:X` — word read as a ticker; rephrase or use a pack ticker.
+- `coverage:CPIAUCSL` — mention CPI with its `yoy_pct`.
+- `watch_today:generic_outcome` — each bullish outcome must name a market (2Y, equities,
+  dollar, odds, credit, VIX...).
+
+## 5. Report to the operator
+
+Summarize in the operator's language: what happened, positioning, what to expect, the
+invalidation line, and any data gaps (failed jobs, stale series). The UI shows the report on
+`/outlook` once the API runs (`make api`, port 8000; web on 3000 or the next free port).

@@ -77,7 +77,7 @@ def test_regime_and_liquidity_in_pack():
         # These may be None if compute_regime hasn't run or no anomalies detected
         assert "regime" in pack or pack.get("regime") is None
         assert "liquidity" in pack or pack.get("liquidity") is None
-        assert "anomalies" in pack or pack.get("anomalies") == []
+        assert isinstance(pack.get("anomalies", []), list)
 
 
 def test_manual_skill_prerequisite_check():

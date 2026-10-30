@@ -346,6 +346,51 @@ def test_session_phase_by_eastern_clock() -> None:
     assert session_phase(date(2026, 10, 31), saturday)["phase"] == "closed"
 
 
+def test_writer_pack_spreads_news_across_categories() -> None:
+    news = [
+        {"title": f"{category} {index}", "category": category}
+        for category, count in (("boj", 3), ("energy", 2), ("fiscal", 1))
+        for index in range(count)
+    ]
+    payload = {"news": news}
+    titles = [row["title"] for row in writer_pack(payload)["news"]]
+    assert titles == ["boj 0", "energy 0", "fiscal 0", "boj 1", "energy 1", "boj 2"]
+    many = {"news": [{"title": f"n{i}", "category": f"c{i}"} for i in range(14)]}
+    assert len(writer_pack(many)["news"]) == 10
+
+
+def test_extended_hours_rows_gap_vs_last_close() -> None:
+    from decimal import Decimal
+    from types import SimpleNamespace
+
+    from agent.pack import extended_hours_rows
+
+    def row(ticker: str) -> SimpleNamespace:
+        return SimpleNamespace(
+            ticker=ticker, last_close=Decimal("243.79"), last_date=date(2026, 10, 29)
+        )
+
+    at = lambda d, h, m: datetime(2026, 10, d, h, m, tzinfo=UTC)  # noqa: E731
+    bars = {
+        # 15:55 ET regular bar, then after-hours and pre-market
+        "AMZN": [
+            (at(29, 19, 55), Decimal("244.23")),
+            (at(29, 20, 30), Decimal("229.76")),
+            (at(30, 11, 55), Decimal("227.5")),
+        ],
+        "MSFT": [(at(29, 20, 30), Decimal("243.79"))],
+        # a regular session followed the close: reference is stale
+        "NVDA": [(at(29, 21, 0), Decimal("240")), (at(30, 14, 0), Decimal("250"))],
+        "AAPL": [(at(29, 19, 0), Decimal("250"))],
+    }
+    rows = extended_hours_rows([row(t) for t in ("MSFT", "AMZN", "NVDA", "AAPL")], bars)
+    assert [item["ticker"] for item in rows] == ["AMZN", "MSFT"]
+    amzn = rows[0]
+    assert amzn["side"] == "pre" and amzn["as_of_et"] == "2026-10-30 07:55"
+    assert amzn["gap_pct"] == -6.682 and amzn["ref_close"] == 243.79
+    assert rows[1]["side"] == "post" and rows[1]["gap_pct"] == 0.0
+
+
 def test_short_outcome_labels_every_fed_and_cpi_market() -> None:
     from agent.pack import short_outcome
 

@@ -63,11 +63,13 @@ python -m jobs.ingest_yahoo
 python -m jobs.ingest_yahoo --universe watchlist   # the default run refreshes the tape only
 python -m jobs.ingest_fred
 python -m jobs.compute_regime
+python -m jobs.ingest_intraday      # pre/post 5m bars -> pack extended_hours
+python -m jobs.ingest_polymarket
 python -m jobs.ingest_news
 python -m jobs.ingest_fed_rss
 python -m jobs.ingest_calendar
 python -m jobs.build_pack
-python -m jobs.generate_outlook
+python -m jobs.generate_outlook     # or the generate-outlook-manual skill
 ```
 
 ---
@@ -176,18 +178,19 @@ Intended times if you automate later. Until then, run the same commands by hand.
 3. `python -m jobs.ingest_fred` — 06:00 cadence
 4. `python -m jobs.compute_regime` — classify macro regime from FRED
 5. `python -m jobs.ingest_intraday` — pre/post 5m gaps
-6. `python -m jobs.ingest_news`
-7. `python -m jobs.ingest_fed_rss`
-8. `python -m jobs.ingest_calendar` — Finnhub ~07:00
-9. `python -m jobs.build_pack`
-10. `python -m jobs.generate_outlook` — ~07:45 (SDK writer; provider per `AGENT_PROVIDER`)
+6. `python -m jobs.ingest_polymarket` — Fed / CPI / recession odds
+7. `python -m jobs.ingest_news`
+8. `python -m jobs.ingest_fed_rss`
+9. `python -m jobs.ingest_calendar` — Finnhub ~07:00
+10. `python -m jobs.build_pack` — before 09:30 ET the pack carries `extended_hours` (pre-market gaps)
+11. `python -m jobs.generate_outlook` — ~07:45 (SDK writer; provider per `AGENT_PROVIDER`), or the manual skill
 
 Open Outlook: the sources table must match `/health` job rows. Hover the header status dot for latest `job_run`.
 
 **Manual override (optional):** If the automated output needs better reasoning, use the coding-agent skill (Cursor or Claude Code). This is the one sanctioned exception to the writer/coder split in AGENTS.md; the citation check still gates the result:
 
 ```
-# In Cursor Chat
+# In Cursor or Claude Code
 /generate-outlook-manual
 ```
 
@@ -208,6 +211,7 @@ python -m jobs.ingest_yahoo
 python -m jobs.ingest_yahoo --universe watchlist
 python -m jobs.ingest_fred
 python -m jobs.compute_regime
+python -m jobs.ingest_intraday      # after 16:00 ET: post-market gaps (earnings)
 python -m jobs.ingest_polymarket
 python -m jobs.ingest_news
 python -m jobs.ingest_fed_rss
