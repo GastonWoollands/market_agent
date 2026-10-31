@@ -21,6 +21,7 @@ from store.catalog import CatalogInstrument, load_universes
 from store.engine import session_scope
 from store.repos import (
     instruments_in_universe,
+    prune_metric_ttm,
     replace_membership,
     universe_size,
     upsert_instrument,
@@ -82,7 +83,14 @@ def ingest(
                 if not rows:
                     raise RuntimeError("no SEC tickers after exchange filter")
                 listed = len(rows)
-                kept, fy_written = _write_members(client, rows, floor, archive, failures)
+                kept, fy_written = _write_members(
+                    client,
+                    rows,
+                    floor,
+                    archive,
+                    failures,
+                    enforce_band=tickers is None and limit is None,
+                )
         finally:
             if archive is not None:
                 archive.close()
@@ -106,7 +114,7 @@ def ingest(
 
 
 def _write_members(
-    client, listed, floor: Decimal, archive, failures: list[str]
+    client, listed, floor: Decimal, archive, failures: list[str], *, enforce_band: bool
 ) -> tuple[int, int]:
     kept = 0
     fy_written = 0
@@ -157,6 +165,7 @@ def _write_members(
                 snapshots = [*snapshots, metric]
             for snap in snapshots:
                 upsert_metric_ttm(session, instrument.id, snap)
+            prune_metric_ttm(session, instrument.id, {snap.as_of for snap in snapshots})
             for fy_snap in fy_history_from_facts(payload):
                 upsert_metric_fy(session, instrument.id, fy_snap)
                 fy_written += 1
@@ -164,6 +173,9 @@ def _write_members(
             kept += 1
             if index % 500 == 0:
                 log.info("sec facts %s/%s kept=%s", index, len(listed), kept)
+        # Raise inside the transaction so a bad parse rolls back TTM rows and membership.
+        if enforce_band and not (BAND[0] <= len(ids) <= BAND[1]):
+            raise RuntimeError(f"valuation membership {len(ids)} is outside {BAND[0]}–{BAND[1]}")
         replace_membership(session, universe.id, ids)
     return kept, fy_written
 

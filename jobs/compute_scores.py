@@ -15,6 +15,7 @@ from store.engine import session_scope
 from store.repos import (
     closes_for_instrument_ids,
     latest_valuation_rows,
+    prune_opportunity_scores,
     upsert_opportunity_scores,
 )
 
@@ -133,6 +134,7 @@ def compute() -> dict[str, object]:
         )
     with session_scope() as session:
         written = upsert_opportunity_scores(session, payload)
+        prune_opportunity_scores(session, {int(item["instrument_id"]) for item in payload})
     top = scored[0]
     return {
         "written": written,

@@ -118,6 +118,8 @@ class MetricTtm(BaseModel):
     revenue: Decimal
     ebitda: Decimal | None = None
     fcf: Decimal | None = None
+    cfo: Decimal | None = None
+    capex: Decimal | None = None
     net_debt: Decimal | None = None
     shares: Decimal | None = None
 

@@ -13,7 +13,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
 
-MIN_COMPARABLE_OBS = 252
+# ~3 years of sessions: a younger listing has no own history to be cheap against.
+MIN_COMPARABLE_OBS = 750
 LOOKBACK_DAYS = 5 * 365 + 30
 YEAR_DAYS = 365
 

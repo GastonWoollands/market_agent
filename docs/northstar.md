@@ -53,7 +53,7 @@ Every number on screen comes from Postgres. Vendors are never called from the UI
 - LLM-owned weights, entries, targets, or stops. Python fills numeric snapshots; the writer narrates the pack
 - Piotroski F-Score or Altman Z as a screen, badge, rank input, or pack field. `metric_fy` stays; F/Z are not product
 - LLM “moat” scores or fit-percentage gauges
-- P/E, P/B, or interest coverage until those facts are stored (this universe is EV/EBITDA + FCF yield)
+- P/E or P/B until those facts are stored (this universe is EV/EBITDA + FCF yield). Interest coverage is **in scope** once `InterestExpense` is stored (2026-10-31, see decision_layer_plan Phase 1.6)
 - In-process job scheduler (APScheduler). Unattended runs are `cron` / `launchd` calling CLIs when you want them; until then, operators run `make` / `python -m jobs…`
 
 Do not implement a non-goal because it appeared in an older plan. Change this section first.
@@ -70,6 +70,8 @@ Do not implement a non-goal because it appeared in an older plan. Change this se
 | **Valuation** | EV/EBITDA vs own 5y, FCF yield, net debt / EBITDA, growth × re-rating |
 | **Opportunities** | Named desk metrics + rank + trap; memos on top names (gems **inside** the $1B+ universe until universe D ships). Insider column omitted until Form 4 |
 | **Watchlist** | User tickers, quote cards, TradingView widget |
+| **Ticker** (`/t/[ticker]`) | One name in depth: FY + quarterly TTM history, valuation vs own history, dilution (share count YoY), technicals (SMAs, drawdown, RSI, vol), relative strength vs SPY and sector, risk (vol, beta, max drawdown), next earnings, news — **not shipped** |
+| **Compare** | 2–6 tickers side by side: desk metrics, risk, pairwise correlation, rank — **not shipped** |
 | **Book** | Sized holdings + cash + risk snapshot + rebalance plan — **not shipped** |
 | **Gems** | Small/mid screen ($300M–$2B cap) — **not shipped** |
 
@@ -207,7 +209,7 @@ Sleeves in `analytics/scores.py` are a **sort key**, not the grid: Cheap 0.30 (1
 - Net debt / EBITDA
 - Trap badge
 
-Do not show sleeve unit-ranks (0–1) as the primary columns once those fields are on the API. Do not add P/E, P/B, or interest coverage until those facts exist.
+Do not show sleeve unit-ranks (0–1) as the primary columns once those fields are on the API. Do not add P/E or P/B until those facts exist. Interest coverage ships with stored `InterestExpense`.
 
 **Not product:** Piotroski F-Score and Altman Z. Do not show them, pack them, or feed F into quality. Do not hard-cut F ≥ 7. Nothing computes them: the Piotroski / Altman modules were removed (2026-10-29) and the legacy `quant_score` columns are written NULL. Gem candidate flag uses yaml thresholds (cap band, revenue growth, FCF yield, D/E); fail negative book equity. Insider ownership is not required until Form 4.
 

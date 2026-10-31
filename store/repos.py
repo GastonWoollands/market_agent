@@ -994,6 +994,8 @@ def upsert_metric_ttm(session: Session, instrument_id: int, item: TtmSnapshot) -
         revenue=item.revenue,
         ebitda=item.ebitda,
         fcf=item.fcf,
+        cfo=item.cfo,
+        capex=item.capex,
         net_debt=item.net_debt,
         shares=item.shares,
         source="sec",
@@ -1004,12 +1006,22 @@ def upsert_metric_ttm(session: Session, instrument_id: int, item: TtmSnapshot) -
             "revenue": stmt.excluded.revenue,
             "ebitda": stmt.excluded.ebitda,
             "fcf": stmt.excluded.fcf,
+            "cfo": stmt.excluded.cfo,
+            "capex": stmt.excluded.capex,
             "net_debt": stmt.excluded.net_debt,
             "shares": stmt.excluded.shares,
             "source": stmt.excluded.source,
         },
     )
     session.execute(stmt)
+
+
+def prune_metric_ttm(session: Session, instrument_id: int, keep: set[date]) -> int:
+    """Drop TTM rows the parser no longer produces (e.g. a window that is not contiguous)."""
+    stmt = delete(MetricTtm).where(MetricTtm.instrument_id == instrument_id)
+    if keep:
+        stmt = stmt.where(MetricTtm.as_of.not_in(keep))
+    return session.execute(stmt).rowcount or 0
 
 
 def upsert_metric_fy(session: Session, instrument_id: int, item: FySnapshot) -> None:
@@ -1264,6 +1276,14 @@ def comparable_valuation_counts(session: Session, universe: str = "valuation") -
         .where(Universe.name == universe, ValuationDaily.comparable.is_(True))
     )
     return int(session.execute(comparable).scalar_one() or 0), universe_size(session, universe)
+
+
+def prune_opportunity_scores(session: Session, keep: set[int]) -> int:
+    """Drop scores for names outside the current run so stale ranks never surface."""
+    stmt = delete(OpportunityScore)
+    if keep:
+        stmt = stmt.where(OpportunityScore.instrument_id.not_in(keep))
+    return session.execute(stmt).rowcount or 0
 
 
 def upsert_opportunity_scores(session: Session, rows: Sequence[dict[str, object]]) -> int:
