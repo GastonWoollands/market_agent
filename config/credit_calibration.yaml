@@ -1,0 +1,788 @@
+# Equity-implied credit bucket calibration set (Phase 1.11, Northstar §9).
+#
+# One row per rated US issuer. `bucket` is the S&P letter grade without modifiers
+# (Moody's / Fitch converted when S&P was not found). The model places each name's
+# distance to default on the median DD of these buckets.
+#
+# fit: false keeps a row out of the anchors. Low-confidence rows are out by default;
+# exclusions follow Northstar §9 (financial-like balance sheets). `holdout` rows are
+# scored but never fitted, to check the model out of sample.
+#
+# Verified by web research on 2026-10-31. REVIEW BEFORE SHIP: confirm or correct
+# rating / as_of / source; set confidence to high when you have checked a row.
+
+version: 2026-10-31
+names:
+  - ticker: MSFT
+    bucket: AAA
+    rating: "AAA"
+    agency: "S&P"
+    as_of: "2026-05"
+    source: https://247wallst.com/investing/2026/05/13/the-2-us-companies-with-a-better-credit-rating-than-uncle-sam-belong-in-every-retirement-portfolio/
+    confidence: medium
+  - ticker: JNJ
+    bucket: AAA
+    rating: "AAA"
+    agency: "S&P"
+    as_of: "2026-05"
+    source: https://247wallst.com/investing/2026/05/13/the-2-us-companies-with-a-better-credit-rating-than-uncle-sam-belong-in-every-retirement-portfolio/
+    confidence: medium
+  - ticker: AAPL
+    bucket: AA
+    rating: "AA+"
+    agency: "S&P"
+    as_of: "2025-05"
+    source: https://ng.investing.com/news/stock-market-news/apples-senior-unsecured-notes-earn-aa-rating-from-sp-global-93CH-1899283
+    confidence: high
+  - ticker: GOOG
+    bucket: AA
+    rating: "AA+"
+    agency: "S&P"
+    as_of: "2026-05"
+    source: https://shop.atlasrr.com/first-dry/Alphabet-Issues-Largest-YenDenominated-Bond-by-Foreign-Firm-to-Boost-AI-Spending-19-405
+    confidence: medium
+  - ticker: AMZN
+    bucket: AA
+    rating: "AA"
+    agency: "S&P"
+    as_of: "2026"
+    source: https://www.investing.com/news/stock-market-news/amazon-launches-eightpart-us-investment-grade-bond-offering-4779013
+    confidence: high
+  - ticker: WMT
+    bucket: AA
+    rating: "AA"
+    agency: "S&P"
+    as_of: "2026-10"
+    source: https://www.sec.gov/Archives/edgar/data/0000104169/000119312526425644/d48472dfwp.htm
+    confidence: high
+  - ticker: META
+    bucket: AA
+    rating: "AA-"
+    agency: "S&P"
+    as_of: "2026-04"
+    source: https://www.sec.gov/Archives/edgar/data/0001326801/000119312526197902/d148113dfwp.htm
+    confidence: high
+  - ticker: NVDA
+    bucket: AA
+    rating: "AA"
+    agency: "S&P"
+    as_of: "2026-06"
+    source: https://www.tmgm.com/en/analysis/market-news/sp-upgrades-nvidia-rating-on-strong-ai-demand
+    confidence: high
+  - ticker: CSCO
+    bucket: AA
+    rating: "AA-"
+    agency: "S&P"
+    as_of: "2025-02"
+    source: https://ng.investing.com/news/stock-market-news/ciscos-planned-notes-for-commercial-paper-reduction-rated-aa-at-sp-93CH-1769381
+    confidence: medium
+  - ticker: PG
+    bucket: AA
+    rating: "AA-"
+    agency: "S&P"
+    as_of: "2026-06"
+    source: https://www.sec.gov/Archives/edgar/data/0000080424/000008042426000103/pg-20260630.htm
+    confidence: high
+  - ticker: COST
+    bucket: AA
+    rating: "AA"
+    agency: "S&P"
+    as_of: "2025-01"
+    source: https://ph.investing.com/news/stock-market-news/costco-receives-aa-sp-credit-rating-upgrade-due-to-strong-performance-and-low-leverage-93CH-1624155
+    confidence: medium
+  - ticker: KO
+    bucket: A
+    rating: "A+"
+    agency: "S&P"
+    as_of: "2025-12"
+    source: https://www.sec.gov/Archives/edgar/data/21344/000162828026010047/ko-20251231.htm
+    confidence: high
+  - ticker: PEP
+    bucket: A
+    rating: "A+"
+    agency: "S&P"
+    as_of: "2025-07"
+    source: https://www.sec.gov/Archives/edgar/data/77476/000110465925069374/tm2516509d8_fwp.htm
+    confidence: high
+  - ticker: HD
+    bucket: A
+    rating: "A"
+    agency: "S&P"
+    as_of: "2022-03"
+    source: https://www.sec.gov/Archives/edgar/data/354950/000035495022000074/hdmarch2022fwp.htm
+    confidence: medium
+  - ticker: UPS
+    bucket: A
+    rating: "A"
+    agency: "S&P"
+    as_of: "2025"
+    source: https://quantisnow.com/insight/sec-form-fwp-filed-by-united-parcel-service-inc-6033886
+    confidence: medium
+  - ticker: DIS
+    bucket: A
+    rating: "A"
+    agency: "S&P"
+    as_of: "2025-01"
+    source: https://www.tipranks.com/news/the-fly/sp-upgrades-walt-disney-to-a-with-stable-outlook
+    confidence: medium
+  - ticker: ADBE
+    bucket: A
+    rating: "A+"
+    agency: "S&P"
+    as_of: "2024-04"
+    source: https://www.sec.gov/Archives/edgar/data/796343/000119312524083602/d771466dfwp.htm
+    confidence: medium
+  - ticker: CRM
+    bucket: A
+    rating: "A+"
+    agency: "S&P"
+    as_of: null
+    source: https://www.alacrastore.com/s-and-p-credit-research/Salesforce-Inc-2872079
+    confidence: medium
+  - ticker: NFLX
+    bucket: A
+    rating: "A"
+    agency: "S&P"
+    as_of: "2025-12"
+    source: https://fortune.com/2025/12/11/netflix-looks-to-become-debtflix-again-to-fund-warner-bros-acquisition/
+    confidence: medium
+  - ticker: ABBV
+    bucket: A
+    rating: "A-"
+    agency: "S&P"
+    as_of: "2026-06"
+    source: https://www.sec.gov/Archives/edgar/data/0001551152/000155115226000026/abbv-20260630.htm
+    confidence: high
+  - ticker: AMD
+    bucket: A
+    rating: "A"
+    agency: "S&P"
+    as_of: null
+    source: https://www.insidermonkey.com/blog/sp-global-upgrades-advanced-micro-devices-inc-amd-to-a-rating-ai-growth-and-strong-market-share-propel-outlook-1421521/
+    confidence: medium
+  - ticker: MO
+    bucket: BBB
+    rating: "BBB+"
+    agency: "S&P"
+    as_of: "2025-05"
+    source: https://www.sec.gov/Archives/edgar/data/0000764180/000076418026000094/mo-20260630.htm
+    confidence: high
+  - ticker: ORCL
+    bucket: BBB
+    rating: "BBB-"
+    agency: "S&P"
+    as_of: "2026-07"
+    source: https://ppc.land/s-p-cuts-oracle-to-bbb-as-ai-buildout-widens-cash-deficit-to-42bn/
+    confidence: high
+  - ticker: T
+    bucket: BBB
+    rating: "BBB"
+    agency: "S&P"
+    as_of: "2026-07"
+    source: https://www.sec.gov/Archives/edgar/data/0000732717/000119312526318207/d101711dfwp.htm
+    confidence: high
+  - ticker: CVS
+    bucket: BBB
+    rating: "BBB"
+    agency: "S&P"
+    as_of: "2026-05"
+    source: https://www.sec.gov/Archives/edgar/data/0000064803/000006480326000098/cvs-20260630.htm
+    confidence: high
+  - ticker: BA
+    bucket: BBB
+    rating: "BBB-"
+    agency: "S&P"
+    as_of: "2025"
+    source: https://ng.investing.com/news/stock-market-news/boeing-outlook-revised-to-stable-by-sp-on-increasing-production-93CH-2179318
+    confidence: medium
+  - ticker: GM
+    bucket: BBB
+    rating: "BBB"
+    agency: "S&P"
+    as_of: "2026-07"
+    source: https://bmv.com.mx/docs-pub/eventoca/eventoca_1577680_1.pdf
+    confidence: high
+    fit: false
+    note: captive finance arm inflates liabilities
+  - ticker: F
+    bucket: BBB
+    rating: "BBB-"
+    agency: "S&P"
+    as_of: "2025-02"
+    source: https://www.sec.gov/Archives/edgar/data/38009/000003800925000014/fmcc-20250331.htm
+    confidence: medium
+    fit: false
+    note: captive finance arm inflates liabilities
+  - ticker: INTC
+    bucket: BBB
+    rating: "BBB"
+    agency: "S&P"
+    as_of: "2026-04"
+    source: https://www.intc.com/filings-reports/all-sec-filings/content/0001193125-26-183128/0001193125-26-183128.pdf
+    confidence: high
+  - ticker: TSLA
+    bucket: BBB
+    rating: "BBB"
+    agency: "S&P"
+    as_of: "2024"
+    source: https://eletric-vehicles.com/tesla/fitch-gives-tesla-first-bbb-rating-one-notch-below-spacex/
+    confidence: medium
+  - ticker: RCL
+    bucket: BBB
+    rating: "BBB"
+    agency: "S&P"
+    as_of: "2026"
+    source: https://bondblox.com/news/royal-caribbean-upgraded-to-bbb-by-sp-2
+    confidence: medium
+  - ticker: LOW
+    bucket: BBB
+    rating: "BBB+"
+    agency: "S&P"
+    as_of: "2026-08"
+    source: https://www.sec.gov/Archives/edgar/data/0000060667/000006066726000117/low-20260731.htm
+    confidence: high
+  - ticker: MCD
+    bucket: BBB
+    rating: "BBB+"
+    agency: "S&P"
+    as_of: "2025-02"
+    source: https://quantisnow.com/insight/sec-form-fwp-filed-by-mcdonald's-corporation-5912137
+    confidence: medium
+  - ticker: SBUX
+    bucket: BBB
+    rating: "BBB+"
+    agency: "S&P"
+    as_of: "2025-05"
+    source: https://www.alacrastore.com/s-and-p-credit-research/Starbucks-Corp-s-Proposed-Senior-Unsecured-Notes-Rated-BBB-3364176
+    confidence: medium
+  - ticker: HAL
+    bucket: BBB
+    rating: "BBB+"
+    agency: "S&P"
+    as_of: "2025"
+    source: https://ng.investing.com/news/stock-market-news/halliburton-outlook-revised-to-stable-at-sp-on-slowing-demand-93CH-2034727
+    confidence: medium
+  - ticker: KMI
+    bucket: BBB
+    rating: "BBB+"
+    agency: "S&P"
+    as_of: "2026-01"
+    source: https://www.fool.com/earnings/call-transcripts/2026/01/21/kinder-morgan-kmi-q4-2025-earnings-call-transcript
+    confidence: high
+  - ticker: WMB
+    bucket: BBB
+    rating: "BBB+"
+    agency: "S&P"
+    as_of: "2026-09"
+    source: https://www.sec.gov/Archives/edgar/data/0000107263/000119312526385621/d41068dfwp.htm
+    confidence: high
+  - ticker: MU
+    bucket: BBB
+    rating: "BBB+"
+    agency: "S&P"
+    as_of: "2026"
+    source: https://www.edgen.tech/news/post/sp-lifts-micron-to-bbb-on-ai-memory-demand-to-2028
+    confidence: medium
+  - ticker: DELL
+    bucket: BBB
+    rating: "BBB+"
+    agency: "S&P"
+    as_of: "2026"
+    source: https://bondblox.com/news/dell-upgraded-to-bbb-by-sp
+    confidence: medium
+  - ticker: HPQ
+    bucket: BBB
+    rating: "BBB"
+    agency: "S&P"
+    as_of: null
+    source: null
+    confidence: low
+    fit: false
+    note: low confidence, not fitted until confirmed
+  - ticker: HPE
+    bucket: BBB
+    rating: "BBB"
+    agency: "S&P"
+    as_of: "2025-07"
+    source: https://ng.investing.com/news/stock-market-news/sp-global-revises-hpe-outlook-to-stable-after-juniper-acquisition-93CH-1996225
+    confidence: high
+  - ticker: UBER
+    bucket: BBB
+    rating: "BBB"
+    agency: "S&P"
+    as_of: "2025-03"
+    source: https://ng.investing.com/news/stock-market-news/uber-technologies-upgraded-to-bbb-at-sp-on-credit-and-cash-flow-improvements-93CH-1814774
+    confidence: medium
+  - ticker: LVS
+    bucket: BBB
+    rating: "BBB"
+    agency: "S&P"
+    as_of: "2026-05"
+    source: https://www.ggrasia.com/lvs-sands-china-upgraded-to-bbb-on-disciplined-financial-policy-sp
+    confidence: high
+  - ticker: PTEN
+    bucket: BBB
+    rating: "Baa3"
+    agency: "Moody's"
+    as_of: "2026-04"
+    source: https://app.researchpool.com/provider/moodys-investors-service/patterson-uti-energy-inc-pten-moodys-ratings-affirms-pattersons-baa3-rating-outlook-stable-opxRoCWLs0
+    confidence: medium
+  - ticker: KDP
+    bucket: BBB
+    rating: "BBB-"
+    agency: "S&P"
+    as_of: "2026-03"
+    source: https://www.sec.gov/Archives/edgar/data/0001418135/000141813526000051/kdp-20260630.htm
+    confidence: high
+  - ticker: GIS
+    bucket: BBB
+    rating: "BBB"
+    agency: "S&P"
+    as_of: "2024-02"
+    source: https://cbonds.hk/news/2697533/
+    confidence: medium
+  - ticker: AKAM
+    bucket: BBB
+    rating: "BBB-"
+    agency: "S&P"
+    as_of: "2026"
+    source: https://www.boerse-express.com/news/articles/akamai-aktie-26-milliarden-dollar-wandelanleihen-906869
+    confidence: medium
+  - ticker: CCL
+    bucket: BBB
+    rating: "BBB-"
+    agency: "S&P"
+    as_of: "2026-06"
+    source: https://www.boerse-express.com/news/articles/carnival-aktie-sp-hebt-rating-auf-bbb--934603
+    confidence: high
+  - ticker: XRAY
+    bucket: BBB
+    rating: "BBB-"
+    agency: "S&P"
+    as_of: "2025-05"
+    source: https://cbonds.com/news/3415727/
+    confidence: medium
+  - ticker: YUM
+    bucket: BB
+    rating: "BB+"
+    agency: "S&P"
+    as_of: null
+    source: null
+    confidence: low
+    fit: false
+    note: low confidence, not fitted until confirmed
+  - ticker: SJM
+    bucket: BBB
+    rating: "BBB"
+    agency: "S&P"
+    as_of: null
+    source: null
+    confidence: low
+    fit: false
+    note: low confidence, not fitted until confirmed
+  - ticker: OMC
+    bucket: BBB
+    rating: "BBB+"
+    agency: "S&P"
+    as_of: "2024-12"
+    source: https://www.mnimarkets.com/articles/omnicom-omc-baa1bbb-nr-merger-reports-1733732735213
+    confidence: low
+    fit: false
+    note: low confidence, not fitted until confirmed
+  - ticker: VTRS
+    bucket: BB
+    rating: "BB+"
+    agency: "S&P"
+    as_of: "2025-02"
+    source: https://investor.viatris.com/news-releases/news-release-details/viatris-issues-statement-sp-credit-rating-change
+    confidence: medium
+  - ticker: UAL
+    bucket: BB
+    rating: "BB+"
+    agency: "S&P"
+    as_of: "2025-08"
+    source: https://ng.investing.com/news/stock-market-news/sp-global-ratings-upgrades-united-airlines-to-bb-on-strong-metrics-93CH-2058696
+    confidence: high
+  - ticker: CHTR
+    bucket: BB
+    rating: "BB+"
+    agency: "S&P"
+    as_of: "2025-05"
+    source: https://www.alacrastore.com/s-and-p-credit-research/Research-Update-Charter-Communications-Inc-Ratings-Affirmed-On-Revised-Leverage-Targets-Following-Acquisition-Of-Cox-Outlook-Stable-3371492
+    confidence: medium
+  - ticker: M
+    bucket: BB
+    rating: "BB+"
+    agency: "S&P"
+    as_of: "2026-10"
+    source: https://www.borsaitaliana.it/borsa/notizie/teleborsa/finanza/macy-s-outlook-rivisto-a-positivo-da-sp-grazie-ai-miglioramenti-operativi-131_2026-10-12_TLB.html
+    confidence: high
+  - ticker: SIRI
+    bucket: BB
+    rating: "BB+"
+    agency: "S&P"
+    as_of: "2025-02"
+    source: https://cbonds.com/news/3286845/
+    confidence: medium
+  - ticker: STX
+    bucket: BB
+    rating: "BB+"
+    agency: "S&P"
+    as_of: "2025-10"
+    source: https://bondblox.com/news/seagate-upgraded-to-bb-by-sp
+    confidence: medium
+  - ticker: DVA
+    bucket: BB
+    rating: "BB"
+    agency: "S&P"
+    as_of: "2025-09"
+    source: https://cbonds.com/news/3590241/
+    confidence: high
+  - ticker: THC
+    bucket: BB
+    rating: "BB-"
+    agency: "S&P"
+    as_of: "2025-06"
+    source: https://ng.investing.com/news/stock-market-news/tenet-healthcare-upgraded-to-bb-by-sp-on-improved-performance-93CH-1977540
+    confidence: high
+  - ticker: MGM
+    bucket: BB
+    rating: "BB-"
+    agency: "Fitch"
+    as_of: "2026-03"
+    source: https://asgam.com/2026/03/18/fitch-affirms-mgm-resorts-at-bb-on-strong-fiscal-position-diversification/
+    confidence: low
+    fit: false
+    note: low confidence, not fitted until confirmed
+  - ticker: BBWI
+    bucket: BB
+    rating: "BB+"
+    agency: "S&P"
+    as_of: "2026-08"
+    source: https://www.sec.gov/Archives/edgar/data/0000701985/000070198526000029/bbwi-20260801.htm
+    confidence: medium
+  - ticker: COIN
+    bucket: BB
+    rating: "BB-"
+    agency: "S&P"
+    as_of: "2025-12"
+    source: https://www.sec.gov/Archives/edgar/data/0001679788/000167978826000047/coinbase2025ars.pdf
+    confidence: medium
+    fit: false
+    note: customer custody liabilities on the balance sheet
+  - ticker: CE
+    bucket: BB
+    rating: "BB"
+    agency: "S&P"
+    as_of: "2025-11"
+    source: https://cbonds.com/news/3684637/
+    confidence: high
+  - ticker: WHR
+    bucket: BB
+    rating: "BB"
+    agency: "S&P"
+    as_of: "2026"
+    source: https://www.sec.gov/Archives/edgar/data/0000106640/000010664026000036/whr-20260331.htm
+    confidence: medium
+  - ticker: HUN
+    bucket: BB
+    rating: "BB"
+    agency: "S&P"
+    as_of: "2026-01"
+    source: https://in.investing.com/news/stock-market-news/huntsman-corp-downgraded-to-bb-by-sp-on-weak-credit-metrics-93CH-5214529
+    confidence: high
+  - ticker: COTY
+    bucket: BB
+    rating: "BB"
+    agency: "S&P"
+    as_of: "2026-07"
+    source: https://www.teleborsa.it/News/2026/07/10/coty-declassata-a-bb-da-s-p-con-la-rescissione-della-licenza-gucci-beauty-55.html
+    confidence: high
+  - ticker: OLN
+    bucket: BB
+    rating: "BB+"
+    agency: "S&P"
+    as_of: "2025-11"
+    source: https://ng.investing.com/news/stock-market-news/sp-global-revises-olin-corp-outlook-to-negative-amid-weak-metrics-93CH-2211606
+    confidence: high
+  - ticker: NXST
+    bucket: BB
+    rating: "BB+"
+    agency: "S&P"
+    as_of: "2023-10"
+    source: https://cbonds.com/news/2535917/
+    confidence: low
+    fit: false
+    note: low confidence, not fitted until confirmed
+  - ticker: NRG
+    bucket: BB
+    rating: "BB"
+    agency: "S&P"
+    as_of: "2025-05"
+    source: https://ng.investing.com/news/stock-market-news/nrg-energy-outlook-revised-to-stable-by-sp-global-ratings-after-ls-power-assets-acquisition-93CH-1915053
+    confidence: medium
+  - ticker: TLN
+    bucket: BB
+    rating: "BB-"
+    agency: "S&P"
+    as_of: "2025-09"
+    source: https://www.sec.gov/Archives/edgar/data/1622536/000162253625000010/investorupdate090925_vf.htm
+    confidence: medium
+  - ticker: CWEN
+    bucket: BB
+    rating: "BB"
+    agency: "S&P"
+    as_of: "2023-09"
+    source: https://www.sec.gov/Archives/edgar/data/1567683/000156768323000035/cwen-20230930.htm
+    confidence: low
+    fit: false
+    note: low confidence, not fitted until confirmed
+  - ticker: MBC
+    bucket: BB
+    rating: "BB"
+    agency: "S&P"
+    as_of: "2025-12"
+    source: https://ng.investing.com/news/stock-market-news/masterbrand-outlook-revised-to-positive-on-american-woodmark-merger-93CH-2058694
+    confidence: medium
+  - ticker: WSC
+    bucket: BB
+    rating: "BB"
+    agency: "S&P"
+    as_of: "2023-10"
+    source: https://cbonds.com/news/2546149/
+    confidence: medium
+  - ticker: SXC
+    bucket: BB
+    rating: "BB-"
+    agency: "S&P"
+    as_of: "2025-05"
+    source: https://www.sec.gov/Archives/edgar/data/1514705/000151470526000010/sxc-20251231.htm
+    confidence: high
+  - ticker: WYNN
+    bucket: BB
+    rating: "BB-"
+    agency: "S&P"
+    as_of: "2025-03"
+    source: https://cbonds.com/news/3298363/
+    confidence: medium
+  - ticker: TDG
+    bucket: BB
+    rating: "BB-"
+    agency: "S&P"
+    as_of: "2025-03"
+    source: https://cbonds.com/news/3331119/
+    confidence: high
+  - ticker: CABO
+    bucket: BB
+    rating: "BB-"
+    agency: "S&P"
+    as_of: "2025-05"
+    source: https://ng.investing.com/news/stock-market-news/cable-one-inc-ratings-downgraded-due-to-poor-performance-and-negative-outlook-93CH-1925721
+    confidence: medium
+  - ticker: NCLH
+    bucket: B
+    rating: "B+"
+    agency: "S&P"
+    as_of: "2026-09"
+    source: https://www.sec.gov/Archives/edgar/data/0001513761/000110465926120217/nclh-20260930x10q.htm
+    confidence: high
+  - ticker: NWL
+    bucket: B
+    rating: "B+"
+    agency: "S&P"
+    as_of: "2025-04"
+    source: https://ng.investing.com/news/stock-market-news/newell-brands-downgraded-to-b-by-sp-global-ratings-due-to-consumer-demand-and-tariff-risks-93CH-1902455
+    confidence: medium
+  - ticker: KSS
+    bucket: B
+    rating: "B+"
+    agency: "S&P"
+    as_of: "2026-01"
+    source: https://www.sec.gov/Archives/edgar/data/885639/000119312526115982/kss-20260131.htm
+    confidence: high
+  - ticker: CLF
+    bucket: B
+    rating: "B+"
+    agency: "S&P"
+    as_of: "2025-12"
+    source: https://ts2.tech/en/cleveland-cliffs-stock-nyse-clf-on-dec-16-2025-credit-downgrade-steel-market-shifts-and-the-2026-profitability-debate/
+    confidence: high
+  - ticker: AAL
+    bucket: B
+    rating: "B+"
+    agency: "S&P"
+    as_of: "2025-05"
+    source: https://ts2.tech/en/american-airlines-stock-aal-news-today-sp-eetc-upgrade-ubs-buy-call-and-holiday-travel-catalyst-in-focus-dec-16-2025/
+    confidence: high
+  - ticker: CRWV
+    bucket: B
+    rating: "B+"
+    agency: "S&P"
+    as_of: "2025-05"
+    source: https://www.alacrastore.com/s-and-p-credit-research/Research-Update-CoreWeave-Inc-Assigned-B-Issuer-Credit-Rating-Outlook-Stable-Debt-Rated-B-Recovery-Rating-5-3372088
+    confidence: high
+    holdout: true
+    note: validation name, never fitted
+    fit: false
+  - ticker: CZR
+    bucket: B
+    rating: "B+"
+    agency: "S&P"
+    as_of: "2026-06"
+    source: https://cbonds.com/news/3978877/
+    confidence: high
+  - ticker: VSAT
+    bucket: B
+    rating: "B"
+    agency: "S&P"
+    as_of: "2025-01"
+    source: https://cbonds.com/news/3226911/
+    confidence: medium
+  - ticker: SABR
+    bucket: B
+    rating: "B-"
+    agency: "S&P"
+    as_of: "2025-11"
+    source: https://ng.investing.com/news/stock-market-news/sabre-corp-outlook-revised-to-negative-by-sp-on-weak-metrics-93CH-2221592
+    confidence: medium
+  - ticker: CLMT
+    bucket: B
+    rating: "B-"
+    agency: "S&P"
+    as_of: "2026-08"
+    source: https://app.parqet.com/en/stocks/calumet-US1314281049
+    confidence: medium
+  - ticker: UIS
+    bucket: B
+    rating: "B"
+    agency: "S&P"
+    as_of: "2024"
+    source: https://www.sec.gov/Archives/edgar/data/746838/000130817926000085/uis014724a.pdf
+    confidence: medium
+  - ticker: SGRY
+    bucket: B
+    rating: "B"
+    agency: "S&P"
+    as_of: "2025-11"
+    source: https://cbonds.com/news/3690815/
+    confidence: high
+  - ticker: GTN
+    bucket: B
+    rating: "B-"
+    agency: "S&P"
+    as_of: "2025"
+    source: https://ng.investing.com/news/stock-market-news/sp-global-ratings-upgrades-gray-medias-firstlien-debt-to-b-93CH-2002506
+    confidence: medium
+  - ticker: FTRE
+    bucket: B
+    rating: "B-"
+    agency: "S&P"
+    as_of: "2025-05"
+    source: https://ng.investing.com/news/stock-market-news/fortrea-holdings-downgraded-to-b-by-sp-global-ratings-due-to-weak-credit-metrics-93CH-1957862
+    confidence: medium
+  - ticker: BGS
+    bucket: B
+    rating: "B-"
+    agency: "S&P"
+    as_of: "2025-04"
+    source: https://ng.investing.com/news/stock-market-news/bg-foods-outlook-revised-to-stable-on-weaker-earnings-sp-global-93CH-1796363
+    confidence: medium
+  - ticker: BLCO
+    bucket: B
+    rating: "B"
+    agency: "S&P"
+    as_of: "2026-09"
+    source: https://www.sec.gov/Archives/edgar/data/0001860742/000186074226000111/blco-20260930.htm
+    confidence: high
+  - ticker: BALY
+    bucket: B
+    rating: "B-"
+    agency: "S&P"
+    as_of: "2025-12"
+    source: https://www.intralot.com/files/RatingsDirect_Bulletin_IntralotHasAmpleRatingHeadroomToHandleU_K_RemoteGamingDutyHikes_3491810_Dec-9-2025.pdf
+    confidence: medium
+  - ticker: BHC
+    bucket: B
+    rating: "B-"
+    agency: "S&P"
+    as_of: "2025-03"
+    source: https://ng.investing.com/news/stock-market-news/bausch-health-upgraded-to-b-by-sp-global-ratings-amid-partial-refinancing-93CH-1823714
+    confidence: medium
+  - ticker: LUMN
+    bucket: B
+    rating: "B-"
+    agency: "S&P"
+    as_of: "2026-02"
+    source: https://www.businesswire.com/news/home/20260223472150/en/Lumen-Ratings-Upgraded-by-Top-3-Global-Ratings-Agencies
+    confidence: high
+  - ticker: AMC
+    bucket: B
+    rating: "B-"
+    agency: "S&P"
+    as_of: "2026-07"
+    source: https://www.fxleaders.com/news/2026/07/31/amc-stock-eyes-3-after-credit-upgrade-and-record-revenue-but-dilution-risk-remains/
+    confidence: medium
+  - ticker: AMCX
+    bucket: B
+    rating: "B3"
+    agency: "Moody's"
+    as_of: "2025-06"
+    source: https://ng.investing.com/news/stock-market-news/amc-networks-downgraded-to-b3-by-moodys-as-challenges-persist-93CH-1970932
+    confidence: low
+    fit: false
+    note: low confidence, not fitted until confirmed
+  - ticker: ADV
+    bucket: B
+    rating: "B-?"
+    agency: "S&P"
+    as_of: "2026-02"
+    source: https://www.investing.com/news/stock-market-news/advantage-solutions-downgraded-by-sp-amid-exchange-offer-uncertainty-93CH-4506736
+    confidence: low
+    fit: false
+    note: low confidence, not fitted until confirmed
+  - ticker: SBGI
+    bucket: B
+    rating: "B?"
+    agency: "S&P"
+    as_of: "2025"
+    source: https://rbr.com/sbgi-sp-global-ratings/
+    confidence: low
+    fit: false
+    note: low confidence, not fitted until confirmed
+  - ticker: JBLU
+    bucket: CCC
+    rating: "CCC+"
+    agency: "S&P"
+    as_of: "2026-06"
+    source: https://thedailyguardian.com/world/sp-downgrades-jetblue-deeper-into-junk-as-high-fuel-costs-dent-recovery-708981/
+    confidence: high
+  - ticker: TROX
+    bucket: CCC
+    rating: "CCC+"
+    agency: "S&P"
+    as_of: "2025"
+    source: https://www.sec.gov/Archives/edgar/data/1530804/000153080426000006/trox-20251231.htm
+    confidence: medium
+  - ticker: RXT
+    bucket: CCC
+    rating: "CCC+"
+    agency: "S&P"
+    as_of: "2026-03"
+    source: https://www.tetragoncreditpartners.com/op-ed-rackspaces-pricing-turnaround-provides-a-useful-pointer-for-clo-managers
+    confidence: medium
+  - ticker: CYH
+    bucket: CCC
+    rating: "CCC+"
+    agency: "S&P"
+    as_of: "2025-05"
+    source: https://ng.investing.com/news/stock-market-news/community-health-systems-rating-upgraded-to-ccc-by-sp-global-ratings-93CH-1897798
+    confidence: medium
+  - ticker: IHRT
+    bucket: CCC
+    rating: "CCC+?"
+    agency: "S&P"
+    as_of: "2024-12"
+    source: https://news.bloomberglaw.com/bankruptcy-law/iheart-completes-debt-exchange-s-p-cuts-subsidiary-to-default
+    confidence: low
+    fit: false
+    note: low confidence, not fitted until confirmed

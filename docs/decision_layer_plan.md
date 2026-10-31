@@ -337,6 +337,7 @@ Method in Northstar §9. Spike (2026-10-31, scratch only, 65 rated names + CRWV 
 - Default point uses liabilities (every filer tags them; gross debt is missing for CRWV / GM / F from custom tags). Removing current deferred revenue moved MSFT AAA-side and kept the HY order; software names still read one bucket low (CRM BBB, ORCL BB).
 - Thin tail: 5 B names (WYNN at DD 4.3 drags the median) and 2 CCC. Fix by adding rated HY names to the calibration yaml, not by changing the model.
 - Ratings in the spike came from operator memory. **Before ship:** `config/credit_calibration.yaml` with source + as-of per row, reviewed by the operator.
+- **Re-run on the verified set (2026-10-31, `config/credit_calibration.yaml`, 106 rows, 91 fitted):** anchors AAA 11.05 · AA 9.08 · A 7.59 · BBB 4.59 · BB 2.69 · B 1.76 · CCC 1.33 (B now has 19 names, CCC 4). Spearman 0.84; leave-one-out exact 35/91, within one bucket 84/91 (92%). Misses > 1 bucket are low-vol levered payers (KO, MO, MCD, KMI, TDG read too safe), CABO (vol 112%) too risky, BLCO too safe. CRWV (S&P B+, held out) still reads below CCC; MSFT AAA; ORCL (BBB-) reads BB; META (AA-) reads A.
 - Output: `credit_implied` (instrument, as_of, E, F, σ_E, σ_A, DD, bucket, bucket_oas_bp, calibration_version). Excluded sectors per Northstar §9. Not a rank input.
 
 ## Phase 1.12 — Options read
