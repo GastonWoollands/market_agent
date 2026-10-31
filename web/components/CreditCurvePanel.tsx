@@ -20,7 +20,13 @@ const TODAY_COLOR = "#3b82f6";
 const YEAR_AGO_COLOR = "#64748b";
 const AXIS = { fill: "#94a3b8", fontSize: 11 };
 
-export function CreditCurvePanel({ curve }: { curve: CreditCurve | null }) {
+export function CreditCurvePanel({
+  curve,
+  highlight = null,
+}: {
+  curve: CreditCurve | null;
+  highlight?: string | null;
+}) {
   return (
     <section className="rounded border border-line p-4">
       <div className="mb-3 flex items-baseline justify-between gap-2">
@@ -40,13 +46,13 @@ export function CreditCurvePanel({ curve }: { curve: CreditCurve | null }) {
           No stored rating curve. Run <code className="text-white">python -m jobs.ingest_fred</code>.
         </p>
       ) : (
-        <CurveBody curve={curve} />
+        <CurveBody curve={curve} highlight={highlight} />
       )}
     </section>
   );
 }
 
-function CurveBody({ curve }: { curve: CreditCurve }) {
+function CurveBody({ curve, highlight }: { curve: CreditCurve; highlight: string | null }) {
   const data = curve.buckets.map((item) => ({
     rating: item.rating,
     today: item.oas_bp,
@@ -89,7 +95,20 @@ function CurveBody({ curve }: { curve: CreditCurve }) {
                 name="Today"
                 stroke={TODAY_COLOR}
                 strokeWidth={2}
-                dot={{ r: 4, fill: TODAY_COLOR, stroke: "#0a0e14", strokeWidth: 2 }}
+                dot={(props: { cx?: number; cy?: number; payload?: { rating: string } }) => {
+                  const mine = props.payload?.rating === highlight;
+                  return (
+                    <circle
+                      key={props.payload?.rating}
+                      cx={props.cx}
+                      cy={props.cy}
+                      r={mine ? 7 : 4}
+                      fill={mine ? "#0a0e14" : TODAY_COLOR}
+                      stroke={TODAY_COLOR}
+                      strokeWidth={mine ? 3 : 2}
+                    />
+                  );
+                }}
                 isAnimationActive={false}
               >
                 <LabelList
@@ -111,6 +130,7 @@ function CurveBody({ curve }: { curve: CreditCurve }) {
             <span className="inline-block h-0.5 w-4 border-t-2 border-dashed" style={{ borderColor: YEAR_AGO_COLOR }} />{" "}
             1y ago
           </span>
+          {highlight ? <span>Ring: this name&apos;s implied bucket</span> : null}
           <span>log scale</span>
         </div>
       </div>

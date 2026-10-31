@@ -175,8 +175,10 @@ class NewsSourcesFile(BaseModel):
     @model_validator(mode="after")
     def _check(self) -> Self:
         seen: dict[str, str] = {}
-        for label, names in [*((f"tier {k}", v) for k, v in self.tiers.items()),
-                             ("blocked", self.blocked)]:
+        for label, names in [
+            *((f"tier {k}", v) for k, v in self.tiers.items()),
+            ("blocked", self.blocked),
+        ]:
             for name in names:
                 key = publisher_key(name)
                 if not key:
@@ -240,3 +242,37 @@ def load_catalysts() -> CatalystsFile:
     with path.open(encoding="utf-8") as handle:
         raw = safe_load(handle)
     return CatalystsFile.model_validate(raw)
+
+
+class CreditCalibrationName(BaseModel):
+    ticker: str
+    bucket: Literal["AAA", "AA", "A", "BBB", "BB", "B", "CCC"]
+    rating: str
+    agency: str
+    as_of: str | None = None
+    source: str | None = None
+    confidence: Literal["high", "medium", "low"]
+    fit: bool = True
+    holdout: bool = False
+    note: str | None = None
+
+    @property
+    def fitted(self) -> bool:
+        return self.fit and not self.holdout and self.confidence != "low"
+
+
+class CreditCalibrationFile(BaseModel):
+    version: str
+    exclude_sectors: list[str] = Field(default_factory=list)
+    exclude_tickers: list[str] = Field(default_factory=list)
+    names: list[CreditCalibrationName] = Field(default_factory=list)
+
+    def by_ticker(self) -> dict[str, CreditCalibrationName]:
+        return {item.ticker: item for item in self.names}
+
+
+def load_credit_calibration() -> CreditCalibrationFile:
+    path = CONFIG_DIR / "credit_calibration.yaml"
+    with path.open(encoding="utf-8") as handle:
+        raw = safe_load(handle)
+    return CreditCalibrationFile.model_validate(raw)

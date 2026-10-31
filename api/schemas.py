@@ -394,6 +394,7 @@ class OutlookJudgment(BaseModel):
 
 class OutlookWatchScenario(BaseModel):
     """Structured scenario for a watch item with branching outcomes."""
+
     catalyst: str
     date: str | None = None
     time: str | None = None
@@ -404,6 +405,7 @@ class OutlookWatchScenario(BaseModel):
 
 class OutlookCalendarItem(BaseModel):
     """Structured calendar entry with consensus/prior."""
+
     date: str
     time: str | None = None
     event: str
@@ -420,27 +422,27 @@ class OutlookResponse(BaseModel):
     brief: str | None = None
     brief_status: str | None = None
     brief_model: str | None = None
-    
+
     # Core fields
     headline: str | None = None
     tldr: str | None = None
     what_happened: str | None = None
     current_positioning: str | None = None
     drivers: str | None = None
-    
+
     # Scenario planning
     watch_today: list[OutlookWatchScenario] = Field(default_factory=list)
     invalidation: str | None = None
-    
+
     # Deep sections
     macro_deep: str | None = None
     market_deep: str | None = None
     policy_deep: str | None = None
     geopolitical_deep: str | None = None
-    
+
     # Calendar
     calendar: list[OutlookCalendarItem] = Field(default_factory=list)
-    
+
     # Legacy fields (kept for backward compat)
     abstract: str | None = None
     conclusions: list[str] = Field(default_factory=list)
@@ -449,7 +451,7 @@ class OutlookResponse(BaseModel):
     macro_md: str | None = None
     market_md: str | None = None
     near_term_md: str | None = None
-    
+
     # Pack data
     facts: dict[str, float | None] = Field(default_factory=dict)
     judgment: OutlookJudgment | None = None
@@ -739,6 +741,43 @@ class TickerPeers(BaseModel):
     scatter: list[PeerPoint] = Field(default_factory=list)
 
 
+class CreditAnchorRow(BaseModel):
+    bucket: str
+    median_dd: float
+    names: int
+    oas_bp: float | None = None
+
+
+class AgencyRating(BaseModel):
+    rating: str
+    bucket: str
+    agency: str
+    as_of: str | None = None
+    source: str | None = None
+
+
+class TickerCredit(BaseModel):
+    """Equity-implied credit bucket. The bp is the bucket's market OAS, not this name's spread."""
+
+    source: Literal["stored", "read_time"] | None = None
+    unavailable: str | None = None
+    as_of: date | None = None
+    statement_as_of: date | None = None
+    market_cap: float | None = None
+    default_point: float | None = None
+    vol_equity: float | None = None
+    asset_value: float | None = None
+    vol_asset: float | None = None
+    risk_free: float | None = None
+    dd: float | None = None
+    bucket: str | None = None
+    position: Literal["above", "within", "below"] | None = None
+    bucket_oas_bp: float | None = None
+    calibration_version: str | None = None
+    agency: AgencyRating | None = None
+    anchors: list[CreditAnchorRow] = Field(default_factory=list)
+
+
 class TickerResponse(BaseModel):
     stale: bool = True
     identity: TickerIdentity | None = None
@@ -751,6 +790,7 @@ class TickerResponse(BaseModel):
     events: list[TickerEvent] = Field(default_factory=list)
     news: list[TickerNews] = Field(default_factory=list)
     peers: TickerPeers | None = None
+    credit: TickerCredit | None = None
     hint: str | None = None
 
 

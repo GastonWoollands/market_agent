@@ -134,6 +134,10 @@ class MetricTtm(BaseModel):
     interest_expense: Decimal | None = None
     net_debt: Decimal | None = None
     shares: Decimal | None = None
+    # Balance-sheet instants on `as_of`, for the credit default point.
+    current_liabilities: Decimal | None = None
+    total_liabilities: Decimal | None = None
+    deferred_revenue_current: Decimal | None = None
 
 
 class MetricFy(BaseModel):

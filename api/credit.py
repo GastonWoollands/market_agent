@@ -1,6 +1,6 @@
-"""Credit curve: ICE BofA OAS and effective yield by rating bucket, read from stored FRED.
+"""Credit reads for the Ticker page: the FRED rating curve and the equity-implied bucket.
 
-Market context for the Ticker page. No vendor calls; `ingest_fred` owns the series.
+No vendor calls. `ingest_fred` owns the curve, `compute_credit` the stored buckets and ladder.
 """
 
 from __future__ import annotations
@@ -10,20 +10,20 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
 
-from api.schemas import CreditBucket, CreditCurveResponse
-from store.repos import macro_observations
-
-# (rating, grade, OAS series, effective-yield series)
-BUCKETS: tuple[tuple[str, str, str, str], ...] = (
-    ("AAA", "IG", "BAMLC0A1CAAA", "BAMLC0A1CAAAEY"),
-    ("AA", "IG", "BAMLC0A2CAA", "BAMLC0A2CAAEY"),
-    ("A", "IG", "BAMLC0A3CA", "BAMLC0A3CAEY"),
-    ("BBB", "IG", "BAMLC0A4CBBB", "BAMLC0A4CBBBEY"),
-    ("BB", "HY", "BAMLH0A1HYBB", "BAMLH0A1HYBBEY"),
-    ("B", "HY", "BAMLH0A2HYB", "BAMLH0A2HYBEY"),
-    ("CCC", "HY", "BAMLH0A3HYC", "BAMLH0A3HYCEY"),
+from analytics.credit import OAS_SERIES, Anchor, CreditInputs, credit_inputs, merton, place
+from api.schemas import (
+    AgencyRating,
+    CreditAnchorRow,
+    CreditBucket,
+    CreditCurveResponse,
+    TickerCredit,
 )
+from store.catalog import CreditCalibrationFile, load_credit_calibration
+from store.repos import latest_credit_anchors, latest_credit_implied, macro_observations
+
+BUCKETS = OAS_SERIES
 GAUGES = ("BAA10Y", "NFCI", "STLFSI4")
+RISK_FREE_SERIES = "DGS1"
 HISTORY_DAYS = 400
 STALE_AFTER_DAYS = 5
 
@@ -96,3 +96,119 @@ def _value(point: tuple[date, Decimal | float] | None) -> float | None:
 def _bp(point: tuple[date, Decimal | float] | None) -> float | None:
     """FRED quotes spreads in percent; the desk reads basis points."""
     return None if point is None else round(float(point[1]) * 100, 1)
+
+
+def build_ticker_credit(
+    *,
+    ticker: str,
+    sector: str | None,
+    stored: Any | None,
+    inputs: CreditInputs | None,
+    reason: str | None,
+    ladder: Sequence[Any],
+    risk_free: float | None,
+    calibration: CreditCalibrationFile,
+) -> TickerCredit:
+    """Stored row when there is one, else read-time on the stored ladder (names outside the job)."""
+    rated = calibration.by_ticker().get(ticker)
+    agency = (
+        AgencyRating(
+            rating=rated.rating,
+            bucket=rated.bucket,
+            agency=rated.agency,
+            as_of=rated.as_of,
+            source=rated.source,
+        )
+        if rated is not None
+        else None
+    )
+    rungs = [
+        Anchor(row.bucket, float(row.median_dd), int(row.names), _opt(row.oas_bp)) for row in ladder
+    ]
+    base = TickerCredit(
+        agency=agency,
+        anchors=[
+            CreditAnchorRow(
+                bucket=row.bucket, median_dd=row.median_dd, names=row.names, oas_bp=row.oas_bp
+            )
+            for row in rungs
+        ],
+    )
+    if sector in calibration.exclude_sectors or ticker in calibration.exclude_tickers:
+        base.unavailable = (
+            f"Not scored: {sector or ticker} liabilities are funding, float or custody, "
+            "not claims that force default."
+        )
+        return base
+    if stored is not None:
+        return base.model_copy(
+            update={
+                "source": "stored",
+                "as_of": stored.as_of,
+                "statement_as_of": stored.statement_as_of,
+                "market_cap": float(stored.market_cap),
+                "default_point": float(stored.default_point),
+                "vol_equity": float(stored.vol_equity),
+                "asset_value": float(stored.asset_value),
+                "vol_asset": float(stored.vol_asset),
+                "risk_free": float(stored.risk_free),
+                "dd": float(stored.dd),
+                "bucket": stored.bucket,
+                "position": stored.position,
+                "bucket_oas_bp": _opt(stored.bucket_oas_bp),
+                "calibration_version": stored.calibration_version,
+            }
+        )
+    if inputs is None:
+        base.unavailable = f"Not computed: {reason or 'inputs missing'}."
+        return base
+    if not rungs or risk_free is None:
+        base.unavailable = "Not computed: no calibration ladder stored. Run compute_credit."
+        return base
+    fit = merton(inputs.market_cap, inputs.point, inputs.vol_equity, risk_free)
+    placement = place(fit.dd, rungs) if fit is not None else None
+    if fit is None or placement is None:
+        base.unavailable = "Not computed: the Merton solve did not converge."
+        return base
+    return base.model_copy(
+        update={
+            "source": "read_time",
+            "as_of": inputs.close_as_of,
+            "statement_as_of": inputs.statement_as_of,
+            "market_cap": inputs.market_cap,
+            "default_point": inputs.point,
+            "vol_equity": inputs.vol_equity,
+            "asset_value": fit.asset_value,
+            "vol_asset": fit.vol_asset,
+            "risk_free": risk_free,
+            "dd": fit.dd,
+            "bucket": placement.bucket,
+            "position": placement.position,
+            "bucket_oas_bp": placement.oas_bp,
+            "calibration_version": calibration.version,
+        }
+    )
+
+
+def load_ticker_credit(db: Any, item: Any, *, today: date) -> TickerCredit:
+    """Credit block for one Ticker page (`item` is `api.ticker.NameInputs`)."""
+    instrument = item.instrument
+    stored = latest_credit_implied(db, [instrument.id]).get(instrument.id)
+    closes = [(day, Decimal(str(value))) for day, value in item.closes]
+    adj = [(day, Decimal(str(value))) for day, value in item.adj_closes]
+    inputs, reason = credit_inputs(closes, adj, item.ttm[-1] if item.ttm else None, today=today)
+    rate = macro_observations(db, RISK_FREE_SERIES, start=today - timedelta(days=30))
+    return build_ticker_credit(
+        ticker=instrument.ticker,
+        sector=instrument.sector,
+        stored=stored,
+        inputs=inputs,
+        reason=reason,
+        ladder=latest_credit_anchors(db),
+        risk_free=float(rate[-1][1]) / 100 if rate else None,
+        calibration=load_credit_calibration(),
+    )
+
+
+def _opt(value: Any) -> float | None:
+    return None if value is None else float(value)

@@ -1,4 +1,4 @@
-.PHONY: db migrate seed yahoo yahoo-watch fred poly dynamics regime news finnhub-news fed-rss calendar pack outlook outlook-manual sec sec-profile yahoo-val valuation quant scores risk memos intraday backfill dump restore api web test
+.PHONY: db migrate seed yahoo yahoo-watch fred poly dynamics regime news finnhub-news fed-rss calendar pack outlook outlook-manual sec sec-profile yahoo-val valuation quant scores risk credit memos intraday backfill dump restore api web test
 
 db:
 	docker compose up -d db
@@ -74,6 +74,9 @@ scores:
 
 risk:
 	.venv/bin/python -m jobs.compute_risk
+
+credit:
+	.venv/bin/python -m jobs.compute_credit
 
 memos:
 	.venv/bin/python -m jobs.generate_memos --template

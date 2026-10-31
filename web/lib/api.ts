@@ -836,6 +836,41 @@ export type CreditCurve = {
   stlfsi_as_of: string | null;
 };
 
+export type CreditAnchorRow = {
+  bucket: string;
+  median_dd: number;
+  names: number;
+  oas_bp: number | null;
+};
+
+export type AgencyRating = {
+  rating: string;
+  bucket: string;
+  agency: string;
+  as_of: string | null;
+  source: string | null;
+};
+
+export type TickerCredit = {
+  source: "stored" | "read_time" | null;
+  unavailable: string | null;
+  as_of: string | null;
+  statement_as_of: string | null;
+  market_cap: number | null;
+  default_point: number | null;
+  vol_equity: number | null;
+  asset_value: number | null;
+  vol_asset: number | null;
+  risk_free: number | null;
+  dd: number | null;
+  bucket: string | null;
+  position: "above" | "within" | "below" | null;
+  bucket_oas_bp: number | null;
+  calibration_version: string | null;
+  agency: AgencyRating | null;
+  anchors: CreditAnchorRow[];
+};
+
 export type TickerTape = {
   stale: boolean;
   identity: TickerIdentity | null;
@@ -848,6 +883,7 @@ export type TickerTape = {
   events: TickerEvent[];
   news: TickerNews[];
   peers: TickerPeers | null;
+  credit: TickerCredit | null;
   hint: string | null;
 };
 

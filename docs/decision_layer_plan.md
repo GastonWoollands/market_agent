@@ -37,7 +37,7 @@ This file is **not** the product contract. If intent, sources, universes, pages,
 | 1.8 | Ticker + Compare pages | **Done** (PR #15) | `GET /ticker/{t}`, `GET /compare`; links from every grid; header search |
 | 1.9 | Rotation panels | Not started | Cross-asset RRG, sector breadth + median valuation, intra-sector RRG, factor ETFs |
 | 1.10 | Peer comps + credit curve | **Done** (branch `feat/peer-comps-credit-curve`) | Ticker-page peer table and EV/EBITDA vs growth scatter (no new data); FRED rating-bucket OAS / yields, DGS1, Baa–Aaa, NFCI, STLFSI4 |
-| 1.11 | Equity-implied credit bucket | Spike passed (2026-10-31) | Merton DD → implied rating bucket on the FRED curve; `config/credit_calibration.yaml` reviewed before ship |
+| 1.11 | Equity-implied credit bucket | **Done** (branch `feat/implied-credit`) | Merton DD → implied rating bucket on the FRED curve; `config/credit_calibration.yaml` reviewed before ship |
 | 1.12 | Options read | Not started | Yahoo chains (scoped names), ^VIX9D / ^VIX3M / ^VVIX / ^SKEW, Cboe market put/call |
 | 1.13 | Kalshi + CFTC | Not started | S&P / Nasdaq range distribution, macro odds beside Polymarket; TFF positioning |
 | 1.14 | Street consensus + short interest | Not started | Yahoo recommendation / target / revisions; FINRA short interest + days to cover |
@@ -322,7 +322,7 @@ For each Opportunities row when the book is non-empty: ρ vs current holdings, s
 
 **Known limits:** peers are sector + size, not business model (CRWV's comps are FLEX / TTWO / UI, not AI-infra names). SIC sectors are approximate (OTIS lands in IT). A curated peer override (`config/peers.yaml`) is the follow-up if this bites.
 
-## Phase 1.11 — Equity-implied credit bucket
+## Phase 1.11 — Equity-implied credit bucket (done)
 
 Method in Northstar §9. Spike (2026-10-31, scratch only, 65 rated names + CRWV held out, FRED 2026-10-29):
 
@@ -339,6 +339,11 @@ Method in Northstar §9. Spike (2026-10-31, scratch only, 65 rated names + CRWV 
 - Ratings in the spike came from operator memory. **Before ship:** `config/credit_calibration.yaml` with source + as-of per row, reviewed by the operator.
 - **Re-run on the verified set (2026-10-31, `config/credit_calibration.yaml`, 106 rows, 91 fitted):** anchors AAA 11.05 · AA 9.08 · A 7.59 · BBB 4.59 · BB 2.69 · B 1.76 · CCC 1.33 (B now has 19 names, CCC 4). Spearman 0.84; leave-one-out exact 35/91, within one bucket 84/91 (92%). Misses > 1 bucket are low-vol levered payers (KO, MO, MCD, KMI, TDG read too safe), CABO (vol 112%) too risky, BLCO too safe. CRWV (S&P B+, held out) still reads below CCC; MSFT AAA; ORCL (BBB-) reads BB; META (AA-) reads A.
 - Output: `credit_implied` (instrument, as_of, E, F, σ_E, σ_A, DD, bucket, bucket_oas_bp, calibration_version). Excluded sectors per Northstar §9. Not a rank input.
+- Shipped: `analytics/credit.py` (default point, Merton solve, anchors, placement, inputs), `metric_ttm.current_liabilities / total_liabilities / deferred_revenue_current` (migration 0021; L&SE − equity fallback), `credit_implied` + `credit_anchor`, job `compute_credit` (897 names on 2026-10-30; anchors AAA 11.02 · AA 9.15 · A 7.61 · BBB 4.65 · BB 2.69 · B 1.81 · CCC 1.30), `credit` block on `GET /ticker` (stored, else read-time on the stored ladder; agency rating from the yaml when present), `CreditImpliedPanel` + implied bucket ringed on the curve.
+
+**Operator check:** `/t/CRWV` "Below CCC" vs S&P B+; `/t/MSFT` AAA; `/t/ORCL` BB vs BBB-; `/t/V` "Not scored".
+
+**Known limits:** whole Financials / Real Estate sectors are excluded, which also drops payment networks (V, MA, PYPL) that Merton could score; narrow the exclusion to banks / insurers / REITs by industry if that matters. Low-vol buyback-levered issuers read too safe. Re-review `config/credit_calibration.yaml` when agencies move (rows carry as-of dates).
 
 ## Phase 1.12 — Options read
 
@@ -421,5 +426,6 @@ Next concrete PR: **Phase 1.9 rotation panels**, then **Phase 3 Book** (with 3.5
 | 2026-10-31 | Phases 1.6–1.9 added after a single-name deep-dive exposed TTM / debt defects. Northstar: Ticker + Compare pages; interest coverage in scope. |
 | 2026-10-31 | Phase 1.6 merged (PR #13). Phase 1.7: SIC sectors, `risk_stats`, EBIT / interest TTM, additive partial `ingest_sec`. |
 | 2026-10-31 | Phase 1.7 merged (PR #14). Phase 1.8: Ticker + Compare pages and APIs; facts refreshed for non-members. |
+| 2026-10-31 | Phase 1.11: equity-implied credit bucket (verified 106-name calibration set, `compute_credit`, Ticker panel). |
 | 2026-10-31 | Phase 1.10: peer comps + scatter on Ticker, FRED rating curve (`GET /credit/curve`), `in_pack` flag. |
 | 2026-10-31 | Phase 1.8 merged (PR #15). Market-signals contract: Phases 1.10–1.14 (peer comps, credit curve, implied credit bucket, options, Kalshi, CFTC, Cboe, consensus, short interest). Merton spike results recorded; single-name CDS and per-bond TRACE out (licensed). |

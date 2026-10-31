@@ -11,7 +11,14 @@
 # Verified by web research on 2026-10-31. REVIEW BEFORE SHIP: confirm or correct
 # rating / as_of / source; set confidence to high when you have checked a row.
 
-version: 2026-10-31
+version: "2026-10-31"
+
+# Never scored: liabilities are deposits, float, policy reserves or customer custody,
+# not claims that force default (Northstar §9).
+exclude_sectors: [Financials, Real Estate]
+# Captive finance arms put a lender's balance sheet on an industrial issuer.
+exclude_tickers: [F, GM, COIN]
+
 names:
   - ticker: MSFT
     bucket: AAA
