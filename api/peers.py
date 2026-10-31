@@ -54,11 +54,18 @@ def build_peers(
     sector = [item for item in universe if item.sector == me.sector and item.ticker != me.ticker]
     if not sector:
         return None
-    nearest = sorted(sector, key=lambda item: _cap_distance(item, me.market_cap))[:limit]
+    if me.market_cap:
+        basis = "nearest_cap"
+        nearest = sorted(sector, key=lambda item: _cap_distance(item, me.market_cap))[:limit]
+    else:
+        # No market cap for this name yet (SEC shares not stored): show the sector leaders.
+        basis = "largest_cap"
+        nearest = sorted(sector, key=lambda item: -(item.market_cap or 0.0))[:limit]
     members = [*sector, me]
     return TickerPeers(
         sector=me.sector,
         sector_size=len(members),
+        basis=basis,
         rows=[_row(me, is_self=True), *(_row(item) for item in nearest)],
         medians=_medians(members),
         scatter=[

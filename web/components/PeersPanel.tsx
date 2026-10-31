@@ -20,7 +20,9 @@ export function PeersPanel({ peers }: { peers: TickerPeers | null }) {
     <div className="grid gap-4 xl:grid-cols-[3fr_2fr]">
       <Panel
         title={`Peers · ${peers.sector}`}
-        note={`${others.length} nearest by market cap · medians over ${peers.sector_size} names`}
+        note={`${others.length} ${
+          peers.basis === "nearest_cap" ? "nearest by market cap" : "largest (own market cap unknown)"
+        } · medians over ${peers.sector_size} names`}
       >
         <div className="overflow-x-auto">
           <table className="w-full text-left text-[13px]">

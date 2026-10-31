@@ -733,6 +733,7 @@ class TickerPeers(BaseModel):
 
     sector: str
     sector_size: int
+    basis: Literal["nearest_cap", "largest_cap"] = "nearest_cap"
     rows: list[PeerRow] = Field(default_factory=list)
     medians: PeerRow
     scatter: list[PeerPoint] = Field(default_factory=list)

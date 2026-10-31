@@ -40,6 +40,13 @@ def test_peers_nearest_by_log_cap_with_self_first() -> None:
     assert peers.sector_size == 5  # ME + BIG + NEAR + HALF + NOCAP; Energy excluded
 
 
+def test_unknown_own_cap_falls_back_to_sector_leaders() -> None:
+    universe = [_peer("SMALL", 10.0), _peer("BIG", 900.0), _peer("MID", 100.0)]
+    peers = build_peers(_peer("ME", None), universe, limit=2)
+    assert peers.basis == "largest_cap"
+    assert [row.ticker for row in peers.rows] == ["ME", "BIG", "MID"]
+
+
 def test_medians_skip_negative_multiples_and_scatter_needs_both_axes() -> None:
     me = _peer("ME", 100.0, ev_ebitda=-5.0)
     universe = [

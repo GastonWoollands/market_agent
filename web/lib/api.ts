@@ -809,6 +809,7 @@ export type PeerPoint = {
 export type TickerPeers = {
   sector: string;
   sector_size: number;
+  basis: "nearest_cap" | "largest_cap";
   rows: PeerRow[];
   medians: PeerRow;
   scatter: PeerPoint[];
