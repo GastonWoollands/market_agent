@@ -1,4 +1,5 @@
 import { StaleBadge } from "@/components/StaleBadge";
+import { TickerLink } from "@/components/TickerLink";
 import { cn } from "@/lib/cn";
 import type { ValuationMember, ValuationTape } from "@/lib/api";
 
@@ -147,7 +148,9 @@ export function ValuationView({
 function MemberRow({ item }: { item: ValuationMember }) {
   return (
     <tr className="border-b border-line last:border-0">
-      <td className="px-3 py-2 font-medium">{item.ticker}</td>
+      <td className="px-3 py-2 font-medium">
+        <TickerLink ticker={item.ticker} />
+      </td>
       <td className="px-3 py-2 text-mute">{item.name}</td>
       <td className="px-3 py-2 text-right tabular-nums">
         {item.comparable ? formatMultiple(item.ev_ebitda) : "—"}

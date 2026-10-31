@@ -21,6 +21,7 @@ from store.catalog import CatalogInstrument, load_universes
 from store.engine import session_scope
 from store.repos import (
     ensure_membership,
+    instrument_by_ticker,
     instruments_in_universe,
     prune_metric_ttm,
     replace_membership,
@@ -141,12 +142,18 @@ def _write_members(
             except (SecParseError, ValueError) as exc:
                 failures.append(f"{item.ticker}: {exc}")
                 continue
-            if (
-                metric is None
-                or metric.revenue < floor
-                or not fresh_ttm(metric)
-                or not usable_ttm(metric)
-            ):
+            member = (
+                metric is not None
+                and metric.revenue >= floor
+                and fresh_ttm(metric)
+                and usable_ttm(metric)
+            )
+            if not member:
+                # A stored name outside the universe (watchlist, a former member) still gets
+                # current facts, so the Ticker page never shows rows from an older parse.
+                known = instrument_by_ticker(session, item.ticker)
+                if known is not None:
+                    fy_written += _write_facts(session, known.id, payload, metric)
                 continue
             instrument = upsert_instrument(
                 session,
@@ -160,16 +167,7 @@ def _write_members(
                 ),
             )
             session.flush()
-            snapshots = ttm_history_from_facts(payload, require_quarters=True)
-            as_ofs = {snap.as_of for snap in snapshots}
-            if metric.as_of not in as_ofs:
-                snapshots = [*snapshots, metric]
-            for snap in snapshots:
-                upsert_metric_ttm(session, instrument.id, snap)
-            prune_metric_ttm(session, instrument.id, {snap.as_of for snap in snapshots})
-            for fy_snap in fy_history_from_facts(payload):
-                upsert_metric_fy(session, instrument.id, fy_snap)
-                fy_written += 1
+            fy_written += _write_facts(session, instrument.id, payload, metric)
             ids.append(instrument.id)
             kept += 1
             if index % 500 == 0:
@@ -184,6 +182,21 @@ def _write_members(
             raise RuntimeError(f"valuation membership {len(ids)} is outside {BAND[0]}–{BAND[1]}")
         replace_membership(session, universe.id, ids)
     return kept, fy_written
+
+
+def _write_facts(session, instrument_id: int, payload: dict, metric) -> int:
+    """Replace one name's TTM history and upsert its FY rows. Returns FY rows written."""
+    snapshots = ttm_history_from_facts(payload, require_quarters=True)
+    if metric is not None and metric.as_of not in {snap.as_of for snap in snapshots}:
+        snapshots = [*snapshots, metric]
+    for snap in snapshots:
+        upsert_metric_ttm(session, instrument_id, snap)
+    prune_metric_ttm(session, instrument_id, {snap.as_of for snap in snapshots})
+    written = 0
+    for fy_snap in fy_history_from_facts(payload):
+        upsert_metric_fy(session, instrument_id, fy_snap)
+        written += 1
+    return written
 
 
 def _write_fy_only(
