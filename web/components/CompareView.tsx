@@ -2,7 +2,7 @@ import { CorrHeatmap } from "@/components/CorrHeatmap";
 import { RelativeOverlay } from "@/components/RelativeOverlay";
 import { StaleBadge } from "@/components/StaleBadge";
 import { TickerLink } from "@/components/TickerLink";
-import { Panel } from "@/components/TickerView";
+import { Panel } from "@/components/Panel";
 import { cn } from "@/lib/cn";
 import type { CompareRow, CompareTape } from "@/lib/api";
 import {

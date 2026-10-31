@@ -11,7 +11,7 @@ from ingest.sec.client import SecClient
 from ingest.sec.errors import SecError, SecHttpError, SecParseError
 from jobs.runtime import tracked_job
 from store.engine import session_scope
-from store.repos import instruments_in_universes, set_instrument_profile
+from store.repos import instrument_by_ticker, instruments_in_universes, set_instrument_profile
 from store.settings import settings
 
 log = logging.getLogger("jobs.ingest_sec_profile")
@@ -22,13 +22,13 @@ UNIVERSES = ("valuation", "watchlist")
 def ingest(*, tickers: set[str] | None = None, resume: bool = False) -> dict[str, object]:
     sic_map = load_sic_map()
     with session_scope() as session:
-        rows = [
-            (item.id, item.ticker, item.cik, item.sector)
-            for item in instruments_in_universes(session, UNIVERSES)
-            if item.cik
-        ]
-    if tickers:
-        rows = [item for item in rows if item[1].upper() in tickers]
+        # Named tickers may sit outside every universe (a Ticker page on a dropped name).
+        found = (
+            [item for t in sorted(tickers) if (item := instrument_by_ticker(session, t))]
+            if tickers
+            else instruments_in_universes(session, UNIVERSES)
+        )
+        rows = [(item.id, item.ticker, item.cik, item.sector) for item in found if item.cik]
     if resume:
         rows = [item for item in rows if not item[3]]
     written = 0

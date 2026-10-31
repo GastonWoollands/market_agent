@@ -783,6 +783,59 @@ export type TickerNews = {
   publisher: string;
 };
 
+export type PeerRow = {
+  ticker: string;
+  name: string | null;
+  is_self: boolean;
+  market_cap: number | null;
+  ev_ebitda: number | null;
+  pctile_5y: number | null;
+  fcf_yield: number | null;
+  nd_ebitda: number | null;
+  ebitda_growth_1y: number | null;
+  ret_1y: number | null;
+  vol_1y: number | null;
+  rank: number | null;
+};
+
+export type PeerPoint = {
+  ticker: string;
+  ev_ebitda: number;
+  ebitda_growth_1y: number;
+  market_cap: number | null;
+  is_self: boolean;
+};
+
+export type TickerPeers = {
+  sector: string;
+  sector_size: number;
+  basis: "nearest_cap" | "largest_cap";
+  rows: PeerRow[];
+  medians: PeerRow;
+  scatter: PeerPoint[];
+};
+
+export type CreditBucket = {
+  rating: string;
+  grade: "IG" | "HY";
+  oas_bp: number | null;
+  oas_1m_bp: number | null;
+  oas_1y_bp: number | null;
+  yield_pct: number | null;
+  yield_1y_pct: number | null;
+};
+
+export type CreditCurve = {
+  stale: boolean;
+  as_of: string | null;
+  buckets: CreditBucket[];
+  baa_10y_bp: number | null;
+  nfci: number | null;
+  nfci_as_of: string | null;
+  stlfsi: number | null;
+  stlfsi_as_of: string | null;
+};
+
 export type TickerTape = {
   stale: boolean;
   identity: TickerIdentity | null;
@@ -794,6 +847,7 @@ export type TickerTape = {
   risk: TickerRisk | null;
   events: TickerEvent[];
   news: TickerNews[];
+  peers: TickerPeers | null;
   hint: string | null;
 };
 
@@ -820,6 +874,10 @@ export type Fetched<T> = { ok: true; data: T } | { ok: false; status: number | n
 
 export async function fetchTicker(ticker: string): Promise<Fetched<TickerTape>> {
   return fetchTyped<TickerTape>(`/ticker/${encodeURIComponent(ticker.toUpperCase())}`);
+}
+
+export async function fetchCreditCurve(): Promise<Fetched<CreditCurve>> {
+  return fetchTyped<CreditCurve>("/credit/curve");
 }
 
 export async function fetchCompare(tickers: string[]): Promise<Fetched<CompareTape>> {

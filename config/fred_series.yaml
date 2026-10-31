@@ -421,3 +421,185 @@ series:
     show_on_live: false
     insight: OECD monthly JGB 10Y. Stamp as_of / lag_days; do not call it today's JGB yield.
     frequency: monthly
+
+  # Credit curve by rating (ICE BofA via FRED, ~3y history). Reference for the Ticker
+  # credit panel and the implied credit bucket; kept out of Live and the writer pack.
+  - id: BAMLC0A1CAAA
+    name: AAA OAS
+    unit: percent
+    category: credit_curve
+    region: us
+    pack_view: yield_bp
+    show_on_live: false
+    in_pack: false
+    insight: ICE BofA US IG AAA-rated option-adjusted spread over Treasuries.
+
+  - id: BAMLC0A1CAAAEY
+    name: AAA effective yield
+    unit: percent
+    category: credit_curve
+    region: us
+    pack_view: yield_bp
+    show_on_live: false
+    in_pack: false
+    insight: ICE BofA US IG AAA-rated effective yield (all-in borrowing cost).
+
+  - id: BAMLC0A2CAA
+    name: AA OAS
+    unit: percent
+    category: credit_curve
+    region: us
+    pack_view: yield_bp
+    show_on_live: false
+    in_pack: false
+    insight: ICE BofA US IG AA-rated option-adjusted spread over Treasuries.
+
+  - id: BAMLC0A2CAAEY
+    name: AA effective yield
+    unit: percent
+    category: credit_curve
+    region: us
+    pack_view: yield_bp
+    show_on_live: false
+    in_pack: false
+    insight: ICE BofA US IG AA-rated effective yield (all-in borrowing cost).
+
+  - id: BAMLC0A3CA
+    name: A OAS
+    unit: percent
+    category: credit_curve
+    region: us
+    pack_view: yield_bp
+    show_on_live: false
+    in_pack: false
+    insight: ICE BofA US IG A-rated option-adjusted spread over Treasuries.
+
+  - id: BAMLC0A3CAEY
+    name: A effective yield
+    unit: percent
+    category: credit_curve
+    region: us
+    pack_view: yield_bp
+    show_on_live: false
+    in_pack: false
+    insight: ICE BofA US IG A-rated effective yield (all-in borrowing cost).
+
+  - id: BAMLC0A4CBBB
+    name: BBB OAS
+    unit: percent
+    category: credit_curve
+    region: us
+    pack_view: yield_bp
+    show_on_live: false
+    in_pack: false
+    insight: ICE BofA US IG BBB-rated option-adjusted spread over Treasuries.
+
+  - id: BAMLC0A4CBBBEY
+    name: BBB effective yield
+    unit: percent
+    category: credit_curve
+    region: us
+    pack_view: yield_bp
+    show_on_live: false
+    in_pack: false
+    insight: ICE BofA US IG BBB-rated effective yield (all-in borrowing cost).
+
+  - id: BAMLH0A1HYBB
+    name: BB OAS
+    unit: percent
+    category: credit_curve
+    region: us
+    pack_view: yield_bp
+    show_on_live: false
+    in_pack: false
+    insight: ICE BofA US HY BB-rated option-adjusted spread over Treasuries.
+
+  - id: BAMLH0A1HYBBEY
+    name: BB effective yield
+    unit: percent
+    category: credit_curve
+    region: us
+    pack_view: yield_bp
+    show_on_live: false
+    in_pack: false
+    insight: ICE BofA US HY BB-rated effective yield (all-in borrowing cost).
+
+  - id: BAMLH0A2HYB
+    name: B OAS
+    unit: percent
+    category: credit_curve
+    region: us
+    pack_view: yield_bp
+    show_on_live: false
+    in_pack: false
+    insight: ICE BofA US HY B-rated option-adjusted spread over Treasuries.
+
+  - id: BAMLH0A2HYBEY
+    name: B effective yield
+    unit: percent
+    category: credit_curve
+    region: us
+    pack_view: yield_bp
+    show_on_live: false
+    in_pack: false
+    insight: ICE BofA US HY B-rated effective yield (all-in borrowing cost).
+
+  - id: BAMLH0A3HYC
+    name: CCC OAS
+    unit: percent
+    category: credit_curve
+    region: us
+    pack_view: yield_bp
+    show_on_live: false
+    in_pack: false
+    insight: ICE BofA US HY CCC-rated option-adjusted spread over Treasuries.
+
+  - id: BAMLH0A3HYCEY
+    name: CCC effective yield
+    unit: percent
+    category: credit_curve
+    region: us
+    pack_view: yield_bp
+    show_on_live: false
+    in_pack: false
+    insight: ICE BofA US HY CCC-rated effective yield (all-in borrowing cost).
+
+  - id: DGS1
+    name: 1Y Treasury yield
+    unit: percent
+    category: rates
+    region: us
+    pack_view: yield_bp
+    show_on_live: false
+    in_pack: false
+    insight: One-year risk-free rate; the discount rate for the one-year credit model.
+
+  - id: BAA10Y
+    name: Baa - 10Y spread
+    unit: percent
+    category: credit
+    region: us
+    pack_view: yield_bp
+    show_on_live: false
+    in_pack: false
+    insight: Moody's seasoned Baa corporate yield minus the 10Y Treasury; long history for the BBB curve.
+
+  - id: NFCI
+    name: Chicago Fed NFCI
+    unit: index
+    category: credit
+    frequency: weekly
+    region: us
+    pack_view: level
+    show_on_live: false
+    insight: National Financial Conditions Index. Above 0 = tighter than average; below 0 = looser.
+
+  - id: STLFSI4
+    name: St. Louis Fed stress index
+    unit: index
+    category: credit
+    frequency: weekly
+    region: us
+    pack_view: level
+    show_on_live: false
+    insight: Weekly financial stress from 18 market series. 0 = normal; positive = above-average stress.

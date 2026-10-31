@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -704,6 +705,40 @@ class TickerNews(BaseModel):
     publisher: str
 
 
+class PeerRow(BaseModel):
+    ticker: str
+    name: str | None = None
+    is_self: bool = False
+    market_cap: float | None = None
+    ev_ebitda: float | None = None
+    pctile_5y: float | None = None
+    fcf_yield: float | None = None
+    nd_ebitda: float | None = None
+    ebitda_growth_1y: float | None = None
+    ret_1y: float | None = None
+    vol_1y: float | None = None
+    rank: int | None = None
+
+
+class PeerPoint(BaseModel):
+    ticker: str
+    ev_ebitda: float
+    ebitda_growth_1y: float
+    market_cap: float | None = None
+    is_self: bool = False
+
+
+class TickerPeers(BaseModel):
+    """Same-sector valuation members nearest by market cap, plus sector medians."""
+
+    sector: str
+    sector_size: int
+    basis: Literal["nearest_cap", "largest_cap"] = "nearest_cap"
+    rows: list[PeerRow] = Field(default_factory=list)
+    medians: PeerRow
+    scatter: list[PeerPoint] = Field(default_factory=list)
+
+
 class TickerResponse(BaseModel):
     stale: bool = True
     identity: TickerIdentity | None = None
@@ -715,6 +750,7 @@ class TickerResponse(BaseModel):
     risk: TickerRisk | None = None
     events: list[TickerEvent] = Field(default_factory=list)
     news: list[TickerNews] = Field(default_factory=list)
+    peers: TickerPeers | None = None
     hint: str | None = None
 
 
@@ -735,3 +771,26 @@ class CompareResponse(BaseModel):
     rows: list[CompareRow] = Field(default_factory=list)
     corr: DynamicsCorr | None = None
     overlay: list[DynamicsOverlay] = Field(default_factory=list)
+
+
+class CreditBucket(BaseModel):
+    rating: str
+    grade: Literal["IG", "HY"]
+    oas_bp: float | None = None
+    oas_1m_bp: float | None = None
+    oas_1y_bp: float | None = None
+    yield_pct: float | None = None
+    yield_1y_pct: float | None = None
+
+
+class CreditCurveResponse(BaseModel):
+    """ICE BofA OAS and effective yield by rating bucket (FRED), plus conditions gauges."""
+
+    stale: bool = True
+    as_of: date | None = None
+    buckets: list[CreditBucket] = Field(default_factory=list)
+    baa_10y_bp: float | None = None
+    nfci: float | None = None
+    nfci_as_of: date | None = None
+    stlfsi: float | None = None
+    stlfsi_as_of: date | None = None

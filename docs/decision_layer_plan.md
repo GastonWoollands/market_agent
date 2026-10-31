@@ -36,7 +36,7 @@ This file is **not** the product contract. If intent, sources, universes, pages,
 | 1.7 | Sector + per-name risk | **Done** (PR #14) | SIC → sector from SEC submissions; vol / beta / max DD for the valuation universe; `InterestExpense` |
 | 1.8 | Ticker + Compare pages | **Done** (PR #15) | `GET /ticker/{t}`, `GET /compare`; links from every grid; header search |
 | 1.9 | Rotation panels | Not started | Cross-asset RRG, sector breadth + median valuation, intra-sector RRG, factor ETFs |
-| 1.10 | Peer comps + credit curve | **Next** | Ticker-page peer table and EV/EBITDA vs growth scatter (no new data); FRED rating-bucket OAS / yields, DGS1, Baa–Aaa, NFCI, STLFSI4 |
+| 1.10 | Peer comps + credit curve | **Done** (branch `feat/peer-comps-credit-curve`) | Ticker-page peer table and EV/EBITDA vs growth scatter (no new data); FRED rating-bucket OAS / yields, DGS1, Baa–Aaa, NFCI, STLFSI4 |
 | 1.11 | Equity-implied credit bucket | Spike passed (2026-10-31) | Merton DD → implied rating bucket on the FRED curve; `config/credit_calibration.yaml` reviewed before ship |
 | 1.12 | Options read | Not started | Yahoo chains (scoped names), ^VIX9D / ^VIX3M / ^VVIX / ^SKEW, Cboe market put/call |
 | 1.13 | Kalshi + CFTC | Not started | S&P / Nasdaq range distribution, macro odds beside Polymarket; TFF positioning |
@@ -311,11 +311,16 @@ For each Opportunities row when the book is non-empty: ρ vs current holdings, s
 
 ---
 
-## Phase 1.10 — Peer comps + credit curve
+## Phase 1.10 — Peer comps + credit curve (done)
 
 - Ticker page: peers = same sector, valuation universe, nearest by market cap (cap 10). Columns are the Compare desk metrics. Scatter EV/EBITDA vs EBITDA 1y with the name highlighted and the sector median lines.
-- FRED catalog: `BAMLC0A1CAAA`, `BAMLC0A2CAA`, `BAMLC0A3CA`, `BAMLC0A4CBBB`, `BAMLH0A1HYBB`, `BAMLH0A2HYB`, `BAMLH0A3HYC` (OAS) and the matching effective-yield series, `DGS1`, `BAA10Y` / `AAA10Y`, `NFCI`, `STLFSI4`. ICE series on FRED carry ~3y of history only.
-- Live / Ticker: the rating curve (OAS by bucket today vs 1m / 1y ago).
+- FRED catalog: `BAMLC0A1CAAA`, `BAMLC0A2CAA`, `BAMLC0A3CA`, `BAMLC0A4CBBB`, `BAMLH0A1HYBB`, `BAMLH0A2HYB`, `BAMLH0A3HYC` (OAS) and the matching effective-yield series, `DGS1`, `BAA10Y`, `NFCI`, `STLFSI4`. ICE series on FRED carry ~3y of history only.
+- Ticker: the rating curve (OAS by bucket today vs 1y ago, Δ 1m / 1y, effective yield, Baa−10Y, NFCI, STLFSI). Live panel deferred until the implied bucket exists.
+- Shipped: `GET /ticker/{t}` → `peers` (self row from the page's own desk, 1y return from adjusted closes; `return_stats` only covers sector ETFs); `GET /credit/curve`; `FredSeriesItem.in_pack` keeps reference series out of the writer pack; `ingest_sec_profile --tickers` now accepts names outside every universe (CRWV had no sector).
+
+**Operator check:** `/t/MSFT` peers AAPL / NVDA / AVGO…, sector median EV/EBITDA ~20x; `/t/CRWV` peers in Information Technology by cap; credit curve CCC ~1,325bp (+500 over 1y).
+
+**Known limits:** peers are sector + size, not business model (CRWV's comps are FLEX / TTWO / UI, not AI-infra names). SIC sectors are approximate (OTIS lands in IT). A curated peer override (`config/peers.yaml`) is the follow-up if this bites.
 
 ## Phase 1.11 — Equity-implied credit bucket
 
@@ -415,4 +420,5 @@ Next concrete PR: **Phase 1.9 rotation panels**, then **Phase 3 Book** (with 3.5
 | 2026-10-31 | Phases 1.6–1.9 added after a single-name deep-dive exposed TTM / debt defects. Northstar: Ticker + Compare pages; interest coverage in scope. |
 | 2026-10-31 | Phase 1.6 merged (PR #13). Phase 1.7: SIC sectors, `risk_stats`, EBIT / interest TTM, additive partial `ingest_sec`. |
 | 2026-10-31 | Phase 1.7 merged (PR #14). Phase 1.8: Ticker + Compare pages and APIs; facts refreshed for non-members. |
+| 2026-10-31 | Phase 1.10: peer comps + scatter on Ticker, FRED rating curve (`GET /credit/curve`), `in_pack` flag. |
 | 2026-10-31 | Phase 1.8 merged (PR #15). Market-signals contract: Phases 1.10–1.14 (peer comps, credit curve, implied credit bucket, options, Kalshi, CFTC, Cboe, consensus, short interest). Merton spike results recorded; single-name CDS and per-bond TRACE out (licensed). |

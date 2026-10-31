@@ -85,7 +85,7 @@ Each step needs the ones above it. Skip a block only if you do not care about th
 |---|---------|-----|
 | 1 | `python -m jobs.seed_tape` | Instruments + `tape` / `watchlist` from `config/universes.yaml` (includes US indices/ETFs + international indices: Nikkei/DAX/FTSE/HSI/CSI 300 + EEM) |
 | 2 | `python -m jobs.ingest_yahoo` | 5y daily bars + delayed quotes for the tape (~40 names: US + intl indices + Treasury yield indices) |
-| 3 | `python -m jobs.ingest_fred` | FRED catalog (US spine: rates/inflation/growth/employment + FX: DXY/EUR/JPY/MXN/BRL/CNY + commodities: copper/oil/gas + global: ECB/BOJ/PBOC; needs `FRED_API_KEY`) |
+| 3 | `python -m jobs.ingest_fred` | FRED catalog (US spine: rates/inflation/growth/employment + FX: DXY/EUR/JPY/MXN/BRL/CNY + commodities: copper/oil/gas + global: ECB/BOJ/PBOC + credit curve: ICE BofA OAS / yield AAA…CCC, Baa−10Y, NFCI, STLFSI4; needs `FRED_API_KEY`) |
 | 3b | `python -m jobs.compute_regime` | `regime_snapshot` from stored FRED (Live band + `pack.regime`) |
 | 4 | `python -m jobs.ingest_polymarket` | Fed / inflation / recession odds |
 
@@ -350,7 +350,7 @@ Both write to `outlook_report` table. UI displays latest for the date.
 | `jobs.compute_valuation` | `valuation_daily` | — |
 | `jobs.compute_quant` | `quant_score` (gem flag / ratios) | — |
 | `jobs.compute_scores` | `opportunity_score` (prunes names outside the run) | — |
-| `jobs.ingest_sec_profile` | `instrument.sector` / `instrument.industry` | `--tickers`, `--resume` |
+| `jobs.ingest_sec_profile` | `instrument.sector` / `instrument.industry` | `--tickers` (any stored name, also outside every universe), `--resume` |
 | `jobs.compute_risk` | `risk_stats` | — |
 | `jobs.generate_memos` | `opportunity_memo` | `--template`, `--provider`, `--model` |
 | `jobs.ingest_intraday` | `bar_intraday` (5m) | `--tickers`, `--resume` |

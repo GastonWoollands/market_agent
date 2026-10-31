@@ -1,9 +1,12 @@
 import type { ReactNode } from "react";
 
+import { CreditCurvePanel } from "@/components/CreditCurvePanel";
+import { Panel } from "@/components/Panel";
+import { PeersPanel } from "@/components/PeersPanel";
 import { StaleBadge } from "@/components/StaleBadge";
 import { TradingViewChart } from "@/components/TradingViewChart";
 import { cn } from "@/lib/cn";
-import type { TickerDesk, TickerRisk, TickerTape, TickerTechnicals } from "@/lib/api";
+import type { CreditCurve, TickerDesk, TickerRisk, TickerTape, TickerTechnicals } from "@/lib/api";
 import {
   DASH,
   fmtMultiple,
@@ -16,7 +19,7 @@ import {
   signedClass,
 } from "@/lib/format";
 
-export function TickerView({ tape }: { tape: TickerTape }) {
+export function TickerView({ tape, credit }: { tape: TickerTape; credit: CreditCurve | null }) {
   const id = tape.identity;
   if (id == null) {
     return <p className="text-sm text-mute">No identity stored for this name.</p>;
@@ -94,6 +97,9 @@ export function TickerView({ tape }: { tape: TickerTape }) {
         <TechnicalsPanel tech={tape.technicals} sectorEtf={id.sector_etf} />
         <RiskPanel risk={tape.risk} />
       </div>
+
+      <PeersPanel peers={tape.peers} />
+      <CreditCurvePanel curve={credit} />
 
       {price ? (
         <section className="h-[420px] overflow-hidden rounded border border-line">
@@ -369,26 +375,6 @@ function FyTable({ tape }: { tape: TickerTape }) {
         </table>
       </div>
     </Panel>
-  );
-}
-
-export function Panel({
-  title,
-  note,
-  children,
-}: {
-  title: string;
-  note?: string;
-  children: ReactNode;
-}) {
-  return (
-    <section className="rounded border border-line p-4">
-      <div className="mb-3 flex items-baseline justify-between gap-2">
-        <h2 className="text-[11px] uppercase tracking-wide text-mute">{title}</h2>
-        {note ? <span className="text-[11px] text-mute">{note}</span> : null}
-      </div>
-      {children}
-    </section>
   );
 }
 
