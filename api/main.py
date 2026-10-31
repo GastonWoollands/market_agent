@@ -21,6 +21,7 @@ from analytics.drivers import TAPE_IDS as DRIVER_TAPE_IDS
 from analytics.drivers import as_dicts, rank_drivers
 from analytics.risk_on import CURVE_SERIES, RISK_ON_TICKERS, VIX_SERIES
 from analytics.rrg import BENCHMARK, TRAIL_WEEKS
+from api.credit import build_credit_curve, load_credit_series
 from api.dynamics import HISTORY_DAYS as DYNAMICS_LOOKBACK
 from api.dynamics import build_dynamics, stored_from_rows
 from api.live import (
@@ -42,8 +43,10 @@ from api.opportunities import DEFAULT_SORT as OPP_SORT
 from api.opportunities import STALE_AFTER_DAYS as OPP_STALE
 from api.opportunities import build_opportunities
 from api.outlook import outlook_from_store
+from api.peers import build_peers, load_peer_universe, self_input
 from api.schemas import (
     CompareResponse,
+    CreditCurveResponse,
     DynamicsResponse,
     HealthResponse,
     JobStatus,
@@ -437,7 +440,17 @@ def ticker_detail(ticker: str, db: Session = Depends(get_db)) -> TickerResponse:
     items, _missing = load_names(db, [ticker.strip().upper()], today=today)
     if not items:
         raise HTTPException(status_code=404, detail=f"{ticker.upper()} is not stored")
-    return build_ticker(items[0], load_benchmarks(db, today=today), today=today)
+    page = build_ticker(items[0], load_benchmarks(db, today=today), today=today)
+    me = self_input(page)
+    if me is not None:
+        page.peers = build_peers(me, load_peer_universe(db, me.sector, today=today))
+    return page
+
+
+@app.get("/credit/curve", response_model=CreditCurveResponse)
+def credit_curve(db: Session = Depends(get_db)) -> CreditCurveResponse:
+    today = date.today()
+    return build_credit_curve(load_credit_series(db, today=today), today=today)
 
 
 @app.get("/compare", response_model=CompareResponse)

@@ -87,6 +87,8 @@ class FredSeriesItem(BaseModel):
     region: str = "us"
     pack_view: str = "level"
     show_on_live: bool = True
+    # False keeps reference-only series (rating curve buckets) out of the writer pack.
+    in_pack: bool = True
     spine: bool = False
     scale: float = 1.0
 

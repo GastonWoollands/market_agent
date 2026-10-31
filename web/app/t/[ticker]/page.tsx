@@ -1,12 +1,12 @@
 import { TickerView } from "@/components/TickerView";
-import { fetchTicker } from "@/lib/api";
+import { fetchCreditCurve, fetchTicker } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
 export default async function TickerPage({ params }: { params: Promise<{ ticker: string }> }) {
   const { ticker } = await params;
   const symbol = decodeURIComponent(ticker).toUpperCase();
-  const result = await fetchTicker(symbol);
+  const [result, credit] = await Promise.all([fetchTicker(symbol), fetchCreditCurve()]);
   if (!result.ok) {
     return (
       <div className="space-y-2">
@@ -19,5 +19,5 @@ export default async function TickerPage({ params }: { params: Promise<{ ticker:
       </div>
     );
   }
-  return <TickerView tape={result.data} />;
+  return <TickerView tape={result.data} credit={credit.ok ? credit.data : null} />;
 }

@@ -258,6 +258,7 @@ def pack_from_store(
             as_of=as_of,
         )
         for item in load_fred_series().series
+        if item.in_pack
     ]
     
     # Compute net liquidity from FRED series
