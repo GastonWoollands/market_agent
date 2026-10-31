@@ -34,8 +34,13 @@ This file is **not** the product contract. If intent, sources, universes, pages,
 | 1.5 | Desk metrics on Valuation + Opportunities | **Done** | Named fields on `GET /valuation` and `GET /opportunities`; grids match. No LLM |
 | 1.6 | SEC TTM data quality | **Done** (PR #13) | YTD-differenced quarters, contiguous TTM, aligned periods, debt de-dup, `cfo`/`capex` stored, comparable ≥ 750 sessions |
 | 1.7 | Sector + per-name risk | **Done** (PR #14) | SIC → sector from SEC submissions; vol / beta / max DD for the valuation universe; `InterestExpense` |
-| 1.8 | Ticker + Compare pages | **Done** (branch `feat/ticker-compare`) | `GET /ticker/{t}`, `GET /compare`; links from every grid; header search |
+| 1.8 | Ticker + Compare pages | **Done** (PR #15) | `GET /ticker/{t}`, `GET /compare`; links from every grid; header search |
 | 1.9 | Rotation panels | Not started | Cross-asset RRG, sector breadth + median valuation, intra-sector RRG, factor ETFs |
+| 1.10 | Peer comps + credit curve | **Next** | Ticker-page peer table and EV/EBITDA vs growth scatter (no new data); FRED rating-bucket OAS / yields, DGS1, Baa–Aaa, NFCI, STLFSI4 |
+| 1.11 | Equity-implied credit bucket | Spike passed (2026-10-31) | Merton DD → implied rating bucket on the FRED curve; `config/credit_calibration.yaml` reviewed before ship |
+| 1.12 | Options read | Not started | Yahoo chains (scoped names), ^VIX9D / ^VIX3M / ^VVIX / ^SKEW, Cboe market put/call |
+| 1.13 | Kalshi + CFTC | Not started | S&P / Nasdaq range distribution, macro odds beside Polymarket; TFF positioning |
+| 1.14 | Street consensus + short interest | Not started | Yahoo recommendation / target / revisions; FINRA short interest + days to cover |
 | 2 | Gems universe D | Not started | Flag only on B; membership + Yahoo gems later. No F-score gate |
 | 3 | Book (portfolio CRUD + current risk) | Not started | Watchlist stays unsized. After 1.5 for user value |
 | 3b | Constrained rebalance plan | Not started | After the Book is used; holdings-only min-vol first |
@@ -306,13 +311,53 @@ For each Opportunities row when the book is non-empty: ρ vs current holdings, s
 
 ---
 
+## Phase 1.10 — Peer comps + credit curve
+
+- Ticker page: peers = same sector, valuation universe, nearest by market cap (cap 10). Columns are the Compare desk metrics. Scatter EV/EBITDA vs EBITDA 1y with the name highlighted and the sector median lines.
+- FRED catalog: `BAMLC0A1CAAA`, `BAMLC0A2CAA`, `BAMLC0A3CA`, `BAMLC0A4CBBB`, `BAMLH0A1HYBB`, `BAMLH0A2HYB`, `BAMLH0A3HYC` (OAS) and the matching effective-yield series, `DGS1`, `BAA10Y` / `AAA10Y`, `NFCI`, `STLFSI4`. ICE series on FRED carry ~3y of history only.
+- Live / Ticker: the rating curve (OAS by bucket today vs 1m / 1y ago).
+
+## Phase 1.11 — Equity-implied credit bucket
+
+Method in Northstar §9. Spike (2026-10-31, scratch only, 65 rated names + CRWV held out, FRED 2026-10-29):
+
+| Bucket | AAA | AA | A | BBB | BB | B | CCC |
+|---|---|---|---|---|---|---|---|
+| ICE BofA OAS (bp) | 46 | 65 | 74 | 110 | 194 | 332 | 1,325 |
+| Median DD anchor | 11.05 | 8.91 | 8.04 | 4.55 | 2.61 | 2.46 | 1.19 |
+
+- Spearman(rating, −DD) = 0.80; leave-one-out implied bucket exact 24/65, within one bucket 56/65.
+- CRWV (held out, rated B, CDS ~1,000–1,140bp in Oct 2026 press): DD 0.98, below the CCC anchor → reads **below CCC**. MSFT: DD 10.2 → AA.
+- Raw Merton N(−DD) spreads were ~0bp for every IG name: the bucket mapping is required, not optional.
+- Default point uses liabilities (every filer tags them; gross debt is missing for CRWV / GM / F from custom tags). Removing current deferred revenue moved MSFT AAA-side and kept the HY order; software names still read one bucket low (CRM BBB, ORCL BB).
+- Thin tail: 5 B names (WYNN at DD 4.3 drags the median) and 2 CCC. Fix by adding rated HY names to the calibration yaml, not by changing the model.
+- Ratings in the spike came from operator memory. **Before ship:** `config/credit_calibration.yaml` with source + as-of per row, reviewed by the operator.
+- Output: `credit_implied` (instrument, as_of, E, F, σ_E, σ_A, DD, bucket, bucket_oas_bp, calibration_version). Excluded sectors per Northstar §9. Not a rank input.
+
+## Phase 1.12 — Options read
+
+- Chains for watchlist + Opportunities top 25 + SPY / QQQ / IWM / sector ETFs, ~4 monthly expiries, within the Yahoo 2 req/s budget (one request per expiry).
+- `option_stats` daily per name: ATM IV 30d, IV / RV, P/C volume and OI, 25d skew proxy, term slope, expected move to earnings. IV rank after 252 stored sessions only.
+- Tape: ^VIX9D, ^VIX3M, ^VVIX, ^SKEW. Cboe daily JSON → `options_market_stats` with a date backfill (≥ 2025-03 verified).
+- Visuals: IV term structure, skew curve, VIX curve slope, equity P/C history.
+
+## Phase 1.13 — Kalshi + CFTC
+
+- Kalshi `KXINX` / Nasdaq range series → implied distribution of the next close(s) (median, 10/90 band) on Live; Fed / CPI / recession slots beside Polymarket in `odds_snapshot`.
+- CFTC TFF (Socrata `gpe5-46if`): asset manager / leveraged funds net and its 3y percentile for S&P 500, Nasdaq-100, Russell 2000, 2Y / 10Y, VIX.
+
+## Phase 1.14 — Street consensus + short interest
+
+- Yahoo `recommendationTrend`, mean / high / low target, `earningsTrend` revisions for the options scope. Labeled "street consensus"; upside to mean target is shown as vendor data, never as our target.
+- FINRA short interest (public endpoint, verified for MSFT 2026-10-15 cycle): % of float where float is known, days to cover, change vs prior cycle.
+
 ## Explicitly deferred
 
 | Item | Why |
 |---|---|
 | Piotroski F-Score / Altman Z as UI, rank, or pack | Opaque composites; desk metrics replace them |
 | LLM “moat” / fit-percentage gauges | Second opaque rank |
-| Entry / target / stop on the card | Read as advice even when Python-filled |
+| Entry / target / stop on the card | Read as advice even when Python-filled. Street consensus targets are allowed as labeled vendor data (Phase 1.14) |
 | Sleeve unit-ranks as the primary Opportunities columns | After 1.5 the row is the named metrics |
 | Hard-cut F ≥ 7 | Throws away the middle of the universe |
 | P/E, P/B | Facts not stored; EV/EBITDA + FCF yield match this universe (interest coverage moved to Phase 1.7) |
@@ -370,3 +415,4 @@ Next concrete PR: **Phase 1.9 rotation panels**, then **Phase 3 Book** (with 3.5
 | 2026-10-31 | Phases 1.6–1.9 added after a single-name deep-dive exposed TTM / debt defects. Northstar: Ticker + Compare pages; interest coverage in scope. |
 | 2026-10-31 | Phase 1.6 merged (PR #13). Phase 1.7: SIC sectors, `risk_stats`, EBIT / interest TTM, additive partial `ingest_sec`. |
 | 2026-10-31 | Phase 1.7 merged (PR #14). Phase 1.8: Ticker + Compare pages and APIs; facts refreshed for non-members. |
+| 2026-10-31 | Phase 1.8 merged (PR #15). Market-signals contract: Phases 1.10–1.14 (peer comps, credit curve, implied credit bucket, options, Kalshi, CFTC, Cboe, consensus, short interest). Merton spike results recorded; single-name CDS and per-bond TRACE out (licensed). |
