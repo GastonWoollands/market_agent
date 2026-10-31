@@ -427,3 +427,204 @@ def _fy_payload() -> dict:
             },
         },
     }
+
+
+def test_ttm_derives_q4_and_ytd_cash_flow_quarters() -> None:
+    metric = ttm_from_facts(_ytd_payload(), require_quarters=True)
+    assert metric is not None
+    assert metric.as_of == date(2026, 6, 30)
+    # Q2'26 70 + Q1'26 60 + Q4'25 (FY 140 − 9M 90 = 50) + Q3'25 40, not Q2'25 in Q4's place.
+    assert metric.revenue == Decimal("220")
+    assert metric.ebitda == Decimal("44")
+    # CFO YTD 6M'26 20 − 3M 9 = 11, + 9, + (30 − 20), + (20 − 12).
+    assert metric.cfo == Decimal("38")
+    assert metric.capex == Decimal("6")
+    assert metric.fcf == Decimal("32")
+
+
+def test_ttm_history_includes_december_window() -> None:
+    rows = ttm_history_from_facts(_ytd_payload(), today=date(2026, 10, 31), years=5)
+    by_end = {item.as_of: item for item in rows}
+    assert date(2025, 12, 31) in by_end
+    assert by_end[date(2025, 12, 31)].revenue == Decimal("140")
+    assert by_end[date(2025, 12, 31)].fcf == Decimal("26")
+    assert by_end[date(2026, 3, 31)].fcf != by_end[date(2026, 6, 30)].fcf
+
+
+def test_ttm_refuses_window_with_missing_quarter() -> None:
+    payload = _ytd_payload()
+    rows = payload["facts"]["us-gaap"]["Revenues"]["units"]["USD"]
+    payload["facts"]["us-gaap"]["Revenues"]["units"]["USD"] = [
+        item for item in rows if item["end"] not in ("2025-09-30", "2025-12-31")
+    ]
+    assert ttm_from_facts(payload, require_quarters=True) is None
+
+
+def test_component_from_an_older_period_is_dropped() -> None:
+    payload = _ytd_payload()
+    cfo = payload["facts"]["us-gaap"]["NetCashProvidedByUsedInOperatingActivities"]
+    cfo["units"]["USD"] = [item for item in cfo["units"]["USD"] if item["end"] != "2026-06-30"]
+    metric = ttm_from_facts(payload, require_quarters=True)
+    assert metric is not None
+    assert metric.cfo is None
+    assert metric.fcf is None
+    assert not usable_ttm(metric)
+
+
+def test_restated_period_uses_latest_filing() -> None:
+    payload = _ytd_payload()
+    payload["facts"]["us-gaap"]["Revenues"]["units"]["USD"].append(
+        {**_q("2026-04-01", "2026-06-30", 75, "10-Q/A"), "filed": "2026-09-01"}
+    )
+    metric = ttm_from_facts(payload, require_quarters=True)
+    assert metric is not None
+    assert metric.revenue == Decimal("225")
+
+
+def test_debt_does_not_double_count_total_and_parts() -> None:
+    payload = _ytd_payload()
+    gaap = payload["facts"]["us-gaap"]
+    gaap["LongTermDebt"] = {"units": {"USD": [_instant("2026-06-30", 25)]}}
+    gaap["LongTermDebtNoncurrent"] = {"units": {"USD": [_instant("2026-06-30", 17)]}}
+    gaap["LongTermDebtCurrent"] = {"units": {"USD": [_instant("2026-06-30", 8)]}}
+    gaap["ShortTermBorrowings"] = {"units": {"USD": [_instant("2026-06-30", 2)]}}
+    metric = ttm_from_facts(payload, require_quarters=True)
+    assert metric is not None
+    assert metric.net_debt == Decimal("22")  # 25 + 2 − cash 5
+    del gaap["LongTermDebt"]
+    parts = ttm_from_facts(payload, require_quarters=True)
+    assert parts is not None
+    assert parts.net_debt == Decimal("22")  # 17 + 8 + 2 − 5
+
+
+def test_debt_ignores_stale_balance_sheet() -> None:
+    payload = _ytd_payload()
+    payload["facts"]["us-gaap"]["LongTermDebt"] = {
+        "units": {"USD": [_instant("2026-03-31", 25)]}
+    }
+    metric = ttm_from_facts(payload, require_quarters=True)
+    assert metric is not None
+    assert metric.net_debt is None
+
+
+def _ytd(start: str, ends: list[tuple[str, int]], form: str = "10-Q") -> list[dict]:
+    rows = []
+    for end, val in ends:
+        rows.append(_q(start, end, val, "10-K" if end.endswith("12-31") else form))
+    return rows
+
+
+def _ytd_payload() -> dict:
+    """Calendar-year filer as EDGAR tags it: 3M + YTD flows, FY in the 10-K, no Q4 span."""
+    revenue = [
+        _q("2025-01-01", "2025-03-31", 20, "10-Q"),
+        _q("2025-04-01", "2025-06-30", 30, "10-Q"),
+        _q("2025-07-01", "2025-09-30", 40, "10-Q"),
+        *_ytd("2025-01-01", [("2025-06-30", 50), ("2025-09-30", 90), ("2025-12-31", 140)]),
+        _q("2026-01-01", "2026-03-31", 60, "10-Q"),
+        _q("2026-04-01", "2026-06-30", 70, "10-Q"),
+        *_ytd("2026-01-01", [("2026-06-30", 130)]),
+    ]
+    ebit = [
+        _q("2025-01-01", "2025-03-31", 10, "10-Q"),
+        _q("2025-04-01", "2025-06-30", 10, "10-Q"),
+        _q("2025-07-01", "2025-09-30", 10, "10-Q"),
+        *_ytd("2025-01-01", [("2025-09-30", 30), ("2025-12-31", 40)]),
+        _q("2026-01-01", "2026-03-31", 10, "10-Q"),
+        _q("2026-04-01", "2026-06-30", 10, "10-Q"),
+    ]
+    da = [
+        *_ytd("2025-01-01", [("2025-03-31", 1), ("2025-06-30", 2), ("2025-09-30", 3),
+                             ("2025-12-31", 4)]),
+        *_ytd("2026-01-01", [("2026-03-31", 1), ("2026-06-30", 2)]),
+    ]
+    cfo = [
+        *_ytd("2025-01-01", [("2025-03-31", 5), ("2025-06-30", 12), ("2025-09-30", 20),
+                             ("2025-12-31", 30)]),
+        *_ytd("2026-01-01", [("2026-03-31", 9), ("2026-06-30", 20)]),
+    ]
+    capex = [
+        *_ytd("2025-01-01", [("2025-03-31", 1), ("2025-06-30", 2), ("2025-09-30", 3),
+                             ("2025-12-31", 4)]),
+        *_ytd("2026-01-01", [("2026-03-31", 2), ("2026-06-30", 4)]),
+    ]
+    instants = ["2025-03-31", "2025-06-30", "2025-09-30", "2025-12-31", "2026-03-31",
+                "2026-06-30"]
+    return {
+        "cik": 1769628,
+        "facts": {
+            "us-gaap": {
+                "Revenues": {"units": {"USD": revenue}},
+                "OperatingIncomeLoss": {"units": {"USD": ebit}},
+                "DepreciationAndAmortization": {"units": {"USD": da}},
+                "NetCashProvidedByUsedInOperatingActivities": {"units": {"USD": cfo}},
+                "PaymentsToAcquirePropertyPlantAndEquipment": {"units": {"USD": capex}},
+                "CashAndCashEquivalentsAtCarryingValue": {
+                    "units": {"USD": [_instant(end, 5) for end in instants]}
+                },
+            },
+            "dei": {
+                "EntityCommonStockSharesOutstanding": {
+                    "units": {"shares": [_instant(end, 100) for end in instants]}
+                }
+            },
+        },
+    }
+
+
+def test_debt_reads_lease_inclusive_tags() -> None:
+    payload = _ytd_payload()
+    gaap = payload["facts"]["us-gaap"]
+    gaap["LongTermDebtAndCapitalLeaseObligations"] = {
+        "units": {"USD": [_instant("2026-06-30", 17)]}
+    }
+    gaap["LongTermDebtAndCapitalLeaseObligationsCurrent"] = {
+        "units": {"USD": [_instant("2026-06-30", 3)]}
+    }
+    metric = ttm_from_facts(payload, require_quarters=True)
+    assert metric is not None
+    assert metric.net_debt == Decimal("15")
+
+
+def test_balance_sheet_without_debt_lines_is_debt_free() -> None:
+    payload = _ytd_payload()
+    payload["facts"]["us-gaap"]["Liabilities"] = {"units": {"USD": [_instant("2026-06-30", 40)]}}
+    metric = ttm_from_facts(payload, require_quarters=True)
+    assert metric is not None
+    assert metric.net_debt == Decimal("-5")
+
+
+def test_capex_survives_a_tag_switch_in_the_10k() -> None:
+    payload = _ytd_payload()
+    gaap = payload["facts"]["us-gaap"]
+    rows = gaap["PaymentsToAcquirePropertyPlantAndEquipment"]["units"]["USD"]
+    fy = [item for item in rows if item["end"] == "2025-12-31"]
+    gaap["PaymentsToAcquirePropertyPlantAndEquipment"]["units"]["USD"] = [
+        item for item in rows if item["end"] != "2025-12-31"
+    ]
+    gaap["PaymentsToAcquireProductiveAssets"] = {"units": {"USD": fy}}
+    metric = ttm_from_facts(payload, require_quarters=True)
+    assert metric is not None
+    assert metric.capex == Decimal("6")
+
+
+def test_stale_combined_da_falls_back_to_depreciation() -> None:
+    payload = _ytd_payload()
+    gaap = payload["facts"]["us-gaap"]
+    gaap["Depreciation"] = gaap.pop("DepreciationAndAmortization")
+    gaap["DepreciationDepletionAndAmortization"] = {
+        "units": {"USD": [_q("2019-01-01", "2019-12-31", 99, "10-K")]}
+    }
+    metric = ttm_from_facts(payload, require_quarters=True)
+    assert metric is not None
+    assert metric.ebitda == Decimal("44")
+
+
+def test_debt_that_moved_to_custom_tags_stays_unknown() -> None:
+    payload = _ytd_payload()
+    gaap = payload["facts"]["us-gaap"]
+    gaap["Liabilities"] = {"units": {"USD": [_instant("2026-06-30", 40)]}}
+    gaap["LongTermDebt"] = {"units": {"USD": [_instant("2026-03-31", 25)]}}
+    metric = ttm_from_facts(payload, require_quarters=True)
+    assert metric is not None
+    assert metric.net_debt is None

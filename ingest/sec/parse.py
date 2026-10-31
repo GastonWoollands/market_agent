@@ -28,6 +28,7 @@ EBIT_CONCEPTS = (("us-gaap", "OperatingIncomeLoss"), ("ifrs-full", "OperatingInc
 DA_CONCEPTS = (
     ("us-gaap", "DepreciationDepletionAndAmortization"),
     ("us-gaap", "DepreciationAndAmortization"),
+    ("us-gaap", "DepreciationAmortizationAndAccretionNet"),
 )
 DEP_CONCEPTS = (("us-gaap", "Depreciation"),)
 AMORT_CONCEPTS = (
@@ -36,18 +37,42 @@ AMORT_CONCEPTS = (
 )
 CFO_CONCEPTS = (
     ("us-gaap", "NetCashProvidedByUsedInOperatingActivities"),
+    ("us-gaap", "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations"),
     ("ifrs-full", "CashFlowsFromUsedInOperatingActivities"),
 )
 CAPEX_CONCEPTS = (
     ("us-gaap", "PaymentsToAcquirePropertyPlantAndEquipment"),
+    ("us-gaap", "PaymentsToAcquireProductiveAssets"),
+    ("us-gaap", "PaymentsToAcquireOilAndGasPropertyAndEquipment"),
+    ("us-gaap", "PaymentsToAcquireOilAndGasProperty"),
     ("ifrs-full", "PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities"),
 )
-DEBT_CONCEPTS = (
+# Totals already include the current portion; `DebtAndCapitalLeaseObligations` also
+# includes short-term borrowings. Parts are summed only when no total is tagged.
+LONG_DEBT_TOTAL_CONCEPTS = (
     ("us-gaap", "LongTermDebt"),
-    ("us-gaap", "LongTermDebtNoncurrent"),
-    ("us-gaap", "LongTermDebtCurrent"),
-    ("us-gaap", "ShortTermBorrowings"),
+    ("us-gaap", "LongTermDebtAndCapitalLeaseObligationsIncludingCurrentMaturities"),
 )
+ALL_DEBT_TOTAL_CONCEPTS = (("us-gaap", "DebtAndCapitalLeaseObligations"),)
+DEBT_NONCURRENT_CONCEPTS = (
+    ("us-gaap", "LongTermDebtNoncurrent"),
+    ("us-gaap", "LongTermDebtAndCapitalLeaseObligations"),
+    ("us-gaap", "ConvertibleLongTermNotesPayable"),
+    ("us-gaap", "ConvertibleNotesPayable"),
+    ("us-gaap", "SeniorLongTermNotes"),
+    ("us-gaap", "LongTermNotesPayable"),
+)
+DEBT_CURRENT_CONCEPTS = (
+    ("us-gaap", "LongTermDebtCurrent"),
+    ("us-gaap", "LongTermDebtAndCapitalLeaseObligationsCurrent"),
+    ("us-gaap", "SeniorNotesCurrent"),
+    ("us-gaap", "ConvertibleNotesPayableCurrent"),
+)
+BALANCE_SHEET_CONCEPTS = (
+    ("us-gaap", "Liabilities"),
+    ("us-gaap", "LiabilitiesAndStockholdersEquity"),
+)
+SHORT_DEBT_CONCEPTS = (("us-gaap", "ShortTermBorrowings"),)
 CASH_CONCEPTS = (
     ("us-gaap", "CashAndCashEquivalentsAtCarryingValue"),
     ("us-gaap", "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents"),
@@ -93,8 +118,10 @@ EQUITY_CONCEPTS = (
     ("ifrs-full", "Equity"),
 )
 ANNUAL_DAYS = (320, 400)
+QUARTER_DAYS = (60, 120)
 FY_YEARS = 6
 INSTANT_SLACK_DAYS = 45
+DEBT_FREE_LOOKBACK_DAYS = 400
 TTM_MAX_AGE_DAYS = 548
 
 
@@ -152,18 +179,21 @@ def ttm_from_facts(
         return None
     if require_quarters and method != "quarters":
         return None
-    ebit, _, _ = _flow_ttm(facts, EBIT_CONCEPTS, through=through)
-    da, _, _ = _da_ttm(facts, through=through)
+    # Every component must cover the same window as revenue, or it is dropped.
+    ebit = _aligned(_flow_ttm(facts, EBIT_CONCEPTS, through=as_of), as_of)
+    da = _da_ttm(facts, as_of)
     ebitda = None
     if ebit is not None and da is not None:
         ebitda = ebit + da
-    cfo, _, _ = _flow_ttm(facts, CFO_CONCEPTS, through=through)
-    capex, _, _ = _flow_ttm(facts, CAPEX_CONCEPTS, through=through)
+    cfo = _aligned(_flow_ttm(facts, CFO_CONCEPTS, through=as_of), as_of)
+    capex = _aligned(_flow_ttm(facts, CAPEX_CONCEPTS, through=as_of), as_of)
+    if capex is not None:
+        capex = abs(capex)
     fcf = None
     if cfo is not None and capex is not None:
-        fcf = cfo - abs(capex)
-    debt = _sum_instant(facts, DEBT_CONCEPTS, as_of)
-    cash = _latest_instant(facts, CASH_CONCEPTS, as_of)
+        fcf = cfo - capex
+    debt = _debt_on(facts, as_of)
+    cash = _instant_on(facts, CASH_CONCEPTS, as_of)
     net_debt = None
     if debt is not None and cash is not None:
         net_debt = debt - cash
@@ -174,6 +204,8 @@ def ttm_from_facts(
         revenue=revenue,
         ebitda=ebitda,
         fcf=fcf,
+        cfo=cfo,
+        capex=capex,
         net_debt=net_debt,
         shares=shares,
     )
@@ -404,17 +436,15 @@ def _flow_ttm(
 ) -> tuple[Decimal | None, date | None, str | None]:
     best_q: tuple[date, Decimal] | None = None
     best_a: tuple[date, Decimal] | None = None
+    # Merged synonyms first; each concept alone as a fallback when the merge leaves a gap.
+    for group in (concepts, *((item,) for item in concepts)):
+        picked = _last_quarters(_discrete_quarters(facts, group, through=through), 4)
+        if len(picked) == 4 and (best_q is None or picked[0][0] > best_q[0]):
+            best_q = (picked[0][0], sum((value for _end, value in picked), Decimal("0")))
     for taxonomy, concept in concepts:
         points = _duration_points(facts, taxonomy, concept)
         if through is not None:
             points = [item for item in points if item[1] <= through]
-        quarterly = [item for item in points if 60 <= item[0] <= 120]
-        picked = _last_quarters(quarterly, 4)
-        if len(picked) == 4:
-            total = sum((item[2] for item in picked), Decimal("0"))
-            end = picked[0][1]
-            if best_q is None or end > best_q[0]:
-                best_q = (end, total)
         annual = [item for item in points if 320 <= item[0] <= 400]
         if annual:
             _span, end, value = annual[0]
@@ -427,24 +457,37 @@ def _flow_ttm(
     return None, None, None
 
 
-def _da_ttm(
-    facts: dict[str, Any], *, through: date | None = None
-) -> tuple[Decimal | None, date | None, str | None]:
-    combined = _flow_ttm(facts, DA_CONCEPTS, through=through)
-    if combined[0] is not None:
+def _da_ttm(facts: dict[str, Any], as_of: date) -> Decimal | None:
+    """Combined D&A for the window, else depreciation (+ amortization when it lines up)."""
+    combined = _aligned(_flow_ttm(facts, DA_CONCEPTS, through=as_of), as_of)
+    if combined is not None:
         return combined
-    dep = _flow_ttm(facts, DEP_CONCEPTS, through=through)
-    amort = _flow_ttm(facts, AMORT_CONCEPTS, through=through)
-    if (
-        dep[0] is not None
-        and amort[0] is not None
-        and dep[1] == amort[1]
-        and dep[2] == amort[2]
-    ):
-        return dep[0] + amort[0], dep[1], dep[2]
-    if dep[0] is not None:
-        return dep
-    return amort
+    dep = _aligned(_flow_ttm(facts, DEP_CONCEPTS, through=as_of), as_of)
+    amort = _aligned(_flow_ttm(facts, AMORT_CONCEPTS, through=as_of), as_of)
+    if dep is not None and amort is not None:
+        return dep + amort
+    return dep if dep is not None else amort
+
+
+def _duration_spans(
+    facts: dict[str, Any], taxonomy: str, concept: str
+) -> dict[tuple[date, date], Decimal]:
+    """(start, end) → value. The latest filing wins when a period is restated."""
+    best: dict[tuple[date, date], tuple[str, Decimal]] = {}
+    for row in _unit_rows(facts, taxonomy, concept, ("USD",)):
+        start = _as_date(row.get("start"))
+        end = _as_date(row.get("end"))
+        value = _as_decimal(row.get("val"))
+        form = str(row.get("form") or "")
+        if start is None or end is None or value is None or end <= start:
+            continue
+        if not form.startswith(("10-Q", "10-K", "20-F", "40-F")):
+            continue
+        filed = str(row.get("filed") or "")
+        key = (start, end)
+        if key not in best or filed >= best[key][0]:
+            best[key] = (filed, value)
+    return {key: value for key, (_filed, value) in best.items()}
 
 
 def _duration_points(
@@ -469,30 +512,107 @@ def _duration_points(
 
 
 def _quarter_ends(facts: dict[str, Any], concepts: tuple[tuple[str, str], ...]) -> list[date]:
-    ends: set[date] = set()
+    return sorted(_discrete_quarters(facts, concepts))
+
+
+def _discrete_quarters(
+    facts: dict[str, Any],
+    concepts: tuple[tuple[str, str], ...],
+    *,
+    through: date | None = None,
+) -> dict[date, Decimal]:
+    """Quarter end → three-month value.
+
+    10-Q cash-flow lines are year-to-date and 10-Ks rarely tag Q4, so a quarter is
+    either a reported 60–120 day span or the difference of two YTD spans that share
+    a start (6M − 3M, 9M − 6M, FY − 9M). Concepts are synonyms in priority order:
+    filers switch tags between a 10-Q and the 10-K, so spans are merged first.
+    """
+    spans: dict[tuple[date, date], Decimal] = {}
     for taxonomy, concept in concepts:
-        for days, end, _value in _duration_points(facts, taxonomy, concept):
-            if 60 <= days <= 120:
-                ends.add(end)
-    return sorted(ends)
+        for key, value in _duration_spans(facts, taxonomy, concept).items():
+            spans.setdefault(key, value)
+    if through is not None:
+        spans = {key: value for key, value in spans.items() if key[1] <= through}
+    lo, hi = QUARTER_DAYS
+    out: dict[date, Decimal] = {}
+    by_start: dict[date, list[tuple[date, Decimal]]] = {}
+    for (start, end), value in spans.items():
+        if lo <= (end - start).days <= hi:
+            out[end] = value
+        by_start.setdefault(start, []).append((end, value))
+    for rows in by_start.values():
+        rows.sort()
+        for (prev_end, prev_value), (end, value) in zip(rows, rows[1:], strict=False):
+            if end not in out and lo <= (end - prev_end).days <= hi:
+                out[end] = value - prev_value
+    return out
 
 
-def _last_quarters(
-    points: list[tuple[int, date, Decimal]], count: int
-) -> list[tuple[int, date, Decimal]]:
-    picked: list[tuple[int, date, Decimal]] = []
-    seen: set[date] = set()
-    for item in points:
-        end = item[1]
-        if end in seen:
-            continue
-        if picked and (picked[-1][1] - end).days < 50:
-            continue
-        seen.add(end)
-        picked.append(item)
+def _last_quarters(quarters: dict[date, Decimal], count: int) -> list[tuple[date, Decimal]]:
+    """Newest `count` quarters, only if each is one quarter before the next (no gaps)."""
+    lo, hi = QUARTER_DAYS
+    picked: list[tuple[date, Decimal]] = []
+    for end in sorted(quarters, reverse=True):
+        if picked:
+            gap = (picked[-1][0] - end).days
+            if gap < lo:
+                continue
+            if gap > hi:
+                break
+        picked.append((end, quarters[end]))
         if len(picked) == count:
             break
     return picked
+
+
+def _aligned(
+    result: tuple[Decimal | None, date | None, str | None], as_of: date
+) -> Decimal | None:
+    value, end, _method = result
+    return value if end == as_of else None
+
+
+def _debt_tagged_since(facts: dict[str, Any], start: date) -> bool:
+    concepts = (
+        LONG_DEBT_TOTAL_CONCEPTS
+        + ALL_DEBT_TOTAL_CONCEPTS
+        + DEBT_NONCURRENT_CONCEPTS
+        + DEBT_CURRENT_CONCEPTS
+        + SHORT_DEBT_CONCEPTS
+    )
+    for taxonomy, concept in concepts:
+        for row in _unit_rows(facts, taxonomy, concept, ("USD",)):
+            end = _as_date(row.get("end"))
+            value = _as_decimal(row.get("val"))
+            if not row.get("start") and end is not None and end >= start and value:
+                return True
+    return False
+
+
+def _debt_on(facts: dict[str, Any], as_of: date) -> Decimal | None:
+    """Gross debt on the balance-sheet date, never a stale instant and never total + parts."""
+    long_term = _instant_on(facts, LONG_DEBT_TOTAL_CONCEPTS, as_of)
+    if long_term is None:
+        all_debt = _instant_on(facts, ALL_DEBT_TOTAL_CONCEPTS, as_of)
+        if all_debt is not None:
+            return all_debt
+        parts = [
+            _instant_on(facts, DEBT_NONCURRENT_CONCEPTS, as_of),
+            _instant_on(facts, DEBT_CURRENT_CONCEPTS, as_of),
+        ]
+        found = [item for item in parts if item is not None]
+        long_term = sum(found, Decimal("0")) if found else None
+    short = _instant_on(facts, SHORT_DEBT_CONCEPTS, as_of)
+    if long_term is None and short is None:
+        # Debt-free only with a balance sheet on this date and no debt line for a year.
+        # A filer that tagged debt recently and stopped (custom tags) stays unknown.
+        if _instant_on(facts, BALANCE_SHEET_CONCEPTS, as_of) is None:
+            return None
+        if _debt_tagged_since(facts, as_of - timedelta(days=DEBT_FREE_LOOKBACK_DAYS)):
+            return None
+        return Decimal("0")
+    return (long_term or Decimal("0")) + (short or Decimal("0"))
 
 
 def _latest_shares(facts: dict[str, Any], as_of: date) -> Decimal | None:
@@ -512,20 +632,6 @@ def _latest_shares(facts: dict[str, Any], as_of: date) -> Decimal | None:
             if best is None or score > best[0]:
                 best = (score, value)
     return None if best is None else best[1]
-
-
-def _sum_instant(
-    facts: dict[str, Any], concepts: tuple[tuple[str, str], ...], as_of: date
-) -> Decimal | None:
-    total = Decimal("0")
-    found = False
-    for taxonomy, concept in concepts:
-        value = _latest_instant(facts, ((taxonomy, concept),), as_of)
-        if value is None:
-            continue
-        total += value
-        found = True
-    return total if found else None
 
 
 def _latest_instant(

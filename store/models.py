@@ -327,6 +327,8 @@ class MetricTtm(Base):
     revenue: Mapped[Decimal] = mapped_column(Numeric(20, 2), nullable=False)
     ebitda: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
     fcf: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
+    cfo: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
+    capex: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
     net_debt: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
     shares: Mapped[Decimal | None] = mapped_column(Numeric(20, 4))
     source: Mapped[str] = mapped_column(String(16), nullable=False)

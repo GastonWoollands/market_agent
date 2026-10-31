@@ -32,6 +32,10 @@ This file is **not** the product contract. If intent, sources, universes, pages,
 | 0 | Contract | **Done** | Desk metrics are the product language; F/Z out of product (2026-09-14) |
 | 1 | `metric_fy` + ratio snapshot / gem flag | **Warehouse done** | Branch `feat/desk-metrics-and-review`. F/Z computation removed 2026-10-29. No UI |
 | 1.5 | Desk metrics on Valuation + Opportunities | **Done** | Named fields on `GET /valuation` and `GET /opportunities`; grids match. No LLM |
+| 1.6 | SEC TTM data quality | **Done** (branch `fix/ttm-data-quality`) | YTD-differenced quarters, contiguous TTM, aligned periods, debt de-dup, `cfo`/`capex` stored, comparable ≥ 750 sessions |
+| 1.7 | Sector + per-name risk | Not started | SIC → sector from SEC submissions; vol / beta / max DD for the valuation universe; `InterestExpense` |
+| 1.8 | Ticker + Compare pages | Not started | Northstar §3 rows added 2026-10-31 |
+| 1.9 | Rotation panels | Not started | Cross-asset RRG, sector breadth + median valuation, intra-sector RRG, factor ETFs |
 | 2 | Gems universe D | Not started | Flag only on B; membership + Yahoo gems later. No F-score gate |
 | 3 | Book (portfolio CRUD + current risk) | Not started | Watchlist stays unsized. After 1.5 for user value |
 | 3b | Constrained rebalance plan | Not started | After the Book is used; holdings-only min-vol first |
@@ -40,7 +44,7 @@ This file is **not** the product contract. If intent, sources, universes, pages,
 | 6 | Recommendation writer | Not started | Pack desk metrics + citation gate; Python fills snapshot |
 | 7 | Three-zone cards + Gems tab | Not started | Schema/`api.ts` before components. No F/Z drawer |
 
-Last tracker update: 2026-10-29.
+Last tracker update: 2026-10-31.
 
 ---
 
@@ -130,6 +134,36 @@ Nightly (after valuation Yahoo): `ingest_sec` (monthly zip is enough) → `compu
 **Operator check:** open `/valuation` and `/opportunities`; missing FCF/ND render as —. Accrual is yes/no/— from latest `metric_fy`.
 
 ---
+
+## Phase 1.6 — SEC TTM data quality (done, PR pending)
+
+**Why:** a CRWV deep-dive (2026-10-31) found the stored TTM wrong for most of the universe.
+
+- Cash-flow concepts in 10-Qs are year-to-date. `_flow_ttm` only accepted 60–120 day spans, so CFO / capex / D&A fell back to the last annual: latest FCF equalled the prior quarter's for 755 / 933 names.
+- 10-Ks rarely tag a discrete Q4. `_last_quarters` skipped the gap and summed an older quarter (CRWV revenue TTM 7.23B vs ~7.59B). No December TTM rows were written.
+- EBITDA mixed TTM EBIT with an annual D&A; components were never checked for the same period end.
+- `DEBT_CONCEPTS` summed `LongTermDebt` **and** its current / noncurrent parts (double count), from unbounded-stale instants.
+- `MIN_COMPARABLE_OBS = 252` let a 1.5-year-old listing score Cheap 0.90.
+
+**Do:** derive discrete quarters from YTD differences (Q2 = 6M − 3M, Q3 = 9M − 6M, Q4 = FY − 9M), require four contiguous quarters, null any component whose period end differs from revenue's, debt = `LongTermDebt` else current + noncurrent, plus short-term borrowings, instants within 45 days. Store `cfo` and `capex` on `metric_ttm`. Comparable needs ≥ 750 sessions (Cheap falls back to neutral). Replace each name's TTM history on ingest so stale rows do not survive. Fixture tests; re-run `ingest_sec` → `compute_valuation` → `compute_quant` → `compute_scores`.
+
+Found while re-running: filers switch synonym tags between 10-Q and 10-K (capex, D&A, debt), so quarters merge synonyms in priority order with a per-concept fallback; debt reads lease-inclusive / convertible / senior-note tags; a balance sheet with no debt line for 400 days is debt-free (0), a filer that moved debt to custom tags stays unknown (CRWV Q2 2026). The old code silently used years-stale instants and annuals for all of these. `ingest_sec` now raises the 700–1000 band inside the write transaction (it used to commit first). `compute_scores` prunes scores for names outside the run, so dropped names no longer surface with old ranks.
+
+**Result (2026-10-31, same Aug-18 zip):** 973 members (was 933); 860 ranked. Repeated latest FCF 755 → 1. Median rank move 99 places; 11 of the old top 25 remain. Out: names without a current standard capex / EBIT tag (e.g. APP, ABNB, BIIB) and CRWV (debt on custom tags) — candidates for a concept-coverage follow-up, not a fallback to stale data.
+
+**Operator check:** CRWV TTM revenue at 2026-06-30 = 7.590B, a 2025-12-31 row exists, FCF differs quarter to quarter; `opportunity_score` has one row per ranked name.
+
+## Phase 1.7 — Sector + per-name risk
+
+SIC / `sicDescription` from the SEC submissions endpoint (shared client for Phases 4/5) → yaml SIC→sector map → `instrument.sector/industry`. Vol 63/252d, beta vs SPY/QQQ, max drawdown for the valuation universe (bars already stored). Store `InterestExpense` for interest coverage. Dilution = share count YoY from stored `shares`. Financing dependency = (capex − CFO) / market cap.
+
+## Phase 1.8 — Ticker + Compare pages
+
+Northstar §3. API schema first, then `web/lib/api.ts`, then pages. Desk language only — no F/Z.
+
+## Phase 1.9 — Rotation panels
+
+Cross-asset RRG on existing tape (TLT, GLD, UUP, HYG, EEM vs SPY). Sector breadth (% above 200d) and median EV/EBITDA percentile once sectors exist. Intra-sector RRG. Factor ETFs (IWF/IWD, MTUM, QUAL, USMV) via `config/universes.yaml`. "Sell X, buy Y" stays Phase 3.5 — no separate simulator.
 
 ## Phase 2 — Gems universe D
 
@@ -266,7 +300,7 @@ For each Opportunities row when the book is non-empty: ρ vs current holdings, s
 | Entry / target / stop on the card | Read as advice even when Python-filled |
 | Sleeve unit-ranks as the primary Opportunities columns | After 1.5 the row is the named metrics |
 | Hard-cut F ≥ 7 | Throws away the middle of the universe |
-| P/E, P/B, interest coverage | Facts not stored; EV/EBITDA + FCF yield match this universe |
+| P/E, P/B | Facts not stored; EV/EBITDA + FCF yield match this universe (interest coverage moved to Phase 1.7) |
 | 13F institutional accumulation | 45-day lag, sparse on small-caps |
 | Insider ownership > 10% | Needs DEF 14A; Form 4 net-buy is the substitute |
 | Redis / GraphQL / FMP / Polygon | Not needed for one operator |
@@ -305,7 +339,7 @@ Operator / hygiene items found in the full review. Do these before or alongside 
 8. **Design question.** FCF yield is in the Quality sleeve while Cheap already weighs the multiple (partial double count).
 9. ~~**Ship the branch.**~~ Done 2026-10-29: PR #5 merged.
 
-Next concrete PR: **Phase 3 Book**. Gems membership can parallel Book. Do not start Phase 7 until packs exist. Do not start a PR to “fix F-score for the UI.”
+Next concrete PR: **Phase 1.6 TTM data quality**, then 1.7 → 1.8 → 1.9, then **Phase 3 Book** (with 3.5 as the rotation read). Gems membership can parallel Book. Do not start Phase 7 until packs exist. Do not start a PR to “fix F-score for the UI.”
 
 ---
 
@@ -318,3 +352,4 @@ Next concrete PR: **Phase 3 Book**. Gems membership can parallel Book. Do not st
 | 2026-09-14 | Phase 1.5: `fcf_yield`, `nd_ebitda`, `accrual` on GET /valuation and GET /opportunities; both grids. |
 | 2026-10-29 | Review + hardening: Polymarket slot identity committed; no look-ahead on `?as_of=`; stored memos shown on Opportunities; Outlook contract (§10) matches v12; DB rebuilt from scratch; gold moved from FRED LBMA to GLD tape. |
 | 2026-10-29 | Piotroski / Altman modules and tests removed; `compute_quant` writes legacy F/Z columns NULL. Branch renamed `feat/desk-metrics-and-review`. |
+| 2026-10-31 | Phases 1.6–1.9 added after a single-name deep-dive exposed TTM / debt defects. Northstar: Ticker + Compare pages; interest coverage in scope. |
