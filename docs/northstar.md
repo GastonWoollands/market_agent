@@ -50,7 +50,8 @@ Every number on screen comes from Postgres. Vendors are never called from the UI
 - Redis, Kafka, TimescaleDB, pgvector — not until a measured need. Derived Postgres tables (`quant_score`, later `portfolio_snapshot` / `portfolio_plan`) are the cache
 - GraphQL; FMP / Polygon as extra market vendors (Yahoo + SEC cover prices and fundamentals)
 - A full XBRL `financial_fact` warehouse or raw EDGAR HTML in hot tables
-- LLM-owned weights, entries, targets, or stops. Python fills numeric snapshots; the writer narrates the pack
+- LLM-owned weights, entries, targets, or stops. Python fills numeric snapshots; the writer narrates the pack. Third-party **street consensus** (analyst recommendations, mean target, estimate revisions) is allowed as labeled vendor data (2026-10-31); the writer may cite it from the pack but never produces its own target
+- Single-name CDS quotes and per-bond TRACE prices / yields: licensed data (S&P/Markit, LSEG, FINRA TRACE data program), not on any free API. The substitute is the equity-implied credit bucket (§9) placed on the FRED ICE BofA rating curve
 - Piotroski F-Score or Altman Z as a screen, badge, rank input, or pack field. `metric_fy` stays; F/Z are not product
 - LLM “moat” scores or fit-percentage gauges
 - P/E or P/B until those facts are stored (this universe is EV/EBITDA + FCF yield). Interest coverage is **in scope** once `InterestExpense` is stored (2026-10-31, see decision_layer_plan Phase 1.6)
@@ -141,6 +142,14 @@ Frozen for v1. A new vendor is a contract change: update this section first. Cat
 | TTM metrics + valuation membership | SEC EDGAR companyfacts (bulk zip, then incremental) | nightly / monthly |
 | Fiscal-year snapshots (growth, accrual, gems inputs) | Same companyfacts zip; curated columns only | with `ingest_sec` |
 | Charts | TradingView widget | client-side, no ingest |
+| Credit curve: ICE BofA OAS + effective yield by rating (AAA…CCC), DGS1, Moody's Baa–Aaa, NFCI, STLFSI4 | FRED (catalog expansion, not a new vendor) | 06:00 ET |
+| Vol indices ^VIX9D, ^VIX3M, ^VVIX, ^SKEW | Yahoo, tape catalog in `config/universes.yaml` | 16:30 ET |
+| Option chains (per expiry: strikes, bid/ask, last, volume, OI, Yahoo IV) | Yahoo `option_chain` via `YahooClient`, same 2 req/s budget. **Scope:** watchlist + Opportunities top 25 + SPY / QQQ / IWM / sector ETFs, nearest ~4 monthly expiries; never the full valuation universe | 16:30 ET |
+| Analyst consensus: recommendation counts, mean / high / low target, EPS revisions (7d / 30d up vs down) | Yahoo `quoteSummary` (`recommendationTrend`, `financialData`, `earningsTrend`) for the same scope as option chains; Finnhub free as fallback | daily |
+| Short interest (shares short, days to cover, change), twice monthly | FINRA API Platform `otcMarket/consolidatedShortInterest`, public, no key (covers exchange-listed names) | settlement + ~8 days |
+| Positioning: Traders in Financial Futures (S&P 500, Nasdaq-100, Russell, Treasuries, VIX futures) | CFTC Public Reporting (Socrata) API, no key | weekly (Fri for Tue) |
+| Index range markets (S&P 500 / Nasdaq-100 close ranges → implied distribution), Fed / CPI / recession | Kalshi public trade API v2 read endpoints, no key (`config/kalshi_series.yaml`) | 15–60 min in session |
+| Market put/call ratios (total, equity, index, SPX, VIX) and volume / OI by product | Cboe daily market-statistics JSON (`cdn.cboe.com/data/us/options/market_statistics/daily/<date>_daily_options`), the data feed behind the public page; history backfills by date | 18:00 ET |
 
 **Contracted, not ingested yet:** SEC `submissions` JSON, official Form 4 XML, official 10-K/10-Q HTML for Item 1A and Item 7 excerpts only. Same `SEC_USER_AGENT` and rate limit. Not a third-party scrape. Not a `financial_fact` warehouse.
 
@@ -148,7 +157,11 @@ Frozen for v1. A new vendor is a contract change: update this section first. Cat
 
 **Yahoo:** ≤2 req/s, `auto_adjust=False`, HTTP 429 fails fast. Timeouts/5xx retry ≤3.
 
-Do not add scraping, unofficial APIs, or non-US listings. Expanding the FRED catalog is not a new vendor. International **listings** stay out, but international **indices** (Nikkei, DAX, FTSE, HSI, CSI 300) and **EM ETFs** (EEM) via Yahoo are permitted for context.
+**Cboe:** the one sanctioned unofficial endpoint (2026-10-31). It is a JSON file, not HTML parsing; the adapter validates the shape and fails loud when Cboe changes it. Do not parse cboe.com HTML pages.
+
+**Kalshi / CFTC / FINRA:** read-only public endpoints, no account. Kalshi thin books are noisy, same UI label as Polymarket (market-implied). FINRA fixed-income datasets are market-wide aggregates behind a free credential; not ingested.
+
+Do not add scraping, unofficial APIs, or non-US listings beyond the Cboe exception above. Expanding the FRED catalog is not a new vendor. International **listings** stay out, but international **indices** (Nikkei, DAX, FTSE, HSI, CSI 300) and **EM ETFs** (EEM) via Yahoo are permitted for context.
 
 ---
 
@@ -180,6 +193,7 @@ Keep vendor payloads out of hot tables. Polymarket `raw` JSONB is the exception.
 | Derived | `valuation_daily`, `rrg_point`, `return_stats`, `risk_stats`, `opportunity_score`, `quant_score` | Python → Postgres; the writer never computes these. `risk_stats` is per-name vol / downside vol / beta / drawdown from adjusted closes. `quant_score` holds a gem flag and ratio snapshot; legacy `f_score` / `z_score` columns stay NULL |
 | News / calendar | `news_item`, `event_item`, `policy_item` | RSS headlines plus Finnhub `wire` / `company` rows (`summary` nullable, `query` = ticker for company); YAML catalysts (FOMC/CPI/PCE/NFP/GDP/JOLTS/speeches/minutes/Beige Book/ISM/Treasury/central banks) + Finnhub earnings; official Fed Board RSS (speech/statement/minutes/testimony excerpts) |
 | Agent | `evidence_pack`, `outlook_report`, `opportunity_memo`, `job_run` | Pack JSONB, briefs, memos, run log |
+| Market signals (contracted 2026-10-31, built per phase) | `credit_implied`, `option_chain_snapshot`, `option_stats`, `analyst_consensus`, `short_interest`, `cot_position`, `options_market_stats`; Kalshi rows on `odds_snapshot` (source + slot) | Implied credit bucket with its inputs; per-expiry chain rows for the scoped names and the derived daily IV / skew / put-call row; street consensus; FINRA short interest; CFTC TFF positioning; Cboe market put/call |
 
 ---
 
@@ -212,6 +226,10 @@ Sleeves in `analytics/scores.py` are a **sort key**, not the grid: Cheap 0.30 (1
 Do not show sleeve unit-ranks (0–1) as the primary columns once those fields are on the API. Do not add P/E or P/B until those facts exist. Interest coverage ships with stored `InterestExpense`.
 
 **Not product:** Piotroski F-Score and Altman Z. Do not show them, pack them, or feed F into quality. Do not hard-cut F ≥ 7. Nothing computes them: the Piotroski / Altman modules were removed (2026-10-29) and the legacy `quant_score` columns are written NULL. Gem candidate flag uses yaml thresholds (cap band, revenue growth, FCF yield, D/E); fail negative book equity. Insider ownership is not required until Form 4.
+
+**Equity-implied credit bucket (Phase 1.11).** Merton / KMV distance to default (DD) from stored inputs: market cap (close × TTM shares), 1y equity vol from adjusted closes, default point F = (current liabilities − current deferred revenue) + ½ (total liabilities − current liabilities) from the latest 10-Q/10-K instant, r = DGS1, T = 1y. DD is placed on the median DD of each rating bucket in a reviewed calibration set (`config/credit_calibration.yaml`: ticker, bucket, as-of, source), and the output is the **implied bucket** plus that bucket's ICE BofA OAS from FRED. The bp figure is the bucket's market quote, not a per-name spread, and a DD below the CCC anchor reads "below CCC". The page always shows E, F, σ and DD beside the bucket. Raw N(−DD) is not shown: it prices investment grade at ~0bp (the credit-spread puzzle). Excluded: banks, insurers, captive-finance-heavy issuers, REITs. This is not an F/Z return: every input is visible, and the output is a bucket on a market curve, not an unlabeled score. It is never a rank input or a sleeve.
+
+**Options read (Phase 1.12).** From stored chains: 30d ATM IV (interpolated across expiries), IV ÷ 1y realized vol, put/call by volume and by OI, 25-delta skew proxy (IV at 90% vs 110% moneyness), term structure (front vs ~3m IV), expected move to the next earnings date (front straddle mid ÷ spot). IV is recomputed from bid/ask mid with Black-Scholes; zero-bid quotes are dropped. IV rank / percentile shows only after 252 stored sessions.
 
 **Correlation / lead-lag:** 63-session corr on sector ETFs; lags −5…+5. `analytics/corr.py`. Default finding is usually same-day — still show it so the brief cannot invent leadership.
 
@@ -310,6 +328,8 @@ GET /health
 ## 12. As-built gaps
 
 These are contracted or sketched and are **not** implemented. Do not add them unless this file is updated first (pull the item out of this list into the current phase).
+
+**Pulled into the current phases (2026-10-31):** peer comps on the Ticker page and the FRED credit curve (1.10), equity-implied credit bucket (1.11), Yahoo option chains + vol indices + Cboe put/call (1.12), Kalshi index ranges + CFTC positioning (1.13), street consensus + FINRA short interest (1.14). Order and checks: `decision_layer_plan.md`.
 
 **Decision layer (next phases)**
 
