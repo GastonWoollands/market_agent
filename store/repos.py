@@ -1473,3 +1473,73 @@ def events_for_ticker(session: Session, ticker: str, *, limit: int = 3) -> list[
         .limit(limit)
     )
     return list(session.execute(stmt).scalars())
+
+
+def universes_for_instrument(session: Session, instrument_id: int) -> list[str]:
+    stmt = (
+        select(Universe.name)
+        .join(UniverseMember, UniverseMember.universe_id == Universe.id)
+        .where(UniverseMember.instrument_id == instrument_id)
+        .order_by(Universe.name)
+    )
+    return list(session.execute(stmt).scalars())
+
+
+def latest_valuation_map(
+    session: Session, instrument_ids: Sequence[int]
+) -> dict[int, ValuationDaily]:
+    if not instrument_ids:
+        return {}
+    latest = (
+        select(ValuationDaily.instrument_id, func.max(ValuationDaily.as_of).label("as_of"))
+        .where(ValuationDaily.instrument_id.in_(list(instrument_ids)))
+        .group_by(ValuationDaily.instrument_id)
+        .subquery()
+    )
+    stmt = select(ValuationDaily).join(
+        latest,
+        (ValuationDaily.instrument_id == latest.c.instrument_id)
+        & (ValuationDaily.as_of == latest.c.as_of),
+    )
+    return {item.instrument_id: item for item in session.scalars(stmt)}
+
+
+def opportunity_score_map(
+    session: Session, instrument_ids: Sequence[int]
+) -> tuple[dict[int, OpportunityScore], int]:
+    """Current score per name and how many names the current run ranked."""
+    ranked = session.scalar(select(func.count()).select_from(OpportunityScore)) or 0
+    if not instrument_ids:
+        return {}, int(ranked)
+    stmt = select(OpportunityScore).where(
+        OpportunityScore.instrument_id.in_(list(instrument_ids))
+    )
+    out: dict[int, OpportunityScore] = {}
+    for item in session.scalars(stmt):
+        current = out.get(item.instrument_id)
+        if current is None or item.as_of > current.as_of:
+            out[item.instrument_id] = item
+    return out, int(ranked)
+
+
+def upcoming_events_for_ticker(
+    session: Session, ticker: str, *, start: date, limit: int = 3
+) -> list[EventItem]:
+    stmt = (
+        select(EventItem)
+        .where(EventItem.ticker == ticker, EventItem.date >= start)
+        .order_by(EventItem.date)
+        .limit(limit)
+    )
+    return list(session.execute(stmt).scalars())
+
+
+def news_for_name(
+    session: Session, ticker: str, name_hint: str | None, *, limit: int = 8
+) -> list[NewsItem]:
+    """Finnhub company rows (`query` = ticker) plus headlines that name the company."""
+    match = NewsItem.query == ticker
+    if name_hint:
+        match = or_(match, NewsItem.title.ilike(f"%{name_hint}%"))
+    stmt = select(NewsItem).where(match).order_by(NewsItem.published_at.desc()).limit(limit)
+    return list(session.execute(stmt).scalars())

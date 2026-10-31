@@ -667,3 +667,174 @@ export async function fetchWatchlist(ticker?: string): Promise<WatchlistTape | n
     return null;
   }
 }
+
+export type TickerIdentity = {
+  ticker: string;
+  name: string;
+  exchange: string | null;
+  sector: string | null;
+  industry: string | null;
+  cik: string | null;
+  universes: string[];
+  tv_symbol: string;
+  sector_etf: string | null;
+};
+
+export type TickerPrice = {
+  as_of: string;
+  close: number;
+  change_1d: number | null;
+};
+
+export type TickerDesk = {
+  ttm_as_of: string | null;
+  valuation_as_of: string | null;
+  ev_basis: "valuation_daily" | "read_time" | null;
+  market_cap: number | null;
+  ev: number | null;
+  ev_ebitda: number | null;
+  pctile_5y: number | null;
+  comparable: boolean;
+  sample_size: number | null;
+  fcf_yield: number | null;
+  nd_ebitda: number | null;
+  ebitda_growth_1y: number | null;
+  revenue_growth_1y: number | null;
+  interest_coverage: number | null;
+  share_change_1y: number | null;
+  financing_gap: number | null;
+  accrual: boolean | null;
+  rank: number | null;
+  ranked: number | null;
+  trap: boolean | null;
+};
+
+export type TickerTtmRow = {
+  as_of: string;
+  revenue: number | null;
+  ebitda: number | null;
+  ebit: number | null;
+  cfo: number | null;
+  capex: number | null;
+  fcf: number | null;
+  net_debt: number | null;
+  interest_expense: number | null;
+  shares: number | null;
+};
+
+export type TickerFyRow = {
+  as_of: string;
+  fiscal_year: number;
+  revenue: number | null;
+  net_income: number | null;
+  cfo: number | null;
+  ebit: number | null;
+  gross_profit: number | null;
+  long_term_debt: number | null;
+  equity: number | null;
+  shares: number | null;
+};
+
+export type TickerTechnicals = {
+  as_of: string;
+  sma_20: number | null;
+  sma_50: number | null;
+  sma_100: number | null;
+  sma_200: number | null;
+  vs_sma_20: number | null;
+  vs_sma_50: number | null;
+  vs_sma_100: number | null;
+  vs_sma_200: number | null;
+  rsi_14: number | null;
+  high_52w: number | null;
+  low_52w: number | null;
+  vs_high_52w: number | null;
+  ret_1w: number | null;
+  ret_1m: number | null;
+  ret_3m: number | null;
+  ret_6m: number | null;
+  ret_1y: number | null;
+  rel_spy_3m: number | null;
+  rel_spy_1y: number | null;
+  rel_sector_3m: number | null;
+  rel_sector_1y: number | null;
+};
+
+export type TickerRisk = {
+  as_of: string;
+  source: "risk_stats" | "read_time";
+  sessions: number;
+  vol_3m: number | null;
+  vol_1y: number | null;
+  downside_vol_1y: number | null;
+  beta_spy: number | null;
+  beta_qqq: number | null;
+  corr_spy: number | null;
+  max_drawdown_1y: number | null;
+  drawdown: number | null;
+};
+
+export type TickerEvent = { date: string; title: string; kind: string };
+
+export type TickerNews = {
+  published_at: string;
+  title: string;
+  url: string;
+  publisher: string;
+};
+
+export type TickerTape = {
+  stale: boolean;
+  identity: TickerIdentity | null;
+  price: TickerPrice | null;
+  desk: TickerDesk | null;
+  ttm: TickerTtmRow[];
+  fy: TickerFyRow[];
+  technicals: TickerTechnicals | null;
+  risk: TickerRisk | null;
+  events: TickerEvent[];
+  news: TickerNews[];
+  hint: string | null;
+};
+
+export type CompareRow = {
+  identity: TickerIdentity;
+  price: TickerPrice | null;
+  desk: TickerDesk | null;
+  technicals: TickerTechnicals | null;
+  risk: TickerRisk | null;
+};
+
+export type CompareTape = {
+  as_of: string | null;
+  stale: boolean;
+  benchmark: string;
+  tickers: string[];
+  missing: string[];
+  rows: CompareRow[];
+  corr: DynamicsCorr | null;
+  overlay: DynamicsOverlay[];
+};
+
+export type Fetched<T> = { ok: true; data: T } | { ok: false; status: number | null };
+
+export async function fetchTicker(ticker: string): Promise<Fetched<TickerTape>> {
+  return fetchTyped<TickerTape>(`/ticker/${encodeURIComponent(ticker.toUpperCase())}`);
+}
+
+export async function fetchCompare(tickers: string[]): Promise<Fetched<CompareTape>> {
+  const params = new URLSearchParams({ tickers: tickers.join(",") });
+  return fetchTyped<CompareTape>(`/compare?${params.toString()}`);
+}
+
+async function fetchTyped<T>(path: string): Promise<Fetched<T>> {
+  try {
+    const response = await fetch(`${API_URL}${path}`, { cache: "no-store" });
+    if (!response.ok) {
+      return { ok: false, status: response.status };
+    }
+    return { ok: true, data: (await response.json()) as T };
+  } catch {
+    return { ok: false, status: null };
+  }
+}

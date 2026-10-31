@@ -151,7 +151,13 @@ function MemberBlock({
         <td className="px-3 py-2 tabular-nums text-mute">{item.rank}</td>
         <td className="px-3 py-2">
           <div className="flex flex-wrap items-baseline gap-x-2">
-            <span className="font-medium">{item.ticker}</span>
+            <Link
+              href={`/t/${encodeURIComponent(item.ticker)}`}
+              onClick={(event) => event.stopPropagation()}
+              className="font-medium hover:underline"
+            >
+              {item.ticker}
+            </Link>
             {item.trap ? <span className="text-[11px] uppercase tracking-wide text-down">trap</span> : null}
             {item.accrual === false ? (
               <span className="text-[11px] uppercase tracking-wide text-mute">accr no</span>

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { StaleBadge } from "@/components/StaleBadge";
+import { TickerLink } from "@/components/TickerLink";
 import { TradingViewChart } from "@/components/TradingViewChart";
 import { BROWSER_API, type WatchlistMember, type WatchlistTape } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -219,7 +220,7 @@ function QuoteCard({
         </div>
       </button>
       <div className="mt-2 flex items-center justify-between">
-        <span className="text-[12px] text-mute">{item.ticker}</span>
+        <TickerLink ticker={item.ticker} className="text-[12px] text-mute" />
         <button
           type="button"
           onClick={onRemove}
