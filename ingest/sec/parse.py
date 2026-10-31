@@ -6,7 +6,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from ingest.sec.errors import SecParseError
-from store.canonical import MetricFy, MetricTtm, SecTicker
+from store.canonical import MetricFy, MetricTtm, SecProfile, SecTicker
 
 ALLOWED_EXCHANGES = {
     "NYSE": "NYSE",
@@ -31,6 +31,13 @@ DA_CONCEPTS = (
     ("us-gaap", "DepreciationAmortizationAndAccretionNet"),
 )
 DEP_CONCEPTS = (("us-gaap", "Depreciation"),)
+INTEREST_CONCEPTS = (
+    ("us-gaap", "InterestExpense"),
+    ("us-gaap", "InterestExpenseNonoperating"),
+    ("us-gaap", "InterestExpenseDebt"),
+    ("us-gaap", "InterestAndDebtExpense"),
+    ("ifrs-full", "InterestExpense"),
+)
 AMORT_CONCEPTS = (
     ("us-gaap", "AmortizationOfIntangibleAssets"),
     ("us-gaap", "FiniteLivedIntangibleAssetsAmortizationExpense"),
@@ -161,6 +168,18 @@ def tickers_from_payload(payload: Any, *, exchanges: list[str]) -> list[SecTicke
     return out
 
 
+def profile_from_submissions(payload: Any) -> SecProfile:
+    if not isinstance(payload, dict) or payload.get("cik") is None:
+        raise SecParseError("submissions payload has no cik")
+    raw_sic = str(payload.get("sic") or "").strip()
+    description = str(payload.get("sicDescription") or "").strip()
+    return SecProfile(
+        cik=pad_cik(payload["cik"]),
+        sic=int(raw_sic) if raw_sic.isdigit() else None,
+        sic_description=description[:255] or None,
+    )
+
+
 def ttm_from_facts(
     payload: dict[str, Any],
     *,
@@ -192,6 +211,9 @@ def ttm_from_facts(
     fcf = None
     if cfo is not None and capex is not None:
         fcf = cfo - capex
+    interest = _aligned(_flow_ttm(facts, INTEREST_CONCEPTS, through=as_of), as_of)
+    if interest is not None:
+        interest = abs(interest)
     debt = _debt_on(facts, as_of)
     cash = _instant_on(facts, CASH_CONCEPTS, as_of)
     net_debt = None
@@ -206,6 +228,8 @@ def ttm_from_facts(
         fcf=fcf,
         cfo=cfo,
         capex=capex,
+        ebit=ebit,
+        interest_expense=interest,
         net_debt=net_debt,
         shares=shares,
     )

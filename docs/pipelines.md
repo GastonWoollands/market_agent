@@ -122,6 +122,8 @@ Calendar still writes FOMC/CPI dates if Finnhub is unset; earnings just stay emp
 | 12 | `python -m jobs.ingest_yahoo --universe valuation` | Daily bars for those names (≤2 req/s — long) |
 | 13 | `python -m jobs.compute_valuation` | EV/EBITDA, 5y percentile, growth × re-rating |
 | 14 | `python -m jobs.compute_quant` | Gem-candidate flag + ratio snapshot (`quant_score`). F-score / Z are not computed |
+| 14a | `python -m jobs.ingest_sec_profile --resume` | Sector (SIC → `config/sic_sectors.yaml`) + SEC industry on `instrument`; ~1 SEC request per name, `--resume` skips names that have a sector |
+| 14b | `python -m jobs.compute_risk` | Vol 3m/1y, downside vol, beta vs SPY/QQQ, drawdown → `risk_stats` (valuation ∪ watchlist ∪ tape) |
 
 After a schema upgrade that adds `metric_fy`, backfill without rebuilding membership:
 
@@ -138,7 +140,7 @@ If Yahoo dies mid-universe:
 python -m jobs.ingest_yahoo --universe valuation --resume
 ```
 
-Smoke-test one name: `--tickers MSFT`.
+Smoke-test one name: `--tickers MSFT` (adds / refreshes that name; it does not shrink the universe).
 
 ### E — Opportunities
 
@@ -162,7 +164,7 @@ Make equivalent of A–F:
 
 ```bash
 make db migrate seed yahoo fred regime poly dynamics news fed-rss calendar pack outlook \
-  sec yahoo-val valuation quant scores memos yahoo-watch intraday
+  sec sec-profile yahoo-val valuation quant scores risk memos yahoo-watch intraday
 
 make yahoo yahoo-watch fred regime poly dynamics news fed-rss calendar pack outlook
 ```
@@ -265,6 +267,8 @@ python -m jobs.ingest_yahoo --universe valuation --resume
 python -m jobs.compute_valuation
 python -m jobs.compute_quant
 python -m jobs.compute_scores
+python -m jobs.ingest_sec_profile --resume   # new names only; drop --resume after editing sic_sectors.yaml
+python -m jobs.compute_risk
 python -m jobs.generate_memos
 ```
 
@@ -345,7 +349,9 @@ Both write to `outlook_report` table. UI displays latest for the date.
 | `jobs.ingest_sec` | valuation membership, `metric_ttm`, `metric_fy` | `--refresh-zip`, `--zip PATH`, `--tickers`, `--limit`, `--fy-only` |
 | `jobs.compute_valuation` | `valuation_daily` | — |
 | `jobs.compute_quant` | `quant_score` (gem flag / ratios) | — |
-| `jobs.compute_scores` | `opportunity_score` | — |
+| `jobs.compute_scores` | `opportunity_score` (prunes names outside the run) | — |
+| `jobs.ingest_sec_profile` | `instrument.sector` / `instrument.industry` | `--tickers`, `--resume` |
+| `jobs.compute_risk` | `risk_stats` | — |
 | `jobs.generate_memos` | `opportunity_memo` | `--template`, `--provider`, `--model` |
 | `jobs.ingest_intraday` | `bar_intraday` (5m) | `--tickers`, `--resume` |
 | `jobs.backfill` | same as yahoo / intraday / fred | `yahoo\|intraday\|fred` plus the flags above |

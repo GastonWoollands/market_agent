@@ -110,6 +110,16 @@ class SecTicker(BaseModel):
     exchange: str
 
 
+class SecProfile(BaseModel):
+    """Issuer classification from the SEC submissions endpoint."""
+
+    model_config = ConfigDict(frozen=True)
+
+    cik: str
+    sic: int | None = None
+    sic_description: str | None = None
+
+
 class MetricTtm(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -120,6 +130,8 @@ class MetricTtm(BaseModel):
     fcf: Decimal | None = None
     cfo: Decimal | None = None
     capex: Decimal | None = None
+    ebit: Decimal | None = None
+    interest_expense: Decimal | None = None
     net_debt: Decimal | None = None
     shares: Decimal | None = None
 

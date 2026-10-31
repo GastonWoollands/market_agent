@@ -21,3 +21,19 @@ def test_accrual_is_cfo_gt_ni() -> None:
     assert accrual_ok(10, 12) is False
     assert accrual_ok(None, 12) is None
     assert accrual_ok(10, None) is None
+
+
+def test_interest_coverage_dilution_and_financing_gap() -> None:
+    from analytics.desk import financing_gap, interest_coverage, share_change
+
+    assert interest_coverage(300, 100) == 3.0
+    assert interest_coverage(-50, 100) == -0.5
+    assert interest_coverage(300, 0) is None
+    assert interest_coverage(300, None) is None
+    assert abs(share_change(551, 435) - 0.2667) < 1e-3
+    assert abs(share_change(95, 100) + 0.05) < 1e-12
+    assert share_change(100, None) is None
+    # CRWV-like: capex 20.6B, CFO 6.9B, market cap 33.6B.
+    assert abs(financing_gap(20.6, 6.9, 33.6) - 0.4077) < 1e-3
+    assert financing_gap(5, 10, 100) == -0.05
+    assert financing_gap(None, 10, 100) is None

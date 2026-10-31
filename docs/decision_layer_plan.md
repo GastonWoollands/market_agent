@@ -32,8 +32,8 @@ This file is **not** the product contract. If intent, sources, universes, pages,
 | 0 | Contract | **Done** | Desk metrics are the product language; F/Z out of product (2026-09-14) |
 | 1 | `metric_fy` + ratio snapshot / gem flag | **Warehouse done** | Branch `feat/desk-metrics-and-review`. F/Z computation removed 2026-10-29. No UI |
 | 1.5 | Desk metrics on Valuation + Opportunities | **Done** | Named fields on `GET /valuation` and `GET /opportunities`; grids match. No LLM |
-| 1.6 | SEC TTM data quality | **Done** (branch `fix/ttm-data-quality`) | YTD-differenced quarters, contiguous TTM, aligned periods, debt de-dup, `cfo`/`capex` stored, comparable ≥ 750 sessions |
-| 1.7 | Sector + per-name risk | Not started | SIC → sector from SEC submissions; vol / beta / max DD for the valuation universe; `InterestExpense` |
+| 1.6 | SEC TTM data quality | **Done** (PR #13) | YTD-differenced quarters, contiguous TTM, aligned periods, debt de-dup, `cfo`/`capex` stored, comparable ≥ 750 sessions |
+| 1.7 | Sector + per-name risk | **Done** (branch `feat/sector-risk`) | SIC → sector from SEC submissions; vol / beta / max DD for the valuation universe; `InterestExpense` |
 | 1.8 | Ticker + Compare pages | Not started | Northstar §3 rows added 2026-10-31 |
 | 1.9 | Rotation panels | Not started | Cross-asset RRG, sector breadth + median valuation, intra-sector RRG, factor ETFs |
 | 2 | Gems universe D | Not started | Flag only on B; membership + Yahoo gems later. No F-score gate |
@@ -153,9 +153,16 @@ Found while re-running: filers switch synonym tags between 10-Q and 10-K (capex,
 
 **Operator check:** CRWV TTM revenue at 2026-06-30 = 7.590B, a 2025-12-31 row exists, FCF differs quarter to quarter; `opportunity_score` has one row per ranked name.
 
-## Phase 1.7 — Sector + per-name risk
+## Phase 1.7 — Sector + per-name risk (done)
 
-SIC / `sicDescription` from the SEC submissions endpoint (shared client for Phases 4/5) → yaml SIC→sector map → `instrument.sector/industry`. Vol 63/252d, beta vs SPY/QQQ, max drawdown for the valuation universe (bars already stored). Store `InterestExpense` for interest coverage. Dilution = share count YoY from stored `shares`. Financing dependency = (capex − CFO) / market cap.
+- `jobs.ingest_sec_profile`: SEC submissions `sic` → `config/sic_sectors.yaml` (ranges, first match wins, ticker overrides for SIC 7389 / travel / internet media) → `instrument.sector`; `industry` = `sicDescription`. Approximate GICS, not GICS. `upsert_instrument` now coalesces sector/industry so catalog upserts keep it.
+- `risk_stats` + `jobs.compute_risk`: vol 3m / 1y, downside vol, beta vs SPY and QQQ, corr vs SPY, max drawdown 1y, drawdown from 1y high, from `adj_c` (valuation ∪ watchlist ∪ tape).
+- `metric_ttm.ebit` / `interest_expense` (migration 0020). `analytics/desk.py`: `interest_coverage`, `share_change` (dilution), `financing_gap` ((capex − CFO) / market cap). Served from Phase 1.8.
+- Fix: `ingest_sec --tickers/--limit` replaced the whole valuation membership with the subset; partial runs are now additive.
+
+**Result (2026-10-31):** sector on 973 / 973 (0 unmapped); interest expense on 666 / 973; `risk_stats` 998 names. Names outside the universe (e.g. CRWV) get risk only once they are on the watchlist or tape.
+
+**Operator check:** `select sector, count(*)` over the valuation universe has 11 sectors and no NULLs; MSFT coverage ≈ 50x, KODK < 1x.
 
 ## Phase 1.8 — Ticker + Compare pages
 
@@ -339,7 +346,7 @@ Operator / hygiene items found in the full review. Do these before or alongside 
 8. **Design question.** FCF yield is in the Quality sleeve while Cheap already weighs the multiple (partial double count).
 9. ~~**Ship the branch.**~~ Done 2026-10-29: PR #5 merged.
 
-Next concrete PR: **Phase 1.6 TTM data quality**, then 1.7 → 1.8 → 1.9, then **Phase 3 Book** (with 3.5 as the rotation read). Gems membership can parallel Book. Do not start Phase 7 until packs exist. Do not start a PR to “fix F-score for the UI.”
+Next concrete PR: **Phase 1.8 Ticker + Compare pages**, then 1.9, then **Phase 3 Book** (with 3.5 as the rotation read). Gems membership can parallel Book. Do not start Phase 7 until packs exist. Do not start a PR to “fix F-score for the UI.”
 
 ---
 
@@ -353,3 +360,4 @@ Next concrete PR: **Phase 1.6 TTM data quality**, then 1.7 → 1.8 → 1.9, then
 | 2026-10-29 | Review + hardening: Polymarket slot identity committed; no look-ahead on `?as_of=`; stored memos shown on Opportunities; Outlook contract (§10) matches v12; DB rebuilt from scratch; gold moved from FRED LBMA to GLD tape. |
 | 2026-10-29 | Piotroski / Altman modules and tests removed; `compute_quant` writes legacy F/Z columns NULL. Branch renamed `feat/desk-metrics-and-review`. |
 | 2026-10-31 | Phases 1.6–1.9 added after a single-name deep-dive exposed TTM / debt defects. Northstar: Ticker + Compare pages; interest coverage in scope. |
+| 2026-10-31 | Phase 1.6 merged (PR #13). Phase 1.7: SIC sectors, `risk_stats`, EBIT / interest TTM, additive partial `ingest_sec`. |

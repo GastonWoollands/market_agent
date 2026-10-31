@@ -628,3 +628,33 @@ def test_debt_that_moved_to_custom_tags_stays_unknown() -> None:
     metric = ttm_from_facts(payload, require_quarters=True)
     assert metric is not None
     assert metric.net_debt is None
+
+
+def test_ttm_stores_ebit_and_interest_expense() -> None:
+    payload = _ytd_payload()
+    payload["facts"]["us-gaap"]["InterestExpense"] = {
+        "units": {
+            "USD": [
+                *_ytd("2025-01-01", [("2025-03-31", 2), ("2025-06-30", 4), ("2025-09-30", 6),
+                                     ("2025-12-31", 9)]),
+                *_ytd("2026-01-01", [("2026-03-31", 4), ("2026-06-30", 9)]),
+            ]
+        }
+    }
+    metric = ttm_from_facts(payload, require_quarters=True)
+    assert metric is not None
+    assert metric.ebit == Decimal("40")
+    assert metric.interest_expense == Decimal("14")  # 5 + 4 + 3 + 2
+
+
+def test_profile_from_submissions_reads_sic() -> None:
+    from ingest.sec.parse import profile_from_submissions
+
+    profile = profile_from_submissions(
+        {"cik": "0001769628", "sic": "7372", "sicDescription": "Services-Prepackaged Software"}
+    )
+    assert profile.cik == "0001769628"
+    assert profile.sic == 7372
+    assert profile.sic_description == "Services-Prepackaged Software"
+    blank = profile_from_submissions({"cik": 1, "sic": "", "sicDescription": ""})
+    assert blank.sic is None and blank.sic_description is None
