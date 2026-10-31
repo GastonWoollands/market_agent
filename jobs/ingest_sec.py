@@ -20,6 +20,7 @@ from jobs.runtime import record_job
 from store.catalog import CatalogInstrument, load_universes
 from store.engine import session_scope
 from store.repos import (
+    ensure_membership,
     instruments_in_universe,
     prune_metric_ttm,
     replace_membership,
@@ -173,8 +174,13 @@ def _write_members(
             kept += 1
             if index % 500 == 0:
                 log.info("sec facts %s/%s kept=%s", index, len(listed), kept)
+        if not enforce_band:
+            # --tickers / --limit runs refresh those names; they must not shrink the universe.
+            for instrument_id in ids:
+                ensure_membership(session, universe.id, instrument_id)
+            return kept, fy_written
         # Raise inside the transaction so a bad parse rolls back TTM rows and membership.
-        if enforce_band and not (BAND[0] <= len(ids) <= BAND[1]):
+        if not (BAND[0] <= len(ids) <= BAND[1]):
             raise RuntimeError(f"valuation membership {len(ids)} is outside {BAND[0]}–{BAND[1]}")
         replace_membership(session, universe.id, ids)
     return kept, fy_written

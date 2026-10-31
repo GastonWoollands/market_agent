@@ -173,11 +173,11 @@ Keep vendor payloads out of hot tables. Polymarket `raw` JSONB is the exception.
 
 | Group | Tables | Purpose |
 |-------|--------|---------|
-| Identity | `instrument`, `universe`, `universe_member` | Tickers; `tape` / `valuation` / `watchlist` (later `gems`) |
+| Identity | `instrument`, `universe`, `universe_member` | Tickers; `tape` / `valuation` / `watchlist` (later `gems`). `sector` = approximate GICS from the SEC SIC code (`config/sic_sectors.yaml`), `industry` = SEC `sicDescription` |
 | Market | `bar_daily`, `quote_latest`, `bar_intraday` | Daily history, delayed last, 5m for tape ∪ watchlist only |
 | Macro | `macro_series`, `macro_observation`, `odds_snapshot`, `regime_snapshot` | FRED prints; Polymarket implied yes keyed by catalog slot; daily growth / inflation / policy / volatility classification from stored FRED |
 | Fundamentals | `metric_ttm`, `metric_fy` | Point-in-time TTM and fiscal-year facts from SEC companyfacts (no `financial_fact` warehouse). FY is for growth, accrual, gems — not an on-screen F/Z |
-| Derived | `valuation_daily`, `rrg_point`, `return_stats`, `opportunity_score`, `quant_score` | Python → Postgres; the writer never computes these. `quant_score` holds a gem flag and ratio snapshot; legacy `f_score` / `z_score` columns stay NULL |
+| Derived | `valuation_daily`, `rrg_point`, `return_stats`, `risk_stats`, `opportunity_score`, `quant_score` | Python → Postgres; the writer never computes these. `risk_stats` is per-name vol / downside vol / beta / drawdown from adjusted closes. `quant_score` holds a gem flag and ratio snapshot; legacy `f_score` / `z_score` columns stay NULL |
 | News / calendar | `news_item`, `event_item`, `policy_item` | RSS headlines plus Finnhub `wire` / `company` rows (`summary` nullable, `query` = ticker for company); YAML catalysts (FOMC/CPI/PCE/NFP/GDP/JOLTS/speeches/minutes/Beige Book/ISM/Treasury/central banks) + Finnhub earnings; official Fed Board RSS (speech/statement/minutes/testimony excerpts) |
 | Agent | `evidence_pack`, `outlook_report`, `opportunity_memo`, `job_run` | Pack JSONB, briefs, memos, run log |
 

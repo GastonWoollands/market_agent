@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -42,6 +42,7 @@ from store.models import (
     QuoteLatest,
     RegimeSnapshot,
     ReturnStats,
+    RiskStats,
     RrgPoint,
     Universe,
     UniverseMember,
@@ -50,36 +51,43 @@ from store.models import (
 
 
 def upsert_instrument(session: Session, item: CatalogInstrument) -> Instrument:
-    stmt = (
-        insert(Instrument)
-        .values(
-            ticker=item.ticker,
-            yahoo_symbol=item.yahoo,
-            name=item.name,
-            exchange=item.exchange,
-            asset_class=item.asset_class,
-            sector=item.sector,
-            industry=item.industry,
-            cik=item.cik,
-            is_active=True,
-        )
-        .on_conflict_do_update(
-            index_elements=[Instrument.ticker],
-            set_={
-                "yahoo_symbol": item.yahoo,
-                "name": item.name,
-                "exchange": item.exchange,
-                "asset_class": item.asset_class,
-                "sector": item.sector,
-                "industry": item.industry,
-                "cik": item.cik,
-                "is_active": True,
-                "updated_at": func.now(),
-            },
-        )
-        .returning(Instrument)
+    stmt = insert(Instrument).values(
+        ticker=item.ticker,
+        yahoo_symbol=item.yahoo,
+        name=item.name,
+        exchange=item.exchange,
+        asset_class=item.asset_class,
+        sector=item.sector,
+        industry=item.industry,
+        cik=item.cik,
+        is_active=True,
     )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=[Instrument.ticker],
+        set_={
+            "yahoo_symbol": item.yahoo,
+            "name": item.name,
+            "exchange": item.exchange,
+            "asset_class": item.asset_class,
+            # Most catalog rows carry no sector; keep the SIC-derived value already stored.
+            "sector": func.coalesce(stmt.excluded.sector, Instrument.sector),
+            "industry": func.coalesce(stmt.excluded.industry, Instrument.industry),
+            "cik": item.cik,
+            "is_active": True,
+            "updated_at": func.now(),
+        },
+    ).returning(Instrument)
     return session.scalars(stmt).one()
+
+
+def set_instrument_profile(
+    session: Session, instrument_id: int, *, sector: str | None, industry: str | None
+) -> None:
+    session.execute(
+        update(Instrument)
+        .where(Instrument.id == instrument_id)
+        .values(sector=sector, industry=industry, updated_at=func.now())
+    )
 
 
 def upsert_universe(session: Session, name: str, description: str | None) -> Universe:
@@ -996,6 +1004,8 @@ def upsert_metric_ttm(session: Session, instrument_id: int, item: TtmSnapshot) -
         fcf=item.fcf,
         cfo=item.cfo,
         capex=item.capex,
+        ebit=item.ebit,
+        interest_expense=item.interest_expense,
         net_debt=item.net_debt,
         shares=item.shares,
         source="sec",
@@ -1008,6 +1018,8 @@ def upsert_metric_ttm(session: Session, instrument_id: int, item: TtmSnapshot) -
             "fcf": stmt.excluded.fcf,
             "cfo": stmt.excluded.cfo,
             "capex": stmt.excluded.capex,
+            "ebit": stmt.excluded.ebit,
+            "interest_expense": stmt.excluded.interest_expense,
             "net_debt": stmt.excluded.net_debt,
             "shares": stmt.excluded.shares,
             "source": stmt.excluded.source,
@@ -1142,6 +1154,60 @@ def closes_for_instrument_ids(
     for instrument_id, day, close in session.execute(stmt):
         out.setdefault(instrument_id, []).append((day, close))
     return out
+
+
+def adj_closes_for_instrument_ids(
+    session: Session,
+    instrument_ids: Sequence[int],
+    *,
+    start: date | None = None,
+) -> dict[int, list[tuple[date, Decimal]]]:
+    if not instrument_ids:
+        return {}
+    stmt = select(BarDaily.instrument_id, BarDaily.date, BarDaily.adj_close).where(
+        BarDaily.instrument_id.in_(list(instrument_ids))
+    )
+    if start is not None:
+        stmt = stmt.where(BarDaily.date >= start)
+    stmt = stmt.order_by(BarDaily.instrument_id, BarDaily.date)
+    out: dict[int, list[tuple[date, Decimal]]] = {int(item): [] for item in instrument_ids}
+    for instrument_id, day, close in session.execute(stmt):
+        out.setdefault(instrument_id, []).append((day, close))
+    return out
+
+
+def upsert_risk_stats(session: Session, rows: Sequence[dict[str, object]]) -> int:
+    if not rows:
+        return 0
+    written = 0
+    for start in range(0, len(rows), 500):
+        chunk = list(rows[start : start + 500])
+        stmt = insert(RiskStats).values(chunk)
+        columns = [key for key in chunk[0] if key not in ("instrument_id", "as_of")]
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["instrument_id", "as_of"],
+            set_={key: getattr(stmt.excluded, key) for key in columns},
+        )
+        session.execute(stmt)
+        written += len(chunk)
+    return written
+
+
+def latest_risk_stats(session: Session, instrument_ids: Sequence[int]) -> dict[int, RiskStats]:
+    if not instrument_ids:
+        return {}
+    latest = (
+        select(RiskStats.instrument_id, func.max(RiskStats.as_of).label("as_of"))
+        .where(RiskStats.instrument_id.in_(list(instrument_ids)))
+        .group_by(RiskStats.instrument_id)
+        .subquery()
+    )
+    stmt = select(RiskStats).join(
+        latest,
+        (RiskStats.instrument_id == latest.c.instrument_id)
+        & (RiskStats.as_of == latest.c.as_of),
+    )
+    return {item.instrument_id: item for item in session.scalars(stmt)}
 
 
 def upsert_valuation_daily(session: Session, rows: Sequence[dict[str, object]]) -> int:

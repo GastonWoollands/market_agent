@@ -8,9 +8,14 @@ import httpx
 
 from ingest.retry import http_get
 from ingest.sec.errors import SecError, SecHttpError, SecParseError
-from ingest.sec.parse import pad_cik, tickers_from_payload, ttm_from_facts
+from ingest.sec.parse import (
+    pad_cik,
+    profile_from_submissions,
+    tickers_from_payload,
+    ttm_from_facts,
+)
 from ingest.yahoo.rate_limit import TokenBucket
-from store.canonical import MetricTtm, SecTicker
+from store.canonical import MetricTtm, SecProfile, SecTicker
 from store.settings import REPO_ROOT
 
 TICKERS_URL = "https://www.sec.gov/files/company_tickers_exchange.json"
@@ -19,6 +24,7 @@ FACTS_ZIP_URLS = (
     "https://data.sec.gov/archives/edgar/daily-index/xbrl/companyfacts.zip",
 )
 FACTS_JSON_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
+SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik}.json"
 DEFAULT_CACHE = REPO_ROOT / "data" / "sec"
 
 
@@ -118,6 +124,9 @@ class SecClient:
         if not isinstance(payload, dict):
             raise SecParseError(f"{padded}: companyfacts is not an object")
         return payload
+
+    def fetch_profile(self, cik: str) -> SecProfile:
+        return profile_from_submissions(self._get_json(SUBMISSIONS_URL.format(cik=pad_cik(cik))))
 
     def metric_from_archive(
         self, archive: CompanyFactsArchive, cik: str, *, require_quarters: bool = False

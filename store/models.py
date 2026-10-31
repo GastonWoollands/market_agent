@@ -206,6 +206,28 @@ class ReturnStats(Base):
     instrument: Mapped[Instrument] = relationship()
 
 
+class RiskStats(Base):
+    """Per-name price risk from adjusted closes (`analytics/risk.py`)."""
+
+    __tablename__ = "risk_stats"
+
+    instrument_id: Mapped[int] = mapped_column(
+        ForeignKey("instrument.id", ondelete="CASCADE"), primary_key=True
+    )
+    as_of: Mapped[date] = mapped_column(Date, primary_key=True)
+    sessions: Mapped[int] = mapped_column(Integer, nullable=False)
+    vol_3m: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    vol_1y: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    downside_vol_1y: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    beta_spy: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    beta_qqq: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    corr_spy: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    max_drawdown_1y: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    drawdown: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+
+    instrument: Mapped[Instrument] = relationship()
+
+
 class RrgPoint(Base):
     __tablename__ = "rrg_point"
 
@@ -329,6 +351,8 @@ class MetricTtm(Base):
     fcf: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
     cfo: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
     capex: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
+    ebit: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
+    interest_expense: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
     net_debt: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
     shares: Mapped[Decimal | None] = mapped_column(Numeric(20, 4))
     source: Mapped[str] = mapped_column(String(16), nullable=False)

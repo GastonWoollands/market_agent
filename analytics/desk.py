@@ -14,6 +14,32 @@ def nd_ebitda(net_debt: Decimal | float | None, ebitda: Decimal | float | None) 
     return _ratio(net_debt, ebitda, require_positive_den=True)
 
 
+def interest_coverage(
+    ebit: Decimal | float | None, interest_expense: Decimal | float | None
+) -> float | None:
+    """TTM EBIT / TTM interest expense. Negative when operations lose money."""
+    return _ratio(ebit, interest_expense, require_positive_den=True)
+
+
+def share_change(
+    shares: Decimal | float | None, shares_year_ago: Decimal | float | None
+) -> float | None:
+    """Share count change over a year. Positive is dilution, negative is buybacks."""
+    ratio = _ratio(shares, shares_year_ago, require_positive_den=True)
+    return None if ratio is None else ratio - 1.0
+
+
+def financing_gap(
+    capex: Decimal | float | None,
+    cfo: Decimal | float | None,
+    market_cap: Decimal | float | None,
+) -> float | None:
+    """(capex − CFO) / market cap. Positive: the name needs outside capital to invest."""
+    if capex is None or cfo is None:
+        return None
+    return _ratio(_dec(capex) - _dec(cfo), market_cap, require_positive_den=True)
+
+
 def accrual_ok(cfo: Decimal | float | None, net_income: Decimal | float | None) -> bool | None:
     if cfo is None or net_income is None:
         return None
