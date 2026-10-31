@@ -70,8 +70,8 @@ Do not implement a non-goal because it appeared in an older plan. Change this se
 | **Valuation** | EV/EBITDA vs own 5y, FCF yield, net debt / EBITDA, growth × re-rating |
 | **Opportunities** | Named desk metrics + rank + trap; memos on top names (gems **inside** the $1B+ universe until universe D ships). Insider column omitted until Form 4 |
 | **Watchlist** | User tickers, quote cards, TradingView widget |
-| **Ticker** (`/t/[ticker]`) | One name in depth: FY + quarterly TTM history, valuation vs own history, dilution (share count YoY), technicals (SMAs, drawdown, RSI, vol), relative strength vs SPY and sector, risk (vol, beta, max drawdown), next earnings, news — **not shipped** |
-| **Compare** | 2–6 tickers side by side: desk metrics, risk, pairwise correlation, rank — **not shipped** |
+| **Ticker** (`/t/[ticker]`) | One name in depth: FY + quarterly TTM history, valuation vs own history, dilution (share count YoY), technicals (SMAs, drawdown, RSI, vol), relative strength vs SPY and sector, risk (vol, beta, max drawdown), next earnings, news |
+| **Compare** | 2–6 tickers side by side: desk metrics, solvency, risk, 1y rebased performance, pairwise correlation, rank. Side by side only — swapping a holding is Book Phase 3.5 |
 | **Book** | Sized holdings + cash + risk snapshot + rebalance plan — **not shipped** |
 | **Gems** | Small/mid screen ($300M–$2B cap) — **not shipped** |
 
@@ -295,6 +295,8 @@ GET /outlook?date=
 GET /dynamics
 GET /valuation?q=&industry=&sort=&min_rev=
 GET /opportunities?sort=&as_of=
+GET /ticker/{ticker}
+GET /compare?tickers=A,B,...
 GET /watchlist
 POST /watchlist  DELETE /watchlist/{ticker}
 GET /search?q=

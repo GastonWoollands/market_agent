@@ -43,6 +43,7 @@ from api.opportunities import STALE_AFTER_DAYS as OPP_STALE
 from api.opportunities import build_opportunities
 from api.outlook import outlook_from_store
 from api.schemas import (
+    CompareResponse,
     DynamicsResponse,
     HealthResponse,
     JobStatus,
@@ -51,10 +52,12 @@ from api.schemas import (
     OutlookResponse,
     SearchHit,
     SearchResponse,
+    TickerResponse,
     ValuationResponse,
     WatchlistAdd,
     WatchlistResponse,
 )
+from api.ticker import build_compare, build_ticker, load_benchmarks, load_names, parse_tickers
 from api.valuation import DEFAULT_SORT, STALE_AFTER_DAYS, build_valuation
 from api.watchlist import build_watchlist
 from store.catalog import load_fred_series, load_polymarket, load_universes, tape_with_roles
@@ -426,6 +429,31 @@ def watchlist_remove(ticker: str, db: Session = Depends(get_db)) -> Response:
         raise HTTPException(status_code=404, detail=f"{symbol} is not on the watchlist")
     db.commit()
     return Response(status_code=204)
+
+
+@app.get("/ticker/{ticker}", response_model=TickerResponse)
+def ticker_detail(ticker: str, db: Session = Depends(get_db)) -> TickerResponse:
+    today = date.today()
+    items, _missing = load_names(db, [ticker.strip().upper()], today=today)
+    if not items:
+        raise HTTPException(status_code=404, detail=f"{ticker.upper()} is not stored")
+    return build_ticker(items[0], load_benchmarks(db, today=today), today=today)
+
+
+@app.get("/compare", response_model=CompareResponse)
+def compare(tickers: str = "", db: Session = Depends(get_db)) -> CompareResponse:
+    requested = parse_tickers(tickers)
+    if len(requested) < 2:
+        raise HTTPException(status_code=400, detail="compare needs 2 to 6 tickers")
+    today = date.today()
+    items, missing = load_names(db, requested, today=today)
+    return build_compare(
+        items,
+        load_benchmarks(db, today=today),
+        requested=requested,
+        missing=missing,
+        today=today,
+    )
 
 
 @app.get("/search", response_model=SearchResponse)

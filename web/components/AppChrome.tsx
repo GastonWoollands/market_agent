@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/cn";
@@ -14,10 +14,12 @@ const TABS = [
   { href: "/valuation", label: "Valuation" },
   { href: "/opportunities", label: "Opportunities" },
   { href: "/watchlist", label: "Watchlist" },
+  { href: "/compare", label: "Compare" },
 ] as const;
 
 export function AppChrome() {
   const pathname = usePathname();
+  const router = useRouter();
   const [health, setHealth] = useState<Health | null>(null);
   const [riskOn, setRiskOn] = useState<LiveRiskOn | null>(null);
 
@@ -62,14 +64,26 @@ export function AppChrome() {
             );
           })}
         </nav>
-        <label className="hidden md:block">
-          <span className="sr-only">Search</span>
-          <input
-            disabled
-            placeholder="Search names, sectors..."
-            className="h-8 w-56 rounded border border-line bg-panel px-3 text-[13px] text-mute outline-none"
-          />
-        </label>
+        <form
+          className="hidden md:block"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const value = new FormData(event.currentTarget).get("ticker");
+            const ticker = typeof value === "string" ? value.trim().toUpperCase() : "";
+            if (ticker) {
+              router.push(ticker.includes(",") ? `/compare?tickers=${ticker}` : `/t/${ticker}`);
+            }
+          }}
+        >
+          <label>
+            <span className="sr-only">Ticker</span>
+            <input
+              name="ticker"
+              placeholder="Ticker, or A,B to compare"
+              className="h-8 w-56 rounded border border-line bg-panel px-3 text-[13px] text-white outline-none"
+            />
+          </label>
+        </form>
         <div className="flex items-center gap-2">
           <RiskOnPill riskOn={riskOn} />
           <span

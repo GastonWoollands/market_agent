@@ -581,3 +581,157 @@ class SearchHit(BaseModel):
 class SearchResponse(BaseModel):
     q: str
     hits: list[SearchHit] = Field(default_factory=list)
+
+
+class TickerIdentity(BaseModel):
+    ticker: str
+    name: str
+    exchange: str | None = None
+    sector: str | None = None
+    industry: str | None = None
+    cik: str | None = None
+    universes: list[str] = Field(default_factory=list)
+    tv_symbol: str
+    sector_etf: str | None = None
+
+
+class TickerPrice(BaseModel):
+    as_of: date
+    close: float
+    change_1d: float | None = None
+
+
+class TickerDesk(BaseModel):
+    """Named desk metrics. `ev_basis` says whether EV is the stored daily or read-time."""
+
+    ttm_as_of: date | None = None
+    valuation_as_of: date | None = None
+    ev_basis: str | None = None
+    market_cap: float | None = None
+    ev: float | None = None
+    ev_ebitda: float | None = None
+    pctile_5y: float | None = None
+    comparable: bool = False
+    sample_size: int | None = None
+    fcf_yield: float | None = None
+    nd_ebitda: float | None = None
+    ebitda_growth_1y: float | None = None
+    revenue_growth_1y: float | None = None
+    interest_coverage: float | None = None
+    share_change_1y: float | None = None
+    financing_gap: float | None = None
+    accrual: bool | None = None
+    rank: int | None = None
+    ranked: int | None = None
+    trap: bool | None = None
+
+
+class TickerTtmRow(BaseModel):
+    as_of: date
+    revenue: float | None = None
+    ebitda: float | None = None
+    ebit: float | None = None
+    cfo: float | None = None
+    capex: float | None = None
+    fcf: float | None = None
+    net_debt: float | None = None
+    interest_expense: float | None = None
+    shares: float | None = None
+
+
+class TickerFyRow(BaseModel):
+    as_of: date
+    fiscal_year: int
+    revenue: float | None = None
+    net_income: float | None = None
+    cfo: float | None = None
+    ebit: float | None = None
+    gross_profit: float | None = None
+    long_term_debt: float | None = None
+    equity: float | None = None
+    shares: float | None = None
+
+
+class TickerTechnicals(BaseModel):
+    as_of: date
+    sma_20: float | None = None
+    sma_50: float | None = None
+    sma_100: float | None = None
+    sma_200: float | None = None
+    vs_sma_20: float | None = None
+    vs_sma_50: float | None = None
+    vs_sma_100: float | None = None
+    vs_sma_200: float | None = None
+    rsi_14: float | None = None
+    high_52w: float | None = None
+    low_52w: float | None = None
+    vs_high_52w: float | None = None
+    ret_1w: float | None = None
+    ret_1m: float | None = None
+    ret_3m: float | None = None
+    ret_6m: float | None = None
+    ret_1y: float | None = None
+    rel_spy_3m: float | None = None
+    rel_spy_1y: float | None = None
+    rel_sector_3m: float | None = None
+    rel_sector_1y: float | None = None
+
+
+class TickerRisk(BaseModel):
+    as_of: date
+    source: str
+    sessions: int
+    vol_3m: float | None = None
+    vol_1y: float | None = None
+    downside_vol_1y: float | None = None
+    beta_spy: float | None = None
+    beta_qqq: float | None = None
+    corr_spy: float | None = None
+    max_drawdown_1y: float | None = None
+    drawdown: float | None = None
+
+
+class TickerEvent(BaseModel):
+    date: date
+    title: str
+    kind: str
+
+
+class TickerNews(BaseModel):
+    published_at: datetime
+    title: str
+    url: str
+    publisher: str
+
+
+class TickerResponse(BaseModel):
+    stale: bool = True
+    identity: TickerIdentity | None = None
+    price: TickerPrice | None = None
+    desk: TickerDesk | None = None
+    ttm: list[TickerTtmRow] = Field(default_factory=list)
+    fy: list[TickerFyRow] = Field(default_factory=list)
+    technicals: TickerTechnicals | None = None
+    risk: TickerRisk | None = None
+    events: list[TickerEvent] = Field(default_factory=list)
+    news: list[TickerNews] = Field(default_factory=list)
+    hint: str | None = None
+
+
+class CompareRow(BaseModel):
+    identity: TickerIdentity
+    price: TickerPrice | None = None
+    desk: TickerDesk | None = None
+    technicals: TickerTechnicals | None = None
+    risk: TickerRisk | None = None
+
+
+class CompareResponse(BaseModel):
+    as_of: date | None = None
+    stale: bool = True
+    benchmark: str = "SPY"
+    tickers: list[str] = Field(default_factory=list)
+    missing: list[str] = Field(default_factory=list)
+    rows: list[CompareRow] = Field(default_factory=list)
+    corr: DynamicsCorr | None = None
+    overlay: list[DynamicsOverlay] = Field(default_factory=list)
