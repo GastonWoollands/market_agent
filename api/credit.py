@@ -10,6 +10,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
 
+from analytics.credit import BUCKETS as BUCKETS_ORDER
 from analytics.credit import OAS_SERIES, Anchor, CreditInputs, credit_inputs, merton, place
 from api.schemas import (
     AgencyRating,
@@ -122,9 +123,14 @@ def build_ticker_credit(
         if rated is not None
         else None
     )
-    rungs = [
-        Anchor(row.bucket, float(row.median_dd), int(row.names), _opt(row.oas_bp)) for row in ladder
-    ]
+    # Best bucket first. Monotone capping can tie two medians, so order by bucket, not DD.
+    rungs = sorted(
+        (
+            Anchor(row.bucket, float(row.median_dd), int(row.names), _opt(row.oas_bp))
+            for row in ladder
+        ),
+        key=lambda row: BUCKETS_ORDER.index(row.bucket),
+    )
     base = TickerCredit(
         agency=agency,
         anchors=[

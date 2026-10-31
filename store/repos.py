@@ -1593,9 +1593,9 @@ def latest_credit_implied(
 
 
 def latest_credit_anchors(session: Session) -> list[CreditAnchor]:
-    """The most recent ladder, best bucket first."""
+    """The most recent ladder (unordered; callers sort by bucket)."""
     as_of = session.scalar(select(func.max(CreditAnchor.as_of)))
     if as_of is None:
         return []
     rows = list(session.scalars(select(CreditAnchor).where(CreditAnchor.as_of == as_of)))
-    return sorted(rows, key=lambda row: -float(row.median_dd))
+    return rows
