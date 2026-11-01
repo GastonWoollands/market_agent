@@ -21,7 +21,7 @@ from analytics.drivers import TAPE_IDS as DRIVER_TAPE_IDS
 from analytics.drivers import as_dicts, rank_drivers
 from analytics.risk_on import CURVE_SERIES, RISK_ON_TICKERS, VIX_SERIES
 from analytics.rrg import BENCHMARK, TRAIL_WEEKS
-from api.credit import build_credit_curve, load_credit_series
+from api.credit import build_credit_curve, load_credit_series, load_ticker_credit
 from api.dynamics import HISTORY_DAYS as DYNAMICS_LOOKBACK
 from api.dynamics import build_dynamics, stored_from_rows
 from api.live import (
@@ -444,6 +444,7 @@ def ticker_detail(ticker: str, db: Session = Depends(get_db)) -> TickerResponse:
     me = self_input(page)
     if me is not None:
         page.peers = build_peers(me, load_peer_universe(db, me.sector, today=today))
+    page.credit = load_ticker_credit(db, items[0], today=today)
     return page
 
 

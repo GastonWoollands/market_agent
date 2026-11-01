@@ -24,6 +24,8 @@ from store.catalog import CatalogInstrument, FredSeriesItem
 from store.models import (
     BarDaily,
     BarIntraday,
+    CreditAnchor,
+    CreditImplied,
     EventItem,
     EvidencePack,
     Instrument,
@@ -1008,6 +1010,9 @@ def upsert_metric_ttm(session: Session, instrument_id: int, item: TtmSnapshot) -
         interest_expense=item.interest_expense,
         net_debt=item.net_debt,
         shares=item.shares,
+        current_liabilities=item.current_liabilities,
+        total_liabilities=item.total_liabilities,
+        deferred_revenue_current=item.deferred_revenue_current,
         source="sec",
     )
     stmt = stmt.on_conflict_do_update(
@@ -1022,6 +1027,9 @@ def upsert_metric_ttm(session: Session, instrument_id: int, item: TtmSnapshot) -
             "interest_expense": stmt.excluded.interest_expense,
             "net_debt": stmt.excluded.net_debt,
             "shares": stmt.excluded.shares,
+            "current_liabilities": stmt.excluded.current_liabilities,
+            "total_liabilities": stmt.excluded.total_liabilities,
+            "deferred_revenue_current": stmt.excluded.deferred_revenue_current,
             "source": stmt.excluded.source,
         },
     )
@@ -1204,8 +1212,7 @@ def latest_risk_stats(session: Session, instrument_ids: Sequence[int]) -> dict[i
     )
     stmt = select(RiskStats).join(
         latest,
-        (RiskStats.instrument_id == latest.c.instrument_id)
-        & (RiskStats.as_of == latest.c.as_of),
+        (RiskStats.instrument_id == latest.c.instrument_id) & (RiskStats.as_of == latest.c.as_of),
     )
     return {item.instrument_id: item for item in session.scalars(stmt)}
 
@@ -1511,9 +1518,7 @@ def opportunity_score_map(
     ranked = session.scalar(select(func.count()).select_from(OpportunityScore)) or 0
     if not instrument_ids:
         return {}, int(ranked)
-    stmt = select(OpportunityScore).where(
-        OpportunityScore.instrument_id.in_(list(instrument_ids))
-    )
+    stmt = select(OpportunityScore).where(OpportunityScore.instrument_id.in_(list(instrument_ids)))
     out: dict[int, OpportunityScore] = {}
     for item in session.scalars(stmt):
         current = out.get(item.instrument_id)
@@ -1543,3 +1548,54 @@ def news_for_name(
         match = or_(match, NewsItem.title.ilike(f"%{name_hint}%"))
     stmt = select(NewsItem).where(match).order_by(NewsItem.published_at.desc()).limit(limit)
     return list(session.execute(stmt).scalars())
+
+
+def upsert_credit_implied(session: Session, rows: Sequence[dict[str, object]]) -> int:
+    if not rows:
+        return 0
+    for start in range(0, len(rows), 500):
+        chunk = list(rows[start : start + 500])
+        stmt = insert(CreditImplied).values(chunk)
+        columns = [key for key in chunk[0] if key not in ("instrument_id", "as_of")]
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["instrument_id", "as_of"],
+            set_={key: getattr(stmt.excluded, key) for key in columns},
+        )
+        session.execute(stmt)
+    return len(rows)
+
+
+def replace_credit_anchors(session: Session, as_of: date, rows: Sequence[dict[str, object]]) -> int:
+    """One ladder per day: a re-run with a new calibration replaces it."""
+    session.execute(delete(CreditAnchor).where(CreditAnchor.as_of == as_of))
+    if rows:
+        session.execute(insert(CreditAnchor).values([{"as_of": as_of, **row} for row in rows]))
+    return len(rows)
+
+
+def latest_credit_implied(
+    session: Session, instrument_ids: Sequence[int]
+) -> dict[int, CreditImplied]:
+    if not instrument_ids:
+        return {}
+    latest = (
+        select(CreditImplied.instrument_id, func.max(CreditImplied.as_of).label("as_of"))
+        .where(CreditImplied.instrument_id.in_(list(instrument_ids)))
+        .group_by(CreditImplied.instrument_id)
+        .subquery()
+    )
+    stmt = select(CreditImplied).join(
+        latest,
+        (CreditImplied.instrument_id == latest.c.instrument_id)
+        & (CreditImplied.as_of == latest.c.as_of),
+    )
+    return {item.instrument_id: item for item in session.scalars(stmt)}
+
+
+def latest_credit_anchors(session: Session) -> list[CreditAnchor]:
+    """The most recent ladder (unordered; callers sort by bucket)."""
+    as_of = session.scalar(select(func.max(CreditAnchor.as_of)))
+    if as_of is None:
+        return []
+    rows = list(session.scalars(select(CreditAnchor).where(CreditAnchor.as_of == as_of)))
+    return rows

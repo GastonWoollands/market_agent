@@ -206,6 +206,42 @@ class ReturnStats(Base):
     instrument: Mapped[Instrument] = relationship()
 
 
+class CreditImplied(Base):
+    """Equity-implied credit bucket per name (`analytics/credit.py`, Northstar §9)."""
+
+    __tablename__ = "credit_implied"
+
+    instrument_id: Mapped[int] = mapped_column(
+        ForeignKey("instrument.id", ondelete="CASCADE"), primary_key=True
+    )
+    as_of: Mapped[date] = mapped_column(Date, primary_key=True)
+    statement_as_of: Mapped[date] = mapped_column(Date, nullable=False)
+    market_cap: Mapped[Decimal] = mapped_column(Numeric(20, 2), nullable=False)
+    default_point: Mapped[Decimal] = mapped_column(Numeric(20, 2), nullable=False)
+    vol_equity: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
+    asset_value: Mapped[Decimal] = mapped_column(Numeric(20, 2), nullable=False)
+    vol_asset: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
+    risk_free: Mapped[Decimal] = mapped_column(Numeric(10, 6), nullable=False)
+    dd: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
+    bucket: Mapped[str] = mapped_column(String(4), nullable=False)
+    position: Mapped[str] = mapped_column(String(8), nullable=False)
+    bucket_oas_bp: Mapped[Decimal | None] = mapped_column(Numeric(10, 1))
+    calibration_version: Mapped[str] = mapped_column(String(32), nullable=False)
+
+
+class CreditAnchor(Base):
+    """Median distance to default per rating bucket over the fitted calibration set."""
+
+    __tablename__ = "credit_anchor"
+
+    as_of: Mapped[date] = mapped_column(Date, primary_key=True)
+    bucket: Mapped[str] = mapped_column(String(4), primary_key=True)
+    median_dd: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
+    names: Mapped[int] = mapped_column(Integer, nullable=False)
+    oas_bp: Mapped[Decimal | None] = mapped_column(Numeric(10, 1))
+    calibration_version: Mapped[str] = mapped_column(String(32), nullable=False)
+
+
 class RiskStats(Base):
     """Per-name price risk from adjusted closes (`analytics/risk.py`)."""
 
@@ -355,6 +391,9 @@ class MetricTtm(Base):
     interest_expense: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
     net_debt: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
     shares: Mapped[Decimal | None] = mapped_column(Numeric(20, 4))
+    current_liabilities: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
+    total_liabilities: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
+    deferred_revenue_current: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
     source: Mapped[str] = mapped_column(String(16), nullable=False)
 
     instrument: Mapped[Instrument] = relationship()

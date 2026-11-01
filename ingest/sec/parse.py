@@ -115,6 +115,20 @@ LTD_CONCEPTS = (
     ("us-gaap", "LongTermDebtAndCapitalLeaseObligations"),
 )
 LIABILITIES_CONCEPTS = (("us-gaap", "Liabilities"), ("ifrs-full", "Liabilities"))
+LIAB_AND_EQUITY_CONCEPTS = (
+    ("us-gaap", "LiabilitiesAndStockholdersEquity"),
+    ("ifrs-full", "EquityAndLiabilities"),
+)
+# Equity incl. minority interest first: L&SE minus it leaves liabilities only.
+EQUITY_ALL_CONCEPTS = (
+    ("us-gaap", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"),
+    ("us-gaap", "StockholdersEquity"),
+    ("ifrs-full", "Equity"),
+)
+DEFERRED_REVENUE_CURRENT_CONCEPTS = (
+    ("us-gaap", "ContractWithCustomerLiabilityCurrent"),
+    ("us-gaap", "DeferredRevenueCurrent"),
+)
 RETAINED_CONCEPTS = (
     ("us-gaap", "RetainedEarningsAccumulatedDeficit"),
     ("us-gaap", "RetainedEarnings"),
@@ -220,6 +234,8 @@ def ttm_from_facts(
     if debt is not None and cash is not None:
         net_debt = debt - cash
     shares = _latest_shares(facts, as_of)
+    current_liabilities = _instant_on(facts, CURRENT_LIAB_CONCEPTS, as_of)
+    total_liabilities = _total_liabilities(facts, as_of)
     return MetricTtm(
         cik=cik,
         as_of=as_of,
@@ -232,7 +248,22 @@ def ttm_from_facts(
         interest_expense=interest,
         net_debt=net_debt,
         shares=shares,
+        current_liabilities=current_liabilities,
+        total_liabilities=total_liabilities,
+        deferred_revenue_current=_instant_on(facts, DEFERRED_REVENUE_CURRENT_CONCEPTS, as_of),
     )
+
+
+def _total_liabilities(facts: dict[str, Any], as_of: date) -> Decimal | None:
+    """`Liabilities`, else liabilities-and-equity minus equity (many filers skip the total)."""
+    total = _instant_on(facts, LIABILITIES_CONCEPTS, as_of)
+    if total is not None:
+        return total
+    both = _instant_on(facts, LIAB_AND_EQUITY_CONCEPTS, as_of)
+    equity = _instant_on(facts, EQUITY_ALL_CONCEPTS, as_of)
+    if both is None or equity is None:
+        return None
+    return both - equity
 
 
 def ttm_history_from_facts(
@@ -349,9 +380,7 @@ def _fy_at(facts: dict[str, Any], cik: str, as_of: date) -> MetricFy | None:
     )
 
 
-def _annual_ends(
-    facts: dict[str, Any], concepts: tuple[tuple[str, str], ...]
-) -> list[date]:
+def _annual_ends(facts: dict[str, Any], concepts: tuple[tuple[str, str], ...]) -> list[date]:
     ends: set[date] = set()
     lo, hi = ANNUAL_DAYS
     for taxonomy, concept in concepts:
@@ -590,9 +619,7 @@ def _last_quarters(quarters: dict[date, Decimal], count: int) -> list[tuple[date
     return picked
 
 
-def _aligned(
-    result: tuple[Decimal | None, date | None, str | None], as_of: date
-) -> Decimal | None:
+def _aligned(result: tuple[Decimal | None, date | None, str | None], as_of: date) -> Decimal | None:
     value, end, _method = result
     return value if end == as_of else None
 

@@ -124,6 +124,7 @@ Calendar still writes FOMC/CPI dates if Finnhub is unset; earnings just stay emp
 | 14 | `python -m jobs.compute_quant` | Gem-candidate flag + ratio snapshot (`quant_score`). F-score / Z are not computed |
 | 14a | `python -m jobs.ingest_sec_profile --resume` | Sector (SIC → `config/sic_sectors.yaml`) + SEC industry on `instrument`; ~1 SEC request per name, `--resume` skips names that have a sector |
 | 14b | `python -m jobs.compute_risk` | Vol 3m/1y, downside vol, beta vs SPY/QQQ, drawdown → `risk_stats` (valuation ∪ watchlist ∪ tape) |
+| 14c | `python -m jobs.compute_credit` | Merton DD from market cap, 1y vol and TTM liabilities; rating anchors from `config/credit_calibration.yaml` + FRED ICE BofA OAS → `credit_implied`, `credit_anchor` (valuation ∪ watchlist ∪ calibration names; Financials / Real Estate / captive finance excluded). Needs `ingest_sec`, `ingest_fred` (DGS1) first |
 
 After a schema upgrade that adds `metric_fy`, backfill without rebuilding membership:
 
@@ -269,6 +270,7 @@ python -m jobs.compute_quant
 python -m jobs.compute_scores
 python -m jobs.ingest_sec_profile --resume   # new names only; drop --resume after editing sic_sectors.yaml
 python -m jobs.compute_risk
+python -m jobs.compute_credit
 python -m jobs.generate_memos
 ```
 
@@ -352,6 +354,7 @@ Both write to `outlook_report` table. UI displays latest for the date.
 | `jobs.compute_scores` | `opportunity_score` (prunes names outside the run) | — |
 | `jobs.ingest_sec_profile` | `instrument.sector` / `instrument.industry` | `--tickers` (any stored name, also outside every universe), `--resume` |
 | `jobs.compute_risk` | `risk_stats` | — |
+| `jobs.compute_credit` | `credit_implied`, `credit_anchor` | — |
 | `jobs.generate_memos` | `opportunity_memo` | `--template`, `--provider`, `--model` |
 | `jobs.ingest_intraday` | `bar_intraday` (5m) | `--tickers`, `--resume` |
 | `jobs.backfill` | same as yahoo / intraday / fred | `yahoo\|intraday\|fred` plus the flags above |
