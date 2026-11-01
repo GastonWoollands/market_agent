@@ -242,6 +242,82 @@ class CreditAnchor(Base):
     calibration_version: Mapped[str] = mapped_column(String(32), nullable=False)
 
 
+class OptionChainSnapshot(Base):
+    """Yahoo chain rows for the options scope, strikes within the stored moneyness band.
+
+    `iv` is ours (Black-Scholes on the bid/ask mid, out-of-the-money side only);
+    `vendor_iv` is Yahoo's, kept for reference.
+    """
+
+    __tablename__ = "option_chain_snapshot"
+
+    instrument_id: Mapped[int] = mapped_column(
+        ForeignKey("instrument.id", ondelete="CASCADE"), primary_key=True
+    )
+    as_of: Mapped[date] = mapped_column(Date, primary_key=True)
+    expiry: Mapped[date] = mapped_column(Date, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(1), primary_key=True)
+    strike: Mapped[Decimal] = mapped_column(Numeric(14, 4), primary_key=True)
+    bid: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
+    ask: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
+    last: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
+    volume: Mapped[int | None] = mapped_column(Integer)
+    open_interest: Mapped[int | None] = mapped_column(Integer)
+    vendor_iv: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    iv: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    last_trade_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        CheckConstraint("kind IN ('C', 'P')", name="ck_option_chain_snapshot_kind"),
+    )
+
+
+class OptionStats(Base):
+    """Daily options read per name (`analytics/options.py`, Northstar §9)."""
+
+    __tablename__ = "option_stats"
+
+    instrument_id: Mapped[int] = mapped_column(
+        ForeignKey("instrument.id", ondelete="CASCADE"), primary_key=True
+    )
+    as_of: Mapped[date] = mapped_column(Date, primary_key=True)
+    spot: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    quote_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    risk_free: Mapped[Decimal] = mapped_column(Numeric(10, 6), nullable=False)
+    atm_iv_30d: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    atm_iv_90d: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    term_slope: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    skew_30d: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    rv_1y: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    iv_rv: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    call_volume: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    put_volume: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    call_oi: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    put_oi: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    pc_volume: Mapped[Decimal | None] = mapped_column(Numeric(12, 4))
+    pc_oi: Mapped[Decimal | None] = mapped_column(Numeric(12, 4))
+    earnings_date: Mapped[date | None] = mapped_column(Date)
+    earnings_estimate: Mapped[bool | None] = mapped_column(Boolean)
+    move_expiry: Mapped[date | None] = mapped_column(Date)
+    expected_move: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    expiries: Mapped[int] = mapped_column(Integer, nullable=False)
+    contracts: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class OptionsMarketStats(Base):
+    """Cboe daily market statistics per product (Cboe exchange volume, not all US venues)."""
+
+    __tablename__ = "options_market_stats"
+
+    as_of: Mapped[date] = mapped_column(Date, primary_key=True)
+    product: Mapped[str] = mapped_column(String(16), primary_key=True)
+    pc_ratio: Mapped[Decimal | None] = mapped_column(Numeric(10, 4))
+    call_volume: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    put_volume: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    call_oi: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    put_oi: Mapped[int] = mapped_column(BigInteger, nullable=False)
+
+
 class RiskStats(Base):
     """Per-name price risk from adjusted closes (`analytics/risk.py`)."""
 

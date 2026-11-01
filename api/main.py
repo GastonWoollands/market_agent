@@ -42,6 +42,7 @@ from api.live import (
 from api.opportunities import DEFAULT_SORT as OPP_SORT
 from api.opportunities import STALE_AFTER_DAYS as OPP_STALE
 from api.opportunities import build_opportunities
+from api.options import load_market_options, load_ticker_options
 from api.outlook import outlook_from_store
 from api.peers import build_peers, load_peer_universe, self_input
 from api.schemas import (
@@ -51,6 +52,7 @@ from api.schemas import (
     HealthResponse,
     JobStatus,
     LiveResponse,
+    MarketOptionsResponse,
     OpportunityResponse,
     OutlookResponse,
     SearchHit,
@@ -445,6 +447,7 @@ def ticker_detail(ticker: str, db: Session = Depends(get_db)) -> TickerResponse:
     if me is not None:
         page.peers = build_peers(me, load_peer_universe(db, me.sector, today=today))
     page.credit = load_ticker_credit(db, items[0], today=today)
+    page.options = load_ticker_options(db, items[0].instrument.id)
     return page
 
 
@@ -452,6 +455,11 @@ def ticker_detail(ticker: str, db: Session = Depends(get_db)) -> TickerResponse:
 def credit_curve(db: Session = Depends(get_db)) -> CreditCurveResponse:
     today = date.today()
     return build_credit_curve(load_credit_series(db, today=today), today=today)
+
+
+@app.get("/options/market", response_model=MarketOptionsResponse)
+def options_market(db: Session = Depends(get_db)) -> MarketOptionsResponse:
+    return load_market_options(db, today=date.today())
 
 
 @app.get("/compare", response_model=CompareResponse)

@@ -14,6 +14,10 @@ tape:
     - { ticker: "^DJI", yahoo: "^DJI", name: Dow Jones Industrial Average, asset_class: index, role: index }
     - { ticker: "^RUT", yahoo: "^RUT", name: Russell 2000, asset_class: index, role: index }
     - { ticker: "^VIX", yahoo: "^VIX", name: CBOE Volatility Index, asset_class: index, role: vol }
+    - { ticker: "^VIX9D", yahoo: "^VIX9D", name: CBOE S&P 500 9-Day Volatility, asset_class: index, role: vol }
+    - { ticker: "^VIX3M", yahoo: "^VIX3M", name: CBOE S&P 500 3-Month Volatility, asset_class: index, role: vol }
+    - { ticker: "^VVIX", yahoo: "^VVIX", name: CBOE VIX of VIX, asset_class: index, role: vol }
+    - { ticker: "^SKEW", yahoo: "^SKEW", name: CBOE SKEW Index, asset_class: index, role: vol }
     - { ticker: XLK, yahoo: XLK, name: Information Technology, asset_class: etf, sector: Information Technology, role: sector }
     - { ticker: XLF, yahoo: XLF, name: Financials, asset_class: etf, sector: Financials, role: sector }
     - { ticker: XLV, yahoo: XLV, name: Health Care, asset_class: etf, sector: Health Care, role: sector }
