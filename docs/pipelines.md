@@ -161,11 +161,25 @@ Drop `--template` when an LLM key is set.
 
 Adding a ticker in the UI hydrates that name on demand. This job is the batch path.
 
+### G — Options (Phase 1.12)
+
+| # | Command | Why |
+|---|---------|-----|
+| 19 | `python -m jobs.ingest_cboe --backfill` | Cboe daily put/call JSON for every stored SPY session since 2025-03-03 → `options_market_stats` (~420 files, ~7 min). Without `--backfill`: the last 10 sessions not stored |
+| 20 | `python -m jobs.ingest_options` | Yahoo chains for watchlist ∪ Opportunities top 25 ∪ SPY / QQQ / IWM ∪ sector and group ETFs (~45 names, 4 monthlies each, strikes ±30% of spot) → `option_chain_snapshot` + `option_stats`. Needs `ingest_yahoo` (1y realized vol), `ingest_fred` (DGS3MO), `compute_scores` (top 25) |
+
+The vol indices ^VIX9D / ^VIX3M / ^VVIX / ^SKEW are tape names: `seed_tape` + `ingest_yahoo` load them.
+
+Run `ingest_options` before the close (~15:45 ET). After hours and on weekends Yahoo shows
+the widened closing quotes: thin ETF chains then fall back to same-session trades and some
+30d IVs come back empty. `ingest_cboe` after 18:00 ET, when Cboe publishes the day's file.
+
 Make equivalent of A–F:
 
 ```bash
 make db migrate seed yahoo fred regime poly dynamics news fed-rss calendar pack outlook \
-  sec sec-profile yahoo-val valuation quant scores risk memos yahoo-watch intraday
+  sec sec-profile yahoo-val valuation quant scores risk memos yahoo-watch intraday \
+  cboe-backfill options
 
 make yahoo yahoo-watch fred regime poly dynamics news fed-rss calendar pack outlook
 ```
@@ -237,12 +251,19 @@ python -m jobs.ingest_yahoo          # quotes when you want a fresher tape
 python -m jobs.ingest_yahoo --universe watchlist   # same for watchlist names
 ```
 
+### Before the close (~15:45)
+
+```bash
+python -m jobs.ingest_options
+```
+
 ### After the close (~16:30)
 
 ```bash
 python -m jobs.ingest_yahoo
 python -m jobs.ingest_yahoo --universe watchlist
 python -m jobs.compute_dynamics
+python -m jobs.ingest_cboe          # after 18:00 ET; today's file 403s before that
 ```
 
 After a Chair speech (same stored Outlook slice; no Live-time LLM):
@@ -355,6 +376,8 @@ Both write to `outlook_report` table. UI displays latest for the date.
 | `jobs.ingest_sec_profile` | `instrument.sector` / `instrument.industry` | `--tickers` (any stored name, also outside every universe), `--resume` |
 | `jobs.compute_risk` | `risk_stats` | — |
 | `jobs.compute_credit` | `credit_implied`, `credit_anchor` | — |
+| `jobs.ingest_options` | `option_chain_snapshot`, `option_stats` | `--tickers` (subset of the options scope) |
+| `jobs.ingest_cboe` | `options_market_stats` | `--backfill` |
 | `jobs.generate_memos` | `opportunity_memo` | `--template`, `--provider`, `--model` |
 | `jobs.ingest_intraday` | `bar_intraday` (5m) | `--tickers`, `--resume` |
 | `jobs.backfill` | same as yahoo / intraday / fred | `yahoo\|intraday\|fred` plus the flags above |

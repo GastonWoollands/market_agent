@@ -38,7 +38,7 @@ This file is **not** the product contract. If intent, sources, universes, pages,
 | 1.9 | Rotation panels | Not started | Cross-asset RRG, sector breadth + median valuation, intra-sector RRG, factor ETFs |
 | 1.10 | Peer comps + credit curve | **Done** (branch `feat/peer-comps-credit-curve`) | Ticker-page peer table and EV/EBITDA vs growth scatter (no new data); FRED rating-bucket OAS / yields, DGS1, Baa–Aaa, NFCI, STLFSI4 |
 | 1.11 | Equity-implied credit bucket | **Done** (branch `feat/implied-credit`) | Merton DD → implied rating bucket on the FRED curve; `config/credit_calibration.yaml` reviewed before ship |
-| 1.12 | Options read | Not started | Yahoo chains (scoped names), ^VIX9D / ^VIX3M / ^VVIX / ^SKEW, Cboe market put/call |
+| 1.12 | Options read | **Done** (branch `feat/options-read`) | Yahoo chains (scoped names), ^VIX9D / ^VIX3M / ^VVIX / ^SKEW, Cboe market put/call |
 | 1.13 | Kalshi + CFTC | Not started | S&P / Nasdaq range distribution, macro odds beside Polymarket; TFF positioning |
 | 1.14 | Street consensus + short interest | Not started | Yahoo recommendation / target / revisions; FINRA short interest + days to cover |
 | 2 | Gems universe D | Not started | Flag only on B; membership + Yahoo gems later. No F-score gate |
@@ -343,14 +343,21 @@ Method in Northstar §9. Spike (2026-10-31, scratch only, 65 rated names + CRWV 
 
 **Operator check:** `/t/CRWV` "Below CCC" vs S&P B+; `/t/MSFT` AAA; `/t/ORCL` BB vs BBB-; `/t/V` "Not scored".
 
-**Known limits:** whole Financials / Real Estate sectors are excluded, which also drops payment networks (V, MA, PYPL) that Merton could score; narrow the exclusion to banks / insurers / REITs by industry if that matters. Low-vol buyback-levered issuers read too safe. Re-review `config/credit_calibration.yaml` when agencies move (rows carry as-of dates).
+**Known limits:** whole Financials / Real Estate sectors are excluded, which also drops payment networks (V, MA, PYPL) that Merton could score; narrow the exclusion to banks / insurers / REITs by industry if that matters. Operator decision 2026-11-01: keep it sector-wide for now; do not narrow without asking. Low-vol buyback-levered issuers read too safe. Re-review `config/credit_calibration.yaml` when agencies move (rows carry as-of dates).
 
-## Phase 1.12 — Options read
+## Phase 1.12 — Options read (done)
 
 - Chains for watchlist + Opportunities top 25 + SPY / QQQ / IWM / sector ETFs, ~4 monthly expiries, within the Yahoo 2 req/s budget (one request per expiry).
 - `option_stats` daily per name: ATM IV 30d, IV / RV, P/C volume and OI, 25d skew proxy, term slope, expected move to earnings. IV rank after 252 stored sessions only.
 - Tape: ^VIX9D, ^VIX3M, ^VVIX, ^SKEW. Cboe daily JSON → `options_market_stats` with a date backfill (≥ 2025-03 verified).
 - Visuals: IV term structure, skew curve, VIX curve slope, equity P/C history.
+- Shipped: `ingest/cboe/` (daily JSON, six products validated, 403 = no file), `YahooClient.fetch_option_expiries / fetch_option_chain` on the same token bucket, `analytics/options.py` (Black-Scholes IV on OTM mids, monthly picker, total-variance term interpolation, skew, expected move, IV rank), migration 0022 (`option_chain_snapshot`, `option_stats`, `options_market_stats`), jobs `ingest_options` and `ingest_cboe`, `options` block on `GET /ticker`, `GET /options/market`, `OptionsPanel` (Ticker) and `MarketOptionsPanel` (Dynamics).
+- First run (Sat 2026-11-01, close 2026-10-30): 45 names in ~2 min, ~11k chain rows; 42 with a 30d IV, 30 with a skew. Cboe backfill 2025-03-03 → 2026-10-30, 420 sessions, none missing. SPY 30d IV 16.7% (VIX 19.4), skew +13 pts; VIX ÷ VIX3M 0.93; equity P/C 0.66 (81st percentile of the year).
+- Quote cleaning found on that run: Yahoo IV on deep ITM rows reached 235%; thin sector ETFs quote $3–5 wide after the close; XLE carried a Dec call bid at 22% of spot a year after its last trade. Hence OTM only, spread ≤ ½ mid (10c floor) else a same-session print, price monotone away from spot, and a strike-neighbour IV outlier cut.
+
+**Operator check:** `/t/SPY` 30d IV a few points under VIX, positive skew; `/t/MSFT` expected move blank until earnings are within 45 days; `/dynamics` "What is the options market pricing?" ratio below 1 on a calm day.
+
+**Known limits:** run before the close; weekend runs leave some ETF IVs empty. Put/call per name counts the stored monthlies ±30%, not the whole chain. The expected move covers spot to the first expiry after earnings, so a monthly far from the date overstates the event. IV rank is blank until 252 sessions are stored (~Nov 2027). Cboe ratios are Cboe-listed volume only.
 
 ## Phase 1.13 — Kalshi + CFTC
 
@@ -426,6 +433,7 @@ Next concrete PR: **Phase 1.9 rotation panels**, then **Phase 3 Book** (with 3.5
 | 2026-10-31 | Phases 1.6–1.9 added after a single-name deep-dive exposed TTM / debt defects. Northstar: Ticker + Compare pages; interest coverage in scope. |
 | 2026-10-31 | Phase 1.6 merged (PR #13). Phase 1.7: SIC sectors, `risk_stats`, EBIT / interest TTM, additive partial `ingest_sec`. |
 | 2026-10-31 | Phase 1.7 merged (PR #14). Phase 1.8: Ticker + Compare pages and APIs; facts refreshed for non-members. |
+| 2026-11-01 | Phase 1.11 merged (PR #18). Phase 1.12: options read (Yahoo chains + `option_stats`, vol indices on the tape, Cboe put/call with backfill; Ticker + Dynamics panels). |
 | 2026-10-31 | Phase 1.11: equity-implied credit bucket (verified 106-name calibration set, `compute_credit`, Ticker panel). |
 | 2026-10-31 | Phase 1.10: peer comps + scatter on Ticker, FRED rating curve (`GET /credit/curve`), `in_pack` flag. |
 | 2026-10-31 | Phase 1.8 merged (PR #15). Market-signals contract: Phases 1.10–1.14 (peer comps, credit curve, implied credit bucket, options, Kalshi, CFTC, Cboe, consensus, short interest). Merton spike results recorded; single-name CDS and per-bond TRACE out (licensed). |

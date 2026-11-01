@@ -3,9 +3,18 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from ingest.yahoo.errors import YahooParseError
-from store.canonical import DailyBar, IntradayBar, QuoteSnapshot
+from store.canonical import (
+    DailyBar,
+    IntradayBar,
+    OptionQuote,
+    OptionUnderlying,
+    QuoteSnapshot,
+)
+
+ET = ZoneInfo("America/New_York")
 
 
 def _dec(value: Any) -> Decimal | None:
@@ -151,3 +160,77 @@ def snapshot_from_chart_meta(symbol: str, meta: dict[str, Any] | None) -> QuoteS
         market_state=payload.get("marketState"),
         as_of=as_of,
     )
+
+
+def option_quotes_from_frame(
+    frame: Any, symbol: str, expiry: date, kind: str
+) -> list[OptionQuote]:
+    """One side of `option_chain(expiry)`. Rows without a strike are dropped."""
+    if frame is None or getattr(frame, "empty", True):
+        return []
+    quotes: list[OptionQuote] = []
+    for row in frame.to_dict("records"):
+        strike = _dec(row.get("strike"))
+        if strike is None or strike <= 0:
+            continue
+        last_trade = row.get("lastTradeDate")
+        quotes.append(
+            OptionQuote(
+                symbol=symbol,
+                expiry=expiry,
+                kind=kind,
+                strike=strike,
+                bid=_dec(row.get("bid")),
+                ask=_dec(row.get("ask")),
+                last=_dec(row.get("lastPrice")),
+                volume=_int(row.get("volume")),
+                open_interest=_int(row.get("openInterest")),
+                vendor_iv=_dec(row.get("impliedVolatility")),
+                last_trade_at=_optional_as_of(last_trade),
+            )
+        )
+    return quotes
+
+
+def underlying_from_quote(symbol: str, quote: dict[str, Any] | None) -> OptionUnderlying:
+    """Spot, quote time, dividend yield and the next earnings date from the chain's quote."""
+    quote = quote or {}
+    spot = _dec(quote.get("regularMarketPrice"))
+    stamp = quote.get("regularMarketTime")
+    if spot is None or spot <= 0 or not isinstance(stamp, int | float):
+        raise YahooParseError(f"{symbol}: option chain has no underlying price")
+    quote_at = datetime.fromtimestamp(stamp, tz=UTC)
+    as_of = quote_at.astimezone(ET).date()
+    dividend = _dec(quote.get("dividendYield"))  # percent on this endpoint
+    earnings: date | None = None
+    for key in ("earningsTimestamp", "earningsTimestampStart"):
+        value = quote.get(key)
+        if isinstance(value, int | float):
+            day = datetime.fromtimestamp(value, tz=UTC).astimezone(ET).date()
+            if day >= as_of:
+                earnings = day
+                break
+    estimate = quote.get("isEarningsDateEstimate")
+    return OptionUnderlying(
+        symbol=symbol,
+        as_of=as_of,
+        spot=spot,
+        quote_at=quote_at,
+        dividend_yield=None if dividend is None else dividend / 100,
+        earnings_date=earnings,
+        earnings_estimate=estimate if isinstance(estimate, bool) and earnings else None,
+    )
+
+
+def _int(value: Any) -> int | None:
+    number = _dec(value)
+    return None if number is None else int(number)
+
+
+def _optional_as_of(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    try:
+        return _as_of(value)
+    except Exception:
+        return None

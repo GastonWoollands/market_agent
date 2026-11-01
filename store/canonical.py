@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -49,6 +50,50 @@ class MacroPoint(BaseModel):
     series_id: str
     date: date
     value: Decimal
+
+
+class CboeProductStat(BaseModel):
+    """One Cboe product's day: put/call ratio, volume and open interest (Cboe exchange only)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    as_of: date
+    product: str
+    pc_ratio: Decimal | None = None
+    call_volume: int
+    put_volume: int
+    call_oi: int
+    put_oi: int
+
+
+class OptionQuote(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    symbol: str
+    expiry: date
+    kind: Literal["C", "P"]
+    strike: Decimal
+    bid: Decimal | None = None
+    ask: Decimal | None = None
+    last: Decimal | None = None
+    volume: int | None = None
+    open_interest: int | None = None
+    vendor_iv: Decimal | None = None
+    last_trade_at: datetime | None = None
+
+
+class OptionUnderlying(BaseModel):
+    """Underlying quote that ships with the chain: spot, its time, dividend yield, earnings."""
+
+    model_config = ConfigDict(frozen=True)
+
+    symbol: str
+    as_of: date
+    spot: Decimal
+    quote_at: datetime
+    dividend_yield: Decimal | None = None
+    earnings_date: date | None = None
+    earnings_estimate: bool | None = None
 
 
 class OddsPoint(BaseModel):
