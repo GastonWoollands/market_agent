@@ -871,6 +871,58 @@ export type TickerCredit = {
   anchors: CreditAnchorRow[];
 };
 
+export type OptionTermPoint = { expiry: string; dte: number; atm_iv: number };
+export type OptionSmilePoint = { moneyness: number; iv: number; kind: "C" | "P" };
+
+export type TickerOptions = {
+  as_of: string | null;
+  spot: number | null;
+  atm_iv_30d: number | null;
+  atm_iv_90d: number | null;
+  term_slope: number | null;
+  skew_30d: number | null;
+  rv_1y: number | null;
+  iv_rv: number | null;
+  iv_rank: number | null;
+  iv_sessions: number;
+  pc_volume: number | null;
+  pc_oi: number | null;
+  call_volume: number | null;
+  put_volume: number | null;
+  earnings_date: string | null;
+  earnings_estimate: boolean | null;
+  move_expiry: string | null;
+  expected_move: number | null;
+  term: OptionTermPoint[];
+  smile_expiry: string | null;
+  smile: OptionSmilePoint[];
+  unavailable: string | null;
+};
+
+export type MarketOptions = {
+  as_of: string | null;
+  vix_curve: { ticker: string; label: string; days: number; value: number | null }[];
+  vix_ratio: number | null;
+  vix_ratio_history: { date: string; ratio: number }[];
+  indices: {
+    ticker: string;
+    label: string;
+    value: number | null;
+    change_1d: number | null;
+    pct_1y: number | null;
+  }[];
+  put_call_as_of: string | null;
+  put_call: { product: string; label: string; ratio: number | null; pct_1y: number | null }[];
+  put_call_history: {
+    date: string;
+    equity: number | null;
+    index: number | null;
+    total: number | null;
+    spx: number | null;
+    equity_10d: number | null;
+  }[];
+};
+
 export type TickerTape = {
   stale: boolean;
   identity: TickerIdentity | null;
@@ -884,6 +936,7 @@ export type TickerTape = {
   news: TickerNews[];
   peers: TickerPeers | null;
   credit: TickerCredit | null;
+  options: TickerOptions | null;
   hint: string | null;
 };
 
@@ -914,6 +967,10 @@ export async function fetchTicker(ticker: string): Promise<Fetched<TickerTape>> 
 
 export async function fetchCreditCurve(): Promise<Fetched<CreditCurve>> {
   return fetchTyped<CreditCurve>("/credit/curve");
+}
+
+export async function fetchMarketOptions(): Promise<Fetched<MarketOptions>> {
+  return fetchTyped<MarketOptions>("/options/market");
 }
 
 export async function fetchCompare(tickers: string[]): Promise<Fetched<CompareTape>> {

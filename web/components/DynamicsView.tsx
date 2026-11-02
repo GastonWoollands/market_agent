@@ -3,10 +3,11 @@ import { Fragment } from "react";
 import { StaleBadge } from "@/components/StaleBadge";
 import { CorrHeatmap } from "@/components/CorrHeatmap";
 import { LeadLagPanel } from "@/components/LeadLagPanel";
+import { MarketOptionsPanel } from "@/components/MarketOptionsPanel";
 import { RelativeOverlay } from "@/components/RelativeOverlay";
 import { RotationPanel } from "@/components/RotationPanel";
 import { cn } from "@/lib/cn";
-import type { DynamicsMember, DynamicsTape } from "@/lib/api";
+import type { DynamicsMember, DynamicsTape, MarketOptions } from "@/lib/api";
 import {
   QUADRANT_COLOR,
   QUADRANT_TEXT,
@@ -15,7 +16,15 @@ import {
   nameByTicker,
 } from "@/lib/dynamics";
 
-export function DynamicsView({ tape, asOf }: { tape: DynamicsTape | null; asOf?: string }) {
+export function DynamicsView({
+  tape,
+  asOf,
+  options = null,
+}: {
+  tape: DynamicsTape | null;
+  asOf?: string;
+  options?: MarketOptions | null;
+}) {
   if (tape == null) {
     return <p className="text-sm text-mute">Dynamics API unreachable. Start uvicorn, then refresh.</p>;
   }
@@ -66,6 +75,15 @@ export function DynamicsView({ tape, asOf }: { tape: DynamicsTape | null; asOf?:
           <RotationPanel members={tape.members} benchmark={tape.benchmark} />
         </section>
       )}
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-medium">What is the options market pricing?</h2>
+        <p className="max-w-3xl text-[13px] leading-6 text-mute">
+          The VIX term structure and Cboe put/call ratios: fear versus calm, and how much hedging
+          is being bought. As of {options?.as_of ?? "no rows"}.
+        </p>
+        <MarketOptionsPanel market={options} />
+      </section>
 
       {tape.members.length > 0 ? (
         <div className="grid gap-12 lg:grid-cols-2 lg:items-start">

@@ -778,6 +778,45 @@ class TickerCredit(BaseModel):
     anchors: list[CreditAnchorRow] = Field(default_factory=list)
 
 
+class OptionTermPoint(BaseModel):
+    expiry: date
+    dte: int
+    atm_iv: float
+
+
+class OptionSmilePoint(BaseModel):
+    moneyness: float
+    iv: float
+    kind: Literal["C", "P"]
+
+
+class TickerOptions(BaseModel):
+    """Options read from the stored chain. `unavailable` explains an empty block."""
+
+    as_of: date | None = None
+    spot: float | None = None
+    atm_iv_30d: float | None = None
+    atm_iv_90d: float | None = None
+    term_slope: float | None = None
+    skew_30d: float | None = None
+    rv_1y: float | None = None
+    iv_rv: float | None = None
+    iv_rank: float | None = None
+    iv_sessions: int = 0
+    pc_volume: float | None = None
+    pc_oi: float | None = None
+    call_volume: int | None = None
+    put_volume: int | None = None
+    earnings_date: date | None = None
+    earnings_estimate: bool | None = None
+    move_expiry: date | None = None
+    expected_move: float | None = None
+    term: list[OptionTermPoint] = Field(default_factory=list)
+    smile_expiry: date | None = None
+    smile: list[OptionSmilePoint] = Field(default_factory=list)
+    unavailable: str | None = None
+
+
 class TickerResponse(BaseModel):
     stale: bool = True
     identity: TickerIdentity | None = None
@@ -791,6 +830,7 @@ class TickerResponse(BaseModel):
     news: list[TickerNews] = Field(default_factory=list)
     peers: TickerPeers | None = None
     credit: TickerCredit | None = None
+    options: TickerOptions | None = None
     hint: str | None = None
 
 
@@ -834,3 +874,50 @@ class CreditCurveResponse(BaseModel):
     nfci_as_of: date | None = None
     stlfsi: float | None = None
     stlfsi_as_of: date | None = None
+
+
+class VixTermPoint(BaseModel):
+    ticker: str
+    label: str
+    days: int
+    value: float | None = None
+
+
+class VolIndexRow(BaseModel):
+    ticker: str
+    label: str
+    value: float | None = None
+    change_1d: float | None = None
+    pct_1y: float | None = None
+
+
+class VixRatioPoint(BaseModel):
+    date: date
+    ratio: float
+
+
+class PutCallPoint(BaseModel):
+    date: date
+    equity: float | None = None
+    index: float | None = None
+    total: float | None = None
+    spx: float | None = None
+    equity_10d: float | None = None
+
+
+class PutCallLatest(BaseModel):
+    product: str
+    label: str
+    ratio: float | None = None
+    pct_1y: float | None = None
+
+
+class MarketOptionsResponse(BaseModel):
+    as_of: date | None = None
+    vix_curve: list[VixTermPoint] = Field(default_factory=list)
+    vix_ratio: float | None = None
+    vix_ratio_history: list[VixRatioPoint] = Field(default_factory=list)
+    indices: list[VolIndexRow] = Field(default_factory=list)
+    put_call_as_of: date | None = None
+    put_call: list[PutCallLatest] = Field(default_factory=list)
+    put_call_history: list[PutCallPoint] = Field(default_factory=list)

@@ -38,6 +38,9 @@ from store.models import (
     OddsSnapshot,
     OpportunityMemoRow,
     OpportunityScore,
+    OptionChainSnapshot,
+    OptionsMarketStats,
+    OptionStats,
     OutlookReport,
     PolicyItem,
     QuantScore,
@@ -1599,3 +1602,115 @@ def latest_credit_anchors(session: Session) -> list[CreditAnchor]:
         return []
     rows = list(session.scalars(select(CreditAnchor).where(CreditAnchor.as_of == as_of)))
     return rows
+
+
+def top_opportunity_instrument_ids(session: Session, limit: int) -> list[int]:
+    """Instrument ids of the latest Opportunities run, best rank first."""
+    as_of = session.scalar(select(func.max(OpportunityScore.as_of)))
+    if as_of is None:
+        return []
+    stmt = (
+        select(OpportunityScore.instrument_id)
+        .where(OpportunityScore.as_of == as_of)
+        .order_by(OpportunityScore.rank)
+        .limit(limit)
+    )
+    return [int(item) for item in session.scalars(stmt)]
+
+
+def _upsert_chunks(
+    session: Session, model: Any, rows: Sequence[dict[str, object]], keys: Sequence[str]
+) -> int:
+    if not rows:
+        return 0
+    for start in range(0, len(rows), 1000):
+        chunk = list(rows[start : start + 1000])
+        stmt = insert(model).values(chunk)
+        columns = [key for key in chunk[0] if key not in keys]
+        stmt = stmt.on_conflict_do_update(
+            index_elements=list(keys),
+            set_={key: getattr(stmt.excluded, key) for key in columns},
+        )
+        session.execute(stmt)
+    return len(rows)
+
+
+def replace_option_chain(
+    session: Session, instrument_id: int, as_of: date, rows: Sequence[dict[str, object]]
+) -> int:
+    """One chain per name per session: a re-run replaces the day's rows."""
+    session.execute(
+        delete(OptionChainSnapshot).where(
+            (OptionChainSnapshot.instrument_id == instrument_id)
+            & (OptionChainSnapshot.as_of == as_of)
+        )
+    )
+    return _upsert_chunks(
+        session,
+        OptionChainSnapshot,
+        [{"instrument_id": instrument_id, "as_of": as_of, **row} for row in rows],
+        ("instrument_id", "as_of", "expiry", "kind", "strike"),
+    )
+
+
+def upsert_option_stats(session: Session, rows: Sequence[dict[str, object]]) -> int:
+    return _upsert_chunks(session, OptionStats, rows, ("instrument_id", "as_of"))
+
+
+def upsert_options_market_stats(session: Session, rows: Sequence[dict[str, object]]) -> int:
+    return _upsert_chunks(session, OptionsMarketStats, rows, ("as_of", "product"))
+
+
+def latest_option_stats(session: Session, instrument_id: int) -> OptionStats | None:
+    return session.scalar(
+        select(OptionStats)
+        .where(OptionStats.instrument_id == instrument_id)
+        .order_by(OptionStats.as_of.desc())
+        .limit(1)
+    )
+
+
+def option_iv_history(
+    session: Session, instrument_id: int, *, before: date, limit: int = 252
+) -> list[Decimal]:
+    """Stored 30d ATM IVs up to and including `before`, oldest first."""
+    stmt = (
+        select(OptionStats.atm_iv_30d)
+        .where(
+            (OptionStats.instrument_id == instrument_id)
+            & (OptionStats.as_of <= before)
+            & OptionStats.atm_iv_30d.is_not(None)
+        )
+        .order_by(OptionStats.as_of.desc())
+        .limit(limit)
+    )
+    return list(reversed(list(session.scalars(stmt))))
+
+
+def option_chain_rows(
+    session: Session, instrument_id: int, as_of: date
+) -> list[OptionChainSnapshot]:
+    stmt = (
+        select(OptionChainSnapshot)
+        .where(
+            (OptionChainSnapshot.instrument_id == instrument_id)
+            & (OptionChainSnapshot.as_of == as_of)
+        )
+        .order_by(OptionChainSnapshot.expiry, OptionChainSnapshot.strike)
+    )
+    return list(session.scalars(stmt))
+
+
+def options_market_dates(session: Session) -> set[date]:
+    return set(session.scalars(select(OptionsMarketStats.as_of).distinct()))
+
+
+def options_market_history(
+    session: Session, *, start: date
+) -> list[OptionsMarketStats]:
+    stmt = (
+        select(OptionsMarketStats)
+        .where(OptionsMarketStats.as_of >= start)
+        .order_by(OptionsMarketStats.as_of, OptionsMarketStats.product)
+    )
+    return list(session.scalars(stmt))
