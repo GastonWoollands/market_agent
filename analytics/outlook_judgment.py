@@ -411,7 +411,7 @@ def _policy_read(odds: list[dict[str, Any]]) -> tuple[str | None, str | None]:
         None,
     )
     if front is not None and front.get("top_outcome"):
-        policy = _front_policy(str(front["top_outcome"]))
+        policy = _front_policy(str(front["top_outcome"])) or policy
     odds_read = "; ".join(bits[:2]) if bits else None
     return policy, odds_read
 

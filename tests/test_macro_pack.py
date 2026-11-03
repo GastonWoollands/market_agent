@@ -152,6 +152,30 @@ def test_judgment_policy_follows_front_meeting_not_later_hold() -> None:
     assert judgment["regime"]["policy"] == "hike_base"
 
 
+def test_judgment_policy_keeps_hold_when_front_outcome_is_unclassified() -> None:
+    judgment = build_judgment(
+        facts={},
+        macro=[],
+        odds=[
+            {
+                "slot": "next_fomc",
+                "label": "Fed path",
+                "top_outcome": "Hold",
+                "top_implied_yes": 0.97,
+            },
+            {
+                "slot": "front_fomc",
+                "label": "Next FOMC",
+                "top_outcome": "3.75-4.00%",
+                "top_implied_yes": 0.6,
+            },
+        ],
+        events=[],
+        risk_on=None,
+    )
+    assert judgment["regime"]["policy"] == "hold_base"
+
+
 def test_judgment_ranks_fomc_above_ism_and_speech_attaches_dgs2() -> None:
     judgment = build_judgment(
         facts={"dgs2": 4.31},

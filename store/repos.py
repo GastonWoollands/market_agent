@@ -1810,7 +1810,9 @@ class FreshnessDates:
     outlook_as_of: date | None
 
 
-def freshness_dates(session: Session, *, ttm_cutoff: date) -> FreshnessDates:
+def freshness_dates(
+    session: Session, *, ttm_cutoff: date, quote_tickers: Sequence[str]
+) -> FreshnessDates:
     latest_ttm = (
         select(MetricTtm.instrument_id, func.max(MetricTtm.as_of).label("as_of"))
         .join(UniverseMember, UniverseMember.instrument_id == MetricTtm.instrument_id)
@@ -1830,8 +1832,14 @@ def freshness_dates(session: Session, *, ttm_cutoff: date) -> FreshnessDates:
         .join(Instrument, Instrument.id == BarDaily.instrument_id)
         .where(Instrument.ticker == "SPY")
     )
+    # Same tickers as the Live header, so the strip and the page show one quote time.
+    quotes_as_of = session.scalar(
+        select(func.max(QuoteLatest.as_of))
+        .join(Instrument, Instrument.id == QuoteLatest.instrument_id)
+        .where(Instrument.ticker.in_(list(quote_tickers)))
+    )
     return FreshnessDates(
-        quotes_as_of=session.scalar(select(func.max(QuoteLatest.as_of))),
+        quotes_as_of=quotes_as_of,
         spy_last_bar=spy_last_bar,
         dgs10_last=session.scalar(
             select(func.max(MacroObservation.date)).where(MacroObservation.series_id == "DGS10")

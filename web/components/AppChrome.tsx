@@ -115,13 +115,12 @@ export function AppChrome() {
 }
 
 function FreshnessStrip({ freshness }: { freshness: Freshness | null }) {
-  if (freshness == null) {
-    return null;
-  }
+  // Always rendered: sticky table headers below assume the chrome keeps this height.
   return (
     <div className="flex h-7 items-center gap-4 overflow-x-auto border-t border-line px-4 text-[11px] text-mute">
       <span className="shrink-0 uppercase tracking-wide">Data</span>
-      {freshness.items.map((item) => (
+      {freshness == null ? <span className="shrink-0">unavailable</span> : null}
+      {(freshness?.items ?? []).map((item) => (
         <span
           key={item.key}
           className={cn("inline-flex shrink-0 items-center gap-1.5 tabular-nums", item.status !== "ok" && "text-warning")}

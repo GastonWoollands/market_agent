@@ -481,7 +481,8 @@ def options_market(db: Session = Depends(get_db)) -> MarketOptionsResponse:
 @app.get("/freshness", response_model=FreshnessResponse)
 def freshness(db: Session = Depends(get_db)) -> FreshnessResponse:
     now = datetime.now(UTC)
-    dates = freshness_dates(db, ttm_cutoff=FreshnessView.ttm_cutoff(now))
+    header = [item.ticker for item in load_universes().live.header]
+    dates = freshness_dates(db, ttm_cutoff=FreshnessView.ttm_cutoff(now), quote_tickers=header)
     return FreshnessView(dates, now=now).response()
 
 
