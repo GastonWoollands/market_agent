@@ -27,6 +27,7 @@ from store.models import (
     CotPosition,
     CreditAnchor,
     CreditImplied,
+    EpsRevisionRow,
     EventItem,
     EvidencePack,
     Instrument,
@@ -50,6 +51,7 @@ from store.models import (
     ReturnStats,
     RiskStats,
     RrgPoint,
+    ShortInterest,
     Universe,
     UniverseMember,
     ValuationDaily,
@@ -1739,3 +1741,55 @@ def cot_history(
 
 def latest_cot_date(session: Session) -> date | None:
     return session.scalar(select(func.max(CotPosition.report_date)))
+
+
+def active_instruments(session: Session) -> list[Instrument]:
+    stmt = select(Instrument).where(Instrument.is_active.is_(True)).order_by(Instrument.ticker)
+    return list(session.scalars(stmt))
+
+
+def upsert_short_interest(session: Session, rows: Sequence[dict[str, object]]) -> int:
+    return _upsert_chunks(session, ShortInterest, rows, ("instrument_id", "settlement_date"))
+
+
+def short_interest_dates(session: Session) -> set[date]:
+    return set(session.scalars(select(ShortInterest.settlement_date).distinct()))
+
+
+def latest_short_interest(session: Session, instrument_id: int) -> ShortInterest | None:
+    return session.scalar(
+        select(ShortInterest)
+        .where(ShortInterest.instrument_id == instrument_id)
+        .order_by(ShortInterest.settlement_date.desc())
+        .limit(1)
+    )
+
+
+def latest_shares(session: Session, instrument_id: int) -> Decimal | None:
+    """Shares outstanding from the latest TTM row that carries them (SEC)."""
+    return session.scalar(
+        select(MetricTtm.shares)
+        .where((MetricTtm.instrument_id == instrument_id) & MetricTtm.shares.is_not(None))
+        .order_by(MetricTtm.as_of.desc())
+        .limit(1)
+    )
+
+
+def upsert_eps_revisions(session: Session, rows: Sequence[dict[str, object]]) -> int:
+    return _upsert_chunks(session, EpsRevisionRow, rows, ("instrument_id", "as_of", "period"))
+
+
+def latest_eps_revisions(session: Session, instrument_id: int) -> list[EpsRevisionRow]:
+    """All periods of the latest stored day for a name."""
+    latest = session.scalar(
+        select(func.max(EpsRevisionRow.as_of)).where(EpsRevisionRow.instrument_id == instrument_id)
+    )
+    if latest is None:
+        return []
+    return list(
+        session.scalars(
+            select(EpsRevisionRow).where(
+                (EpsRevisionRow.instrument_id == instrument_id) & (EpsRevisionRow.as_of == latest)
+            )
+        )
+    )

@@ -815,6 +815,33 @@ class OptionSmilePoint(BaseModel):
     kind: Literal["C", "P"]
 
 
+class TickerShortInterest(BaseModel):
+    settlement_date: date
+    short_shares: int
+    share_of_outstanding: float | None = None
+    days_to_cover: float | None = None
+    change: float | None = None
+
+
+class TickerRevision(BaseModel):
+    period: str
+    label: str
+    eps: float | None = None
+    change_30d: float | None = None
+    change_90d: float | None = None
+    up_30d: int | None = None
+    down_30d: int | None = None
+
+
+class TickerStreet(BaseModel):
+    """FINRA short interest (whole universe) and Yahoo EPS revisions (options scope)."""
+
+    short: TickerShortInterest | None = None
+    revisions_as_of: date | None = None
+    revisions: list[TickerRevision] = Field(default_factory=list)
+    revisions_unavailable: str | None = None
+
+
 class TickerOptions(BaseModel):
     """Options read from the stored chain. `unavailable` explains an empty block."""
 
@@ -856,6 +883,7 @@ class TickerResponse(BaseModel):
     peers: TickerPeers | None = None
     credit: TickerCredit | None = None
     options: TickerOptions | None = None
+    street: TickerStreet | None = None
     hint: str | None = None
 
 

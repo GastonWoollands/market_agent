@@ -50,7 +50,7 @@ Every number on screen comes from Postgres. Vendors are never called from the UI
 - Redis, Kafka, TimescaleDB, pgvector — not until a measured need. Derived Postgres tables (`quant_score`, later `portfolio_snapshot` / `portfolio_plan`) are the cache
 - GraphQL; FMP / Polygon as extra market vendors (Yahoo + SEC cover prices and fundamentals)
 - A full XBRL `financial_fact` warehouse or raw EDGAR HTML in hot tables
-- LLM-owned weights, entries, targets, or stops. Python fills numeric snapshots; the writer narrates the pack. Third-party **street consensus** (analyst recommendations, mean target, estimate revisions) is allowed as labeled vendor data (2026-10-31); the writer may cite it from the pack but never produces its own target
+- LLM-owned weights, entries, targets, or stops. Python fills numeric snapshots; the writer narrates the pack. Third-party **street EPS revisions** are allowed as labeled vendor data (2026-10-31; price targets and recommendation counts dropped 2026-11-03); the writer may cite them from the pack but never produces a target
 - Single-name CDS quotes and per-bond TRACE prices / yields: licensed data (S&P/Markit, LSEG, FINRA TRACE data program), not on any free API. The substitute is the equity-implied credit bucket (§9) placed on the FRED ICE BofA rating curve
 - Piotroski F-Score or Altman Z as a screen, badge, rank input, or pack field. `metric_fy` stays; F/Z are not product
 - LLM “moat” scores or fit-percentage gauges
@@ -145,7 +145,7 @@ Frozen for v1. A new vendor is a contract change: update this section first. Cat
 | Credit curve: ICE BofA OAS + effective yield by rating (AAA…CCC), DGS1, Moody's Baa–Aaa, NFCI, STLFSI4 | FRED (catalog expansion, not a new vendor) | 06:00 ET |
 | Vol indices ^VIX9D, ^VIX3M, ^VVIX, ^SKEW | Yahoo, tape catalog in `config/universes.yaml` | 16:30 ET |
 | Option chains (per expiry: strikes, bid/ask, last, volume, OI, Yahoo IV) | Yahoo `option_chain` via `YahooClient`, same 2 req/s budget. **Scope:** watchlist + Opportunities top 25 + SPY / QQQ / IWM / sector ETFs, nearest 4 monthly expiries (+ the first expiry after earnings when within 45 days), strikes within ±30% of spot stored; never the full valuation universe | ~15:45 ET (after-hours quotes widen) |
-| Analyst consensus: recommendation counts, mean / high / low target, EPS revisions (7d / 30d up vs down) | Yahoo `quoteSummary` (`recommendationTrend`, `financialData`, `earningsTrend`) for the same scope as option chains; Finnhub free as fallback | daily |
+| Street EPS revisions: consensus EPS now vs 7 / 30 / 60 / 90 days ago, analysts revising up / down (7d / 30d). No price targets or recommendation counts (decided 2026-11-03: they lag the price and read as a target) | Yahoo `quoteSummary` `earningsTrend` for the watchlist ∪ Opportunities top 25 | daily |
 | Short interest (shares short, days to cover, change), twice monthly | FINRA API Platform `otcMarket/consolidatedShortInterest`, public, no key (covers exchange-listed names) | settlement + ~8 days |
 | Positioning: Traders in Financial Futures (S&P 500, Nasdaq-100, Russell, Treasuries, VIX futures) | CFTC Public Reporting (Socrata) API, no key (`config/cftc_contracts.yaml`) | weekly (Fri for Tue) |
 | Index range markets (S&P 500 / Nasdaq-100 close ranges → implied distribution), Fed decision / recession (no CPI: Kalshi lists core CPI month-over-month, Polymarket year-over-year) | Kalshi public trade API v2 read endpoints, no key (`config/kalshi_series.yaml`) | 15–60 min in session |
@@ -193,7 +193,7 @@ Keep vendor payloads out of hot tables. Polymarket `raw` JSONB is the exception.
 | Derived | `valuation_daily`, `rrg_point`, `return_stats`, `risk_stats`, `opportunity_score`, `quant_score` | Python → Postgres; the writer never computes these. `risk_stats` is per-name vol / downside vol / beta / drawdown from adjusted closes. `quant_score` holds a gem flag and ratio snapshot; legacy `f_score` / `z_score` columns stay NULL |
 | News / calendar | `news_item`, `event_item`, `policy_item` | RSS headlines plus Finnhub `wire` / `company` rows (`summary` nullable, `query` = ticker for company); YAML catalysts (FOMC/CPI/PCE/NFP/GDP/JOLTS/speeches/minutes/Beige Book/ISM/Treasury/central banks) + Finnhub earnings; official Fed Board RSS (speech/statement/minutes/testimony excerpts) |
 | Agent | `evidence_pack`, `outlook_report`, `opportunity_memo`, `job_run` | Pack JSONB, briefs, memos, run log |
-| Market signals (contracted 2026-10-31, built per phase) | `credit_implied`, `credit_anchor`, `option_chain_snapshot`, `option_stats`, `analyst_consensus`, `short_interest`, `cot_position`, `options_market_stats`; Kalshi rows on `odds_snapshot` (source + slot) | Implied credit bucket with its inputs; per-expiry chain rows for the scoped names and the derived daily IV / skew / put-call row; street consensus; FINRA short interest; CFTC TFF positioning; Cboe market put/call |
+| Market signals (contracted 2026-10-31, built per phase) | `credit_implied`, `credit_anchor`, `option_chain_snapshot`, `option_stats`, `eps_revision`, `short_interest`, `cot_position`, `options_market_stats`; Kalshi rows on `odds_snapshot` (source + slot) | Implied credit bucket with its inputs; per-expiry chain rows for the scoped names and the derived daily IV / skew / put-call row; street EPS revisions; FINRA short interest; CFTC TFF positioning; Cboe market put/call |
 
 ---
 
@@ -329,7 +329,7 @@ GET /health
 
 These are contracted or sketched and are **not** implemented. Do not add them unless this file is updated first (pull the item out of this list into the current phase).
 
-**Pulled into the current phases (2026-10-31):** peer comps on the Ticker page and the FRED credit curve (1.10), equity-implied credit bucket (1.11), Yahoo option chains + vol indices + Cboe put/call (1.12), Kalshi index ranges + CFTC positioning (1.13), street consensus + FINRA short interest (1.14). Order and checks: `decision_layer_plan.md`.
+**Pulled into the current phases (2026-10-31):** peer comps on the Ticker page and the FRED credit curve (1.10), equity-implied credit bucket (1.11), Yahoo option chains + vol indices + Cboe put/call (1.12), Kalshi index ranges + CFTC positioning (1.13), street EPS revisions + FINRA short interest (1.14). Order and checks: `decision_layer_plan.md`.
 
 **Decision layer (next phases)**
 

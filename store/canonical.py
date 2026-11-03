@@ -83,6 +83,38 @@ class CotReport(BaseModel):
     lev_money_short: int
 
 
+class ShortInterestReport(BaseModel):
+    """FINRA consolidated short interest for one symbol at one settlement date."""
+
+    model_config = ConfigDict(frozen=True)
+
+    symbol: str
+    settlement_date: date
+    short_shares: int
+    prev_short_shares: int | None = None
+    avg_daily_volume: int | None = None
+    days_to_cover: Decimal | None = None
+    change_pct: Decimal | None = None
+
+
+class EpsRevision(BaseModel):
+    """Yahoo earningsTrend for one period: consensus EPS now and back, analysts revising."""
+
+    model_config = ConfigDict(frozen=True)
+
+    symbol: str
+    period: str
+    eps_current: Decimal | None = None
+    eps_7d: Decimal | None = None
+    eps_30d: Decimal | None = None
+    eps_60d: Decimal | None = None
+    eps_90d: Decimal | None = None
+    up_7d: int | None = None
+    up_30d: int | None = None
+    down_7d: int | None = None
+    down_30d: int | None = None
+
+
 class KalshiMarket(BaseModel):
     """One Kalshi contract inside an event. Prices are dollars per $1 payout."""
 

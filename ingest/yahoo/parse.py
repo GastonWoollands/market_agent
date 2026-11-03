@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 from ingest.yahoo.errors import YahooParseError
 from store.canonical import (
     DailyBar,
+    EpsRevision,
     IntradayBar,
     OptionQuote,
     OptionUnderlying,
@@ -234,3 +235,40 @@ def _optional_as_of(value: Any) -> datetime | None:
         return _as_of(value)
     except Exception:
         return None
+
+
+# yfinance column names (the revision frame mixes `Days` / `days`).
+_TREND = {
+    "current": "eps_current",
+    "7daysAgo": "eps_7d",
+    "30daysAgo": "eps_30d",
+    "60daysAgo": "eps_60d",
+    "90daysAgo": "eps_90d",
+}
+_REVISIONS = {
+    "upLast7days": "up_7d",
+    "upLast30days": "up_30d",
+    "downLast7Days": "down_7d",
+    "downLast30days": "down_30d",
+}
+
+
+def eps_revisions_from_frames(symbol: str, trend: Any, revisions: Any) -> list[EpsRevision]:
+    """Yahoo earningsTrend frames (indexed by period: 0q, +1q, 0y, +1y) -> one row per period.
+
+    Empty for names Yahoo has no estimates for (ETFs, thin coverage).
+    """
+    periods: dict[str, dict[str, Any]] = {}
+    for frame, columns, convert in ((trend, _TREND, _dec), (revisions, _REVISIONS, _int)):
+        if frame is None or getattr(frame, "empty", True):
+            continue
+        for period, row in frame.iterrows():
+            fields = periods.setdefault(str(period), {})
+            for column, field in columns.items():
+                if column in row.index:
+                    fields[field] = convert(row[column])
+    return [
+        EpsRevision(symbol=symbol, period=period, **fields)
+        for period, fields in periods.items()
+        if any(value is not None for value in fields.values())
+    ]

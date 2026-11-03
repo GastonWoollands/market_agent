@@ -36,7 +36,7 @@ Claude Code: `CLAUDE.md` imports this file. Skills are the same tree via `.claud
 - Citation check must pass or keep yesterday’s report (`agent/citations.py`).
 - Do not add Redis, Kafka, Timescale, pgvector, scraping, or non-US listings without updating Northstar first.
   The one sanctioned unofficial endpoint is Cboe's daily market-statistics JSON (Northstar §6); never parse HTML.
-- Street consensus (analyst targets / recommendations) is labeled vendor data. The writer never produces a target.
+- Street EPS revisions are labeled vendor data. No analyst price targets or recommendation counts are stored; the writer never produces a target.
 
 ## Layout
 

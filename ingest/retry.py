@@ -52,12 +52,31 @@ def http_get(
     sleep: Callable[[float], None] = time.sleep,
 ) -> httpx.Response:
     """GET with token bucket. Retries transport errors and 5xx. Returns 429 to the caller."""
+    return http_request(http, bucket, "GET", url, params=params, attempts=attempts, sleep=sleep)
+
+
+def http_request(
+    http: httpx.Client,
+    bucket: RateLimiter,
+    method: str,
+    url: str,
+    *,
+    params: Mapping[str, Any] | None = None,
+    json: Any = None,
+    attempts: int = ATTEMPTS,
+    sleep: Callable[[float], None] = time.sleep,
+) -> httpx.Response:
+    """Read-only request (GET, or POST for query APIs) with the same retry rules as GET."""
     last_response: httpx.Response | None = None
     last_error: Exception | None = None
     for index in range(attempts):
         bucket.acquire()
         try:
-            response = http.get(url, params=params)
+            response = (
+                http.get(url, params=params)
+                if method == "GET"
+                else http.request(method, url, params=params, json=json)
+            )
         except httpx.HTTPError as exc:
             last_error = exc
             if index >= attempts - 1:

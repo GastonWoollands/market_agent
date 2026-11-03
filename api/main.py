@@ -65,6 +65,7 @@ from api.schemas import (
     WatchlistAdd,
     WatchlistResponse,
 )
+from api.street import load_ticker_street
 from api.ticker import build_compare, build_ticker, load_benchmarks, load_names, parse_tickers
 from api.valuation import DEFAULT_SORT, STALE_AFTER_DAYS, build_valuation
 from api.watchlist import build_watchlist
@@ -459,6 +460,7 @@ def ticker_detail(ticker: str, db: Session = Depends(get_db)) -> TickerResponse:
         page.peers = build_peers(me, load_peer_universe(db, me.sector, today=today))
     page.credit = load_ticker_credit(db, items[0], today=today)
     page.options = load_ticker_options(db, items[0].instrument.id)
+    page.street = load_ticker_street(db, items[0].instrument.id)
     return page
 
 
