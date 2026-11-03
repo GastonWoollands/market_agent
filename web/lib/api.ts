@@ -944,6 +944,31 @@ export type MarketOptions = {
   }[];
 };
 
+export type TickerShortInterest = {
+  settlement_date: string;
+  short_shares: number;
+  share_of_outstanding: number | null;
+  days_to_cover: number | null;
+  change: number | null;
+};
+
+export type TickerRevision = {
+  period: string;
+  label: string;
+  eps: number | null;
+  change_30d: number | null;
+  change_90d: number | null;
+  up_30d: number | null;
+  down_30d: number | null;
+};
+
+export type TickerStreet = {
+  short: TickerShortInterest | null;
+  revisions_as_of: string | null;
+  revisions: TickerRevision[];
+  revisions_unavailable: string | null;
+};
+
 export type TickerTape = {
   stale: boolean;
   identity: TickerIdentity | null;
@@ -958,6 +983,7 @@ export type TickerTape = {
   peers: TickerPeers | null;
   credit: TickerCredit | null;
   options: TickerOptions | null;
+  street?: TickerStreet | null;
   hint: string | null;
 };
 

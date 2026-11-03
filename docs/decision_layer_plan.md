@@ -40,7 +40,7 @@ This file is **not** the product contract. If intent, sources, universes, pages,
 | 1.11 | Equity-implied credit bucket | **Done** (branch `feat/implied-credit`) | Merton DD → implied rating bucket on the FRED curve; `config/credit_calibration.yaml` reviewed before ship |
 | 1.12 | Options read | **Done** (branch `feat/options-read`) | Yahoo chains (scoped names), ^VIX9D / ^VIX3M / ^VVIX / ^SKEW, Cboe market put/call |
 | 1.13 | Kalshi + CFTC | **Done** (branch `feat/kalshi-cftc`) | S&P / Nasdaq range distribution, Fed + recession beside Polymarket; TFF positioning |
-| 1.14 | Street consensus + short interest | Not started | Yahoo recommendation / target / revisions; FINRA short interest + days to cover |
+| 1.14 | Short interest + estimate revisions | **Done** (branch `feat/short-interest-revisions`) | FINRA short interest + days to cover (all stored names); Yahoo EPS revisions (watchlist ∪ top 25). No targets |
 | 2 | Gems universe D | Not started | Flag only on B; membership + Yahoo gems later. No F-score gate |
 | 3 | Book (portfolio CRUD + current risk) | Not started | Watchlist stays unsized. After 1.5 for user value |
 | 3b | Constrained rebalance plan | Not started | After the Book is used; holdings-only min-vol first |
@@ -370,10 +370,18 @@ Method in Northstar §9. Spike (2026-10-31, scratch only, 65 rated names + CRWV 
 
 **Limits:** CPI has no Kalshi pair (Kalshi lists core CPI month-over-month, Polymarket year-over-year), so that row stays Polymarket only. Kalshi is shown only for the outcome Polymarket ranks first and only at the same FOMC meeting. Kalshi's recession contract is NBER "starts this year", Polymarket's is "by end of 2026": the definition is in the row tooltip, and the pair shows only when both name the same year. `ingest_kalshi` skips events past their strike (Kalshi keeps them open until settlement). Outlook pack still reads Polymarket only.
 
-## Phase 1.14 — Street consensus + short interest
+## Phase 1.14 — Short interest + estimate revisions (done)
 
-- Yahoo `recommendationTrend`, mean / high / low target, `earningsTrend` revisions for the options scope. Labeled "street consensus"; upside to mean target is shown as vendor data, never as our target.
-- FINRA short interest (public endpoint, verified for MSFT 2026-10-15 cycle): % of float where float is known, days to cover, change vs prior cycle.
+Scope changed on 2026-11-03 (operator decision): price targets and buy / hold / sell counts are out. They lag the price, skew optimistic and read as a target; estimate revisions are the documented signal.
+
+- FINRA consolidated short interest (public API, no credential) for every stored instrument: short as a share of shares outstanding (SEC, not float), days to cover, change vs the prior cycle → `short_interest`, one year backfilled.
+- Yahoo `earningsTrend` for the watchlist ∪ Opportunities top 25: consensus EPS for the current and next fiscal year, its 30d / 90d change, analysts revising up / down in 30 days → `eps_revision`. Labeled street consensus, vendor data.
+
+**Shipped:** `ingest/finra/` (`FinraClient` on `JsonApiClient`, now with read-only `post_json`), `YahooClient.fetch_eps_revisions`, `analytics/street.py` (`ShortInterestRead`, `RevisionRead`), `jobs/ingest_finra.py`, `jobs/ingest_estimates.py`, `api/street.py` (`StreetView`), `street` block on `GET /ticker/{ticker}`, `StreetPanel.tsx`.
+
+**Run:** `make finra-backfill estimates`; then `ingest_estimates` daily and `ingest_finra` after each FINRA publication.
+
+**Limits:** short share is of shares outstanding, not float (understates for closely held names). Revisions only for the watchlist ∪ top 25; other Ticker pages say so. Not in the writer pack yet.
 
 ## Explicitly deferred
 
@@ -381,7 +389,7 @@ Method in Northstar §9. Spike (2026-10-31, scratch only, 65 rated names + CRWV 
 |---|---|
 | Piotroski F-Score / Altman Z as UI, rank, or pack | Opaque composites; desk metrics replace them |
 | LLM “moat” / fit-percentage gauges | Second opaque rank |
-| Entry / target / stop on the card | Read as advice even when Python-filled. Street consensus targets are allowed as labeled vendor data (Phase 1.14) |
+| Entry / target / stop on the card | Read as advice even when Python-filled. Street price targets were allowed as vendor data, then dropped from 1.14 (2026-11-03) |
 | Sleeve unit-ranks as the primary Opportunities columns | After 1.5 the row is the named metrics |
 | Hard-cut F ≥ 7 | Throws away the middle of the universe |
 | P/E, P/B | Facts not stored; EV/EBITDA + FCF yield match this universe (interest coverage moved to Phase 1.7) |
@@ -439,6 +447,7 @@ Next concrete PR: **Phase 1.9 rotation panels**, then **Phase 3 Book** (with 3.5
 | 2026-10-31 | Phases 1.6–1.9 added after a single-name deep-dive exposed TTM / debt defects. Northstar: Ticker + Compare pages; interest coverage in scope. |
 | 2026-10-31 | Phase 1.6 merged (PR #13). Phase 1.7: SIC sectors, `risk_stats`, EBIT / interest TTM, additive partial `ingest_sec`. |
 | 2026-10-31 | Phase 1.7 merged (PR #14). Phase 1.8: Ticker + Compare pages and APIs; facts refreshed for non-members. |
+| 2026-11-03 | Phase 1.14: FINRA short interest (all stored names, 1y) + Yahoo EPS revisions on the Ticker page; targets and recommendation counts dropped by operator decision. |
 | 2026-11-03 | Phase 1.12 merged (PR #19). Phase 1.13: Kalshi index ranges + Fed / recession pairs on Live, CFTC TFF positioning on Dynamics; `odds_snapshot` keyed by source + slot. |
 | 2026-11-01 | Phase 1.11 merged (PR #18). Phase 1.12: options read (Yahoo chains + `option_stats`, vol indices on the tape, Cboe put/call with backfill; Ticker + Dynamics panels). |
 | 2026-10-31 | Phase 1.11: equity-implied credit bucket (verified 106-name calibration set, `compute_credit`, Ticker panel). |

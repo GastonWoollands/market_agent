@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { CreditCurvePanel } from "@/components/CreditCurvePanel";
 import { CreditImpliedPanel } from "@/components/CreditImpliedPanel";
 import { OptionsPanel } from "@/components/OptionsPanel";
+import { StreetPanel } from "@/components/StreetPanel";
 import { Panel } from "@/components/Panel";
 import { PeersPanel } from "@/components/PeersPanel";
 import { StaleBadge } from "@/components/StaleBadge";
@@ -102,6 +103,7 @@ export function TickerView({ tape, credit }: { tape: TickerTape; credit: CreditC
 
       <PeersPanel peers={tape.peers} />
       <OptionsPanel options={tape.options} />
+      <StreetPanel street={tape.street ?? null} />
       <CreditImpliedPanel credit={tape.credit} />
       <CreditCurvePanel curve={credit} highlight={tape.credit?.bucket ?? null} />
 

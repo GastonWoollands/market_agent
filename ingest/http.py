@@ -7,7 +7,7 @@ from typing import Any, Self
 
 import httpx
 
-from ingest.retry import http_get
+from ingest.retry import http_request
 from ingest.yahoo.rate_limit import TokenBucket
 
 
@@ -61,8 +61,24 @@ class JsonApiClient:
         self.close()
 
     def get_json(self, path: str, *, params: Mapping[str, Any] | None = None) -> Any:
+        return self._request("GET", path, params=params)
+
+    def post_json(self, path: str, body: Mapping[str, Any]) -> Any:
+        """POST for query-style read APIs (filters in the body); never a write."""
+        return self._request("POST", path, json=dict(body))
+
+    def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: Mapping[str, Any] | None = None,
+        json: Any = None,
+    ) -> Any:
         try:
-            response = http_get(self._http, self._bucket, f"{self.base_url}{path}", params=params)
+            response = http_request(
+                self._http, self._bucket, method, f"{self.base_url}{path}", params=params, json=json
+            )
         except httpx.HTTPError as exc:
             raise self.http_error(
                 f"{self.name} {path}: request failed ({exc.__class__.__name__})"

@@ -12,12 +12,20 @@ from ingest.yahoo.errors import YahooError, YahooHttpError, YahooParseError
 from ingest.yahoo.parse import (
     bars_from_history,
     bars_from_intraday,
+    eps_revisions_from_frames,
     option_quotes_from_frame,
     snapshot_from_chart_meta,
     underlying_from_quote,
 )
 from ingest.yahoo.rate_limit import TokenBucket
-from store.canonical import DailyBar, IntradayBar, OptionQuote, OptionUnderlying, QuoteSnapshot
+from store.canonical import (
+    DailyBar,
+    EpsRevision,
+    IntradayBar,
+    OptionQuote,
+    OptionUnderlying,
+    QuoteSnapshot,
+)
 
 
 def _chrome_session() -> Any:
@@ -121,6 +129,13 @@ class YahooClient:
             if snap is not None:
                 snapshots.append(snap)
         return snapshots
+
+    def fetch_eps_revisions(self, symbol: str) -> list[EpsRevision]:
+        """Consensus EPS trend and analyst revision counts. Empty when Yahoo has none."""
+        ticker = self._ticker(symbol)
+        trend = self._call(lambda: ticker.eps_trend)
+        revisions = self._call(lambda: ticker.eps_revisions)
+        return eps_revisions_from_frames(symbol, trend, revisions)
 
     def fetch_option_expiries(self, symbol: str) -> list[date]:
         """Listed expiries (one request). Empty when the name has no listed options."""

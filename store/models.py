@@ -338,6 +338,43 @@ class CotPosition(Base):
     lev_money_short: Mapped[int] = mapped_column(BigInteger, nullable=False)
 
 
+class ShortInterest(Base):
+    """FINRA consolidated short interest, twice monthly per settlement date."""
+
+    __tablename__ = "short_interest"
+
+    instrument_id: Mapped[int] = mapped_column(
+        ForeignKey("instrument.id", ondelete="CASCADE"), primary_key=True
+    )
+    settlement_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    short_shares: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    prev_short_shares: Mapped[int | None] = mapped_column(BigInteger)
+    avg_daily_volume: Mapped[int | None] = mapped_column(BigInteger)
+    days_to_cover: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    change_pct: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
+
+
+class EpsRevisionRow(Base):
+    """Yahoo earningsTrend per period (0q, +1q, 0y, +1y): street EPS now and back, revisions."""
+
+    __tablename__ = "eps_revision"
+
+    instrument_id: Mapped[int] = mapped_column(
+        ForeignKey("instrument.id", ondelete="CASCADE"), primary_key=True
+    )
+    as_of: Mapped[date] = mapped_column(Date, primary_key=True)
+    period: Mapped[str] = mapped_column(String(8), primary_key=True)
+    eps_current: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    eps_7d: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    eps_30d: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    eps_60d: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    eps_90d: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    up_7d: Mapped[int | None] = mapped_column(Integer)
+    up_30d: Mapped[int | None] = mapped_column(Integer)
+    down_7d: Mapped[int | None] = mapped_column(Integer)
+    down_30d: Mapped[int | None] = mapped_column(Integer)
+
+
 class RiskStats(Base):
     """Per-name price risk from adjusted closes (`analytics/risk.py`)."""
 

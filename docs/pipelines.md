@@ -185,12 +185,22 @@ Kalshi books are thin outside US hours: run `ingest_kalshi` in session, beside `
 A contract nobody bids carries no probability; a book whose quoted mids sum below 0.8 is flagged
 thin. CFTC publishes Friday 15:30 ET for Tuesday's positions.
 
+### I — Short interest + estimate revisions (Phase 1.14)
+
+| # | Command | Why |
+|---|---------|-----|
+| 23 | `python -m jobs.ingest_finra --backfill` | FINRA consolidated short interest, one year of twice-monthly settlement dates, every stored instrument → `short_interest` (~22k rows, ~2 min). Without `--backfill`: dates of the last 60 days not stored, plus the latest (FINRA revises) |
+| 24 | `python -m jobs.ingest_estimates` | Yahoo `earningsTrend` (consensus EPS now / 7 / 30 / 60 / 90 days ago, analysts revising up / down) for the watchlist ∪ Opportunities top 25 → `eps_revision` (~30 s). Needs `compute_scores` (top 25) |
+
+FINRA publishes about eight business days after each settlement (mid-month and month-end).
+No price targets or buy/hold/sell counts are stored: they lag the price and read as a target.
+
 Make equivalent of A–F:
 
 ```bash
 make db migrate seed yahoo fred regime poly dynamics news fed-rss calendar pack outlook \
   sec sec-profile yahoo-val valuation quant scores risk memos yahoo-watch intraday \
-  cboe-backfill options cftc-backfill kalshi
+  cboe-backfill options cftc-backfill kalshi finra-backfill estimates
 
 make yahoo yahoo-watch fred regime poly dynamics news fed-rss calendar pack outlook
 ```
@@ -281,6 +291,13 @@ Friday after 15:30 ET (weekly positioning):
 
 ```bash
 python -m jobs.ingest_cftc
+```
+
+Daily (estimates) and around the 1st / 15th + 8 business days (FINRA cycle):
+
+```bash
+python -m jobs.ingest_estimates
+python -m jobs.ingest_finra
 ```
 
 After a Chair speech (same stored Outlook slice; no Live-time LLM):
@@ -397,6 +414,8 @@ Both write to `outlook_report` table. UI displays latest for the date.
 | `jobs.ingest_cboe` | `options_market_stats` | `--backfill` |
 | `jobs.ingest_kalshi` | `odds_snapshot` (`source = kalshi`) | — |
 | `jobs.ingest_cftc` | `cot_position` | `--backfill` |
+| `jobs.ingest_finra` | `short_interest` | `--backfill` |
+| `jobs.ingest_estimates` | `eps_revision` | — |
 | `jobs.generate_memos` | `opportunity_memo` | `--template`, `--provider`, `--model` |
 | `jobs.ingest_intraday` | `bar_intraday` (5m) | `--tickers`, `--resume` |
 | `jobs.backfill` | same as yahoo / intraday / fred | `yahoo\|intraday\|fred` plus the flags above |
