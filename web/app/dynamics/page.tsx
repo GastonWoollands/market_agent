@@ -1,5 +1,5 @@
 import { DynamicsView } from "@/components/DynamicsView";
-import { fetchDynamics, fetchMarketOptions } from "@/lib/api";
+import { fetchDynamics, fetchMarketOptions, fetchPositioning } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
@@ -10,15 +10,23 @@ export default async function DynamicsPage({
 }) {
   const params = await searchParams;
   const asOf = first(params.as_of);
-  const [tape, options] = await Promise.all([
+  const [tape, options, positioning] = await Promise.all([
     fetchDynamics({
       asOf,
       lead: first(params.lead),
       lag: first(params.lag),
     }),
     fetchMarketOptions(),
+    fetchPositioning(),
   ]);
-  return <DynamicsView tape={tape} asOf={asOf} options={options.ok ? options.data : null} />;
+  return (
+    <DynamicsView
+      tape={tape}
+      asOf={asOf}
+      options={options.ok ? options.data : null}
+      positioning={positioning.ok ? positioning.data : null}
+    />
+  );
 }
 
 function first(value: string | string[] | undefined): string | undefined {

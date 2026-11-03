@@ -1,0 +1,42 @@
+{
+ "cursor": "",
+ "events": [
+  {
+   "category": "Economics",
+   "collateral_return_type": "",
+   "event_ticker": "KXRECSSNBER-26",
+   "exchange_index": 0,
+   "last_updated_ts": "2026-10-27T19:53:03.23617Z",
+   "markets": [
+    {
+     "ticker": "KXRECSSNBER-26",
+     "event_ticker": "KXRECSSNBER-26",
+     "strike_type": null,
+     "floor_strike": null,
+     "cap_strike": null,
+     "yes_sub_title": "Starts",
+     "yes_bid_dollars": "0.0200",
+     "yes_ask_dollars": "0.0300",
+     "last_price_dollars": "0.0200",
+     "volume_fp": "3923216.74",
+     "open_interest_fp": "872486.12",
+     "status": "active",
+     "close_time": "2027-01-31T13:25:00Z",
+     "updated_time": "2026-04-09T10:45:51.933656Z"
+    }
+   ],
+   "mutually_exclusive": false,
+   "series_ticker": "KXRECSSNBER",
+   "settlement_sources": [
+    {
+     "name": "Bureau of Economic Analysis",
+     "url": "https://www.bea.gov/data/gdp/gross-domestic-product"
+    }
+   ],
+   "strike_period": "",
+   "sub_title": "In 2026",
+   "title": "Recession this year?"
+  }
+ ],
+ "milestones": []
+}

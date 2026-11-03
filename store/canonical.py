@@ -66,6 +66,51 @@ class CboeProductStat(BaseModel):
     put_oi: int
 
 
+class CotReport(BaseModel):
+    """One CFTC TFF futures-only report row: contracts long / short per trader class."""
+
+    model_config = ConfigDict(frozen=True)
+
+    contract_code: str
+    report_date: date
+    market: str
+    open_interest: int
+    dealer_long: int
+    dealer_short: int
+    asset_mgr_long: int
+    asset_mgr_short: int
+    lev_money_long: int
+    lev_money_short: int
+
+
+class KalshiMarket(BaseModel):
+    """One Kalshi contract inside an event. Prices are dollars per $1 payout."""
+
+    model_config = ConfigDict(frozen=True)
+
+    ticker: str
+    label: str
+    strike_type: str | None = None
+    floor_strike: Decimal | None = None
+    cap_strike: Decimal | None = None
+    yes_bid: Decimal | None = None
+    yes_ask: Decimal | None = None
+    last_price: Decimal | None = None
+    volume: Decimal = Decimal(0)
+    open_interest: Decimal = Decimal(0)
+
+
+class KalshiEvent(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    ticker: str
+    series: str
+    title: str
+    sub_title: str = ""
+    strike_date: datetime | None = None
+    markets: tuple[KalshiMarket, ...] = ()
+
+
 class OptionQuote(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -106,6 +151,7 @@ class OddsPoint(BaseModel):
     as_of: datetime
     raw: dict | None = None
     slot: str = ""
+    source: str = "polymarket"
 
 
 class NewsHeadline(BaseModel):

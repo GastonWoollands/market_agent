@@ -24,6 +24,7 @@ from store.catalog import CatalogInstrument, FredSeriesItem
 from store.models import (
     BarDaily,
     BarIntraday,
+    CotPosition,
     CreditAnchor,
     CreditImplied,
     EventItem,
@@ -619,6 +620,7 @@ def upsert_odds(session: Session, point: OddsPoint) -> None:
     stmt = (
         insert(OddsSnapshot)
         .values(
+            source=point.source,
             slot=point.slot,
             slug=point.slug,
             as_of=point.as_of,
@@ -628,7 +630,7 @@ def upsert_odds(session: Session, point: OddsPoint) -> None:
             raw=point.raw,
         )
         .on_conflict_do_update(
-            index_elements=[OddsSnapshot.slot],
+            index_elements=[OddsSnapshot.source, OddsSnapshot.slot],
             set_={
                 "slug": point.slug,
                 "as_of": point.as_of,
@@ -642,8 +644,8 @@ def upsert_odds(session: Session, point: OddsPoint) -> None:
     session.execute(stmt)
 
 
-def latest_odds(session: Session) -> list[OddsSnapshot]:
-    stmt = select(OddsSnapshot).order_by(OddsSnapshot.slot)
+def latest_odds(session: Session, source: str = "polymarket") -> list[OddsSnapshot]:
+    stmt = select(OddsSnapshot).where(OddsSnapshot.source == source).order_by(OddsSnapshot.slot)
     return list(session.execute(stmt).scalars())
 
 
@@ -1714,3 +1716,26 @@ def options_market_history(
         .order_by(OptionsMarketStats.as_of, OptionsMarketStats.product)
     )
     return list(session.scalars(stmt))
+
+
+def upsert_cot_positions(session: Session, rows: Sequence[dict[str, object]]) -> int:
+    return _upsert_chunks(session, CotPosition, rows, ("contract_code", "report_date"))
+
+
+def cot_history(
+    session: Session, codes: Sequence[str], *, start: date
+) -> dict[str, list[CotPosition]]:
+    """Weekly TFF rows per contract code since `start`, oldest first."""
+    stmt = (
+        select(CotPosition)
+        .where(CotPosition.contract_code.in_(list(codes)) & (CotPosition.report_date >= start))
+        .order_by(CotPosition.contract_code, CotPosition.report_date)
+    )
+    out: dict[str, list[CotPosition]] = {code: [] for code in codes}
+    for row in session.execute(stmt).scalars():
+        out.setdefault(row.contract_code, []).append(row)
+    return out
+
+
+def latest_cot_date(session: Session) -> date | None:
+    return session.scalar(select(func.max(CotPosition.report_date)))

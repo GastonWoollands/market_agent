@@ -1,0 +1,40 @@
+# Kalshi public trade API v2 (read-only, no key): GET /events?series_ticker=...&status=open
+# Ingest picks the soonest open event per series, so nothing here rotates by hand.
+# Rows land on odds_snapshot with source = kalshi. UI label: market-implied, not a forecast.
+#
+# kind:
+#   range    - mutually exclusive close-price buckets -> implied distribution (median, 10/90)
+#   outcomes - mutually exclusive outcomes; `outcomes` maps the market-ticker suffix to the
+#              outcome key Live uses to sit beside the matching Polymarket outcome
+#   binary   - one yes/no contract
+# `pairs_with` names the Polymarket slot shown on the same Live row. CPI is left out on
+# purpose: Kalshi lists core CPI month-over-month, Polymarket year-over-year.
+
+series:
+  - slot: spx_close
+    series: KXINX
+    kind: range
+    label: S&P 500 close
+
+  - slot: ndx_close
+    series: KXNASDAQ100
+    kind: range
+    label: Nasdaq-100 close
+
+  - slot: front_fomc
+    series: KXFEDDECISION
+    kind: outcomes
+    label: Next FOMC
+    pairs_with: front_fomc
+    outcomes:
+      C26: cut_50
+      C25: cut_25
+      H0: hold
+      H25: hike_25
+      H26: hike_50
+
+  - slot: recession
+    series: KXRECSSNBER
+    kind: binary
+    label: Recession (NBER, starts this year)
+    pairs_with: recession

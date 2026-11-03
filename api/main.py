@@ -39,12 +39,14 @@ from api.live import (
     resolve_lever,
     risk_on_from_store,
 )
+from api.odds import KalshiLiveView
 from api.opportunities import DEFAULT_SORT as OPP_SORT
 from api.opportunities import STALE_AFTER_DAYS as OPP_STALE
 from api.opportunities import build_opportunities
 from api.options import load_market_options, load_ticker_options
 from api.outlook import outlook_from_store
 from api.peers import build_peers, load_peer_universe, self_input
+from api.positioning import load_positioning
 from api.schemas import (
     CompareResponse,
     CreditCurveResponse,
@@ -55,6 +57,7 @@ from api.schemas import (
     MarketOptionsResponse,
     OpportunityResponse,
     OutlookResponse,
+    PositioningResponse,
     SearchHit,
     SearchResponse,
     TickerResponse,
@@ -65,7 +68,14 @@ from api.schemas import (
 from api.ticker import build_compare, build_ticker, load_benchmarks, load_names, parse_tickers
 from api.valuation import DEFAULT_SORT, STALE_AFTER_DAYS, build_valuation
 from api.watchlist import build_watchlist
-from store.catalog import load_fred_series, load_polymarket, load_universes, tape_with_roles
+from store.catalog import (
+    load_cftc,
+    load_fred_series,
+    load_kalshi,
+    load_polymarket,
+    load_universes,
+    tape_with_roles,
+)
 from store.engine import get_db
 from store.models import (
     BarDaily,
@@ -233,6 +243,7 @@ def live(lever: str = "DGS10", db: Session = Depends(get_db)) -> LiveResponse | 
             anomalies=anomaly_models(detect_anomalies(driver_series, today)),
             odds_rows=latest_odds(db),
             polymarket=load_polymarket(),
+            kalshi=KalshiLiveView(latest_odds(db, source="kalshi"), load_kalshi()),
             events=live_event_models(near),
             brief=live_brief(latest_outlook_report(db, today)),
             outliers=outlier_models(outliers),
@@ -460,6 +471,11 @@ def credit_curve(db: Session = Depends(get_db)) -> CreditCurveResponse:
 @app.get("/options/market", response_model=MarketOptionsResponse)
 def options_market(db: Session = Depends(get_db)) -> MarketOptionsResponse:
     return load_market_options(db, today=date.today())
+
+
+@app.get("/positioning", response_model=PositioningResponse)
+def positioning(db: Session = Depends(get_db)) -> PositioningResponse:
+    return load_positioning(db, load_cftc(), today=date.today())
 
 
 @app.get("/compare", response_model=CompareResponse)

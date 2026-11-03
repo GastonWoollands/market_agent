@@ -4,10 +4,11 @@ import { StaleBadge } from "@/components/StaleBadge";
 import { CorrHeatmap } from "@/components/CorrHeatmap";
 import { LeadLagPanel } from "@/components/LeadLagPanel";
 import { MarketOptionsPanel } from "@/components/MarketOptionsPanel";
+import { PositioningPanel } from "@/components/PositioningPanel";
 import { RelativeOverlay } from "@/components/RelativeOverlay";
 import { RotationPanel } from "@/components/RotationPanel";
 import { cn } from "@/lib/cn";
-import type { DynamicsMember, DynamicsTape, MarketOptions } from "@/lib/api";
+import type { DynamicsMember, DynamicsTape, MarketOptions, Positioning } from "@/lib/api";
 import {
   QUADRANT_COLOR,
   QUADRANT_TEXT,
@@ -20,10 +21,12 @@ export function DynamicsView({
   tape,
   asOf,
   options = null,
+  positioning = null,
 }: {
   tape: DynamicsTape | null;
   asOf?: string;
   options?: MarketOptions | null;
+  positioning?: Positioning | null;
 }) {
   if (tape == null) {
     return <p className="text-sm text-mute">Dynamics API unreachable. Start uvicorn, then refresh.</p>;
@@ -83,6 +86,15 @@ export function DynamicsView({
           is being bought. As of {options?.as_of ?? "no rows"}.
         </p>
         <MarketOptionsPanel market={options} />
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-medium">How are futures traders positioned?</h2>
+        <p className="max-w-3xl text-[13px] leading-6 text-mute">
+          CFTC Traders in Financial Futures: net contracts as a share of open interest, and where
+          that sits against the last three years. Weekly, positions as of Tuesday.
+        </p>
+        <PositioningPanel positioning={positioning} />
       </section>
 
       {tape.members.length > 0 ? (

@@ -174,12 +174,23 @@ Run `ingest_options` before the close (~15:45 ET). After hours and on weekends Y
 the widened closing quotes: thin ETF chains then fall back to same-session trades and some
 30d IVs come back empty. `ingest_cboe` after 18:00 ET, when Cboe publishes the day's file.
 
+### H — Kalshi + CFTC (Phase 1.13)
+
+| # | Command | Why |
+|---|---------|-----|
+| 21 | `python -m jobs.ingest_cftc --backfill` | CFTC Traders in Financial Futures (futures only) for the six contracts in `config/cftc_contracts.yaml`, three years plus a quarter → `cot_position` (~1,000 rows, seconds). Without `--backfill`: the last 8 weeks (CFTC revises) |
+| 22 | `python -m jobs.ingest_kalshi` | Soonest open event per series in `config/kalshi_series.yaml` → `odds_snapshot` rows with `source = kalshi`: S&P 500 / Nasdaq-100 close ranges (median, 10–90%), Fed decision and NBER recession beside Polymarket |
+
+Kalshi books are thin outside US hours: run `ingest_kalshi` in session, beside `ingest_polymarket`.
+A contract nobody bids carries no probability; a book whose quoted mids sum below 0.8 is flagged
+thin. CFTC publishes Friday 15:30 ET for Tuesday's positions.
+
 Make equivalent of A–F:
 
 ```bash
 make db migrate seed yahoo fred regime poly dynamics news fed-rss calendar pack outlook \
   sec sec-profile yahoo-val valuation quant scores risk memos yahoo-watch intraday \
-  cboe-backfill options
+  cboe-backfill options cftc-backfill kalshi
 
 make yahoo yahoo-watch fred regime poly dynamics news fed-rss calendar pack outlook
 ```
@@ -264,6 +275,12 @@ python -m jobs.ingest_yahoo
 python -m jobs.ingest_yahoo --universe watchlist
 python -m jobs.compute_dynamics
 python -m jobs.ingest_cboe          # after 18:00 ET; today's file 403s before that
+```
+
+Friday after 15:30 ET (weekly positioning):
+
+```bash
+python -m jobs.ingest_cftc
 ```
 
 After a Chair speech (same stored Outlook slice; no Live-time LLM):
@@ -378,6 +395,8 @@ Both write to `outlook_report` table. UI displays latest for the date.
 | `jobs.compute_credit` | `credit_implied`, `credit_anchor` | — |
 | `jobs.ingest_options` | `option_chain_snapshot`, `option_stats` | `--tickers` (subset of the options scope) |
 | `jobs.ingest_cboe` | `options_market_stats` | `--backfill` |
+| `jobs.ingest_kalshi` | `odds_snapshot` (`source = kalshi`) | — |
+| `jobs.ingest_cftc` | `cot_position` | `--backfill` |
 | `jobs.generate_memos` | `opportunity_memo` | `--template`, `--provider`, `--model` |
 | `jobs.ingest_intraday` | `bar_intraday` (5m) | `--tickers`, `--resume` |
 | `jobs.backfill` | same as yahoo / intraday / fred | `yahoo\|intraday\|fred` plus the flags above |
