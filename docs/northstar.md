@@ -329,7 +329,7 @@ GET /health
 
 These are contracted or sketched and are **not** implemented. Do not add them unless this file is updated first (pull the item out of this list into the current phase).
 
-**Pulled into the current phases (2026-10-31):** peer comps on the Ticker page and the FRED credit curve (1.10), equity-implied credit bucket (1.11), Yahoo option chains + vol indices + Cboe put/call (1.12), Kalshi index ranges + CFTC positioning (1.13), street EPS revisions + FINRA short interest (1.14). Order and checks: `decision_layer_plan.md`.
+**Pulled in and shipped (2026-10-31 → 2026-11-03, PRs #17–#21):** peer comps on the Ticker page and the FRED credit curve (1.10), equity-implied credit bucket (1.11), Yahoo option chains + vol indices + Cboe put/call (1.12), Kalshi index ranges + CFTC positioning (1.13), street EPS revisions + FINRA short interest (1.14). Order and checks: `decision_layer_plan.md`.
 
 **Decision layer (next phases)**
 

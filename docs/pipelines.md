@@ -49,9 +49,11 @@ Activate `.venv` in every terminal before `python -m jobs…`.
 |-----------|-------------|
 | Empty database | [First load](#3-first-load-run-in-this-order) — all steps, in order |
 | Weekday morning | Tape Yahoo + FRED + regime, then Outlook chain (news → Fed RSS → calendar → pack → outlook) |
-| During the session | Polymarket anytime; tape Yahoo for delayed quotes |
-| After the close (~16:30) | Tape Yahoo daily bars, then Dynamics |
-| Nightly | SEC (monthly is enough after the first zip), valuation Yahoo, valuation, quant, scores, memos |
+| During the session | Polymarket and Kalshi anytime; tape Yahoo for delayed quotes; options chains before 15:45 ET |
+| After the close (~16:30) | Tape Yahoo daily bars, then Dynamics; Cboe after 18:00 ET |
+| Nightly | SEC (monthly is enough after the first zip), valuation Yahoo, valuation, quant, scores, risk, credit, estimates, memos |
+| Friday after 15:30 ET | CFTC positioning |
+| ~8 business days after the 15th and month-end | FINRA short interest |
 | After Ctrl-C on Yahoo | `--resume` on the same job |
 | Before a Pi move / wipe | `pg_dump` |
 
