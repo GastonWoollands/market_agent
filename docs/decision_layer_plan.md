@@ -36,11 +36,11 @@ This file is **not** the product contract. If intent, sources, universes, pages,
 | 1.7 | Sector + per-name risk | **Done** (PR #14) | SIC → sector from SEC submissions; vol / beta / max DD for the valuation universe; `InterestExpense` |
 | 1.8 | Ticker + Compare pages | **Done** (PR #15) | `GET /ticker/{t}`, `GET /compare`; links from every grid; header search |
 | 1.9 | Rotation panels | Not started | Cross-asset RRG, sector breadth + median valuation, intra-sector RRG, factor ETFs |
-| 1.10 | Peer comps + credit curve | **Done** (branch `feat/peer-comps-credit-curve`) | Ticker-page peer table and EV/EBITDA vs growth scatter (no new data); FRED rating-bucket OAS / yields, DGS1, Baa–Aaa, NFCI, STLFSI4 |
-| 1.11 | Equity-implied credit bucket | **Done** (branch `feat/implied-credit`) | Merton DD → implied rating bucket on the FRED curve; `config/credit_calibration.yaml` reviewed before ship |
-| 1.12 | Options read | **Done** (branch `feat/options-read`) | Yahoo chains (scoped names), ^VIX9D / ^VIX3M / ^VVIX / ^SKEW, Cboe market put/call |
-| 1.13 | Kalshi + CFTC | **Done** (branch `feat/kalshi-cftc`) | S&P / Nasdaq range distribution, Fed + recession beside Polymarket; TFF positioning |
-| 1.14 | Short interest + estimate revisions | **Done** (branch `feat/short-interest-revisions`) | FINRA short interest + days to cover (all stored names); Yahoo EPS revisions (watchlist ∪ top 25). No targets |
+| 1.10 | Peer comps + credit curve | **Done** (PR #17) | Ticker-page peer table and EV/EBITDA vs growth scatter (no new data); FRED rating-bucket OAS / yields, DGS1, Baa–Aaa, NFCI, STLFSI4 |
+| 1.11 | Equity-implied credit bucket | **Done** (PR #18) | Merton DD → implied rating bucket on the FRED curve; `config/credit_calibration.yaml` reviewed before ship |
+| 1.12 | Options read | **Done** (PR #19) | Yahoo chains (scoped names), ^VIX9D / ^VIX3M / ^VVIX / ^SKEW, Cboe market put/call |
+| 1.13 | Kalshi + CFTC | **Done** (PR #20) | S&P / Nasdaq range distribution, Fed + recession beside Polymarket; TFF positioning |
+| 1.14 | Short interest + estimate revisions | **Done** (PR #21) | FINRA short interest + days to cover (all stored names); Yahoo EPS revisions (watchlist ∪ top 25). No targets |
 | 2 | Gems universe D | Not started | Flag only on B; membership + Yahoo gems later. No F-score gate |
 | 3 | Book (portfolio CRUD + current risk) | Not started | Watchlist stays unsized. After 1.5 for user value |
 | 3b | Constrained rebalance plan | Not started | After the Book is used; holdings-only min-vol first |
@@ -140,7 +140,7 @@ Nightly (after valuation Yahoo): `ingest_sec` (monthly zip is enough) → `compu
 
 ---
 
-## Phase 1.6 — SEC TTM data quality (done, PR pending)
+## Phase 1.6 — SEC TTM data quality (done)
 
 **Why:** a CRWV deep-dive (2026-10-31) found the stored TTM wrong for most of the universe.
 
@@ -407,7 +407,7 @@ Scope changed on 2026-11-03 (operator decision): price targets and buy / hold / 
 ```text
 Phase 1 warehouse ✓  (FY facts; F/Z removed)
     └─ Phase 1.5 ✓  Desk metrics on Valuation + Opportunities
-          ├─ Phase 3  Book   ← next
+          ├─ Phase 3  Book   (after the integration + operations PRs below)
           │     └─ Phase 3.5  book-aware Opportunities (ρ, sector, cash)
           │           └─ Phase 3b  min-vol only after the Book is used
           ├─ Phase 4  Form 4  ──┐
@@ -431,7 +431,55 @@ Operator / hygiene items found in the full review. Do these before or alongside 
 8. **Design question.** FCF yield is in the Quality sleeve while Cheap already weighs the multiple (partial double count).
 9. ~~**Ship the branch.**~~ Done 2026-10-29: PR #5 merged.
 
-Next concrete PR: **Phase 1.9 rotation panels**, then **Phase 3 Book** (with 3.5 as the rotation read). Gems membership can parallel Book. Do not start Phase 7 until packs exist. Do not start a PR to “fix F-score for the UI.”
+## Review after Phase 1.14 (2026-11-03)
+
+Market-signal phases 1.10–1.14 are on `main` (PRs #17–#21; migrations through `0024_short_interest_revisions`). A full review of what is left found these gaps between the stored data and the product. The operator has not yet picked the order; the proposal is below.
+
+**Gaps found**
+
+1. **Outlook pack does not read 1.10–1.14.** No credit curve / implied bucket, options (`option_stats`, VIX term, Cboe put/call), Kalshi rows (`latest_odds` defaults to Polymarket), CFTC positioning, short interest or EPS revisions in `agent/pack.py`.
+2. **Four pack defects from the 2026-11-02 manual Outlook run, still open:**
+   - `percentile_2y` loads a 180-day window (`analytics/regime_detect.py`, `lookback = as_of - timedelta(days=180)`).
+   - `_policy_read` (`analytics/outlook_judgment.py`) returns `hold_base` only by string match, so a top outcome of "increase 25 bps" gets no hike read.
+   - `co_moves` / `outliers` 1d mix today's partial bars with the prior session's FRED, and bond-ETF bars look like ex-distribution drops.
+   - The 72h policy window drops the FOMC statement by Monday.
+
+   Also, `compute_dynamics` is not in the `generate-outlook-manual` refresh chain (RRG went stale 10-29).
+3. **Everything runs by hand.** About 25 jobs, several time-bound:
+   - `ingest_options` before 15:45 ET.
+   - `ingest_kalshi` in session.
+   - `ingest_cboe` after 18:00 ET.
+   - `ingest_cftc` Friday after 15:30 ET.
+   - `ingest_finra` twice a month.
+   - `ingest_estimates` daily.
+
+   Item 3 below (`launchd`) is still open.
+4. **Coverage:**
+   - APP, ABNB, BIIB and CRWV are out of the valuation universe (custom XBRL tags for capex / EBIT / debt).
+   - Peers are sector + size, not business model; `config/peers.yaml` is the follow-up.
+   - CRWV is not on the watchlist, so it has no options or EPS revisions. The operator holds CRWV; adding it is the operator's call.
+5. **Ticker page density.** 1.10–1.14 added five panels (peers, credit curve, implied credit, options, short interest + revisions). The operator wants a simple, clear UI: one consolidation pass (order, what sits above the fold, what collapses) before adding more.
+6. **Older adapters on the shared base.** New JSON vendors use `ingest/http.py` `JsonApiClient` (Kalshi, CFTC, FINRA). Polymarket and Cboe still carry their own HTTP code; migrate them in a separate PR (the operator asked for OOP on new code first).
+
+**Proposed order (pending operator decision)**
+
+1. **Outlook integration:** fix the four pack defects and pack 1.10–1.14 with citations (`change-outlook-writer` skill).
+2. **Operations:** `launchd` plists for morning / in-session / close / evening / Friday / FINRA recipes (CLIs only, no in-process scheduler).
+3. **Phase 3 Book + 3.5 book-aware Opportunities.**
+4. **Ticker page consolidation.**
+5. Then 1.9 rotation panels, Phase 4 Form 4, Phase 2 Gems, Phase 5 excerpts, Phase 6 writer, Phase 7 cards.
+
+The original order was 1.9 → Book. It moved because 1.9 adds more charts, while 1–3 make the stored data reach the Outlook and the operator's own positions.
+
+Do not start Phase 7 until packs exist. Do not start a PR to “fix F-score for the UI.”
+
+## Working agreements (operator, 2026-11)
+
+- Ask before assuming. Decisions are taken one question at a time; merges only when the operator says so.
+- Long-term, object-oriented code that follows industry standards: adapters subclass `JsonApiClient`, readers are classes (`KalshiLiveView`, `PositioningView`, `StreetView`), analytics expose frozen dataclasses with classmethod constructors (`RangeDistribution`, `PositioningRead`, `ShortInterestRead`, `RevisionRead`).
+- UI simple and clear above everything: fewer, labeled numbers; one panel per question; footnote limits in one line.
+- One PR per phase unless the operator says otherwise. Format only touched files (`ruff format <files>`); the repo has older files ruff would rewrite.
+- PR bodies carry no "Generated with Claude Code" footer.
 
 ---
 
@@ -447,6 +495,7 @@ Next concrete PR: **Phase 1.9 rotation panels**, then **Phase 3 Book** (with 3.5
 | 2026-10-31 | Phases 1.6–1.9 added after a single-name deep-dive exposed TTM / debt defects. Northstar: Ticker + Compare pages; interest coverage in scope. |
 | 2026-10-31 | Phase 1.6 merged (PR #13). Phase 1.7: SIC sectors, `risk_stats`, EBIT / interest TTM, additive partial `ingest_sec`. |
 | 2026-10-31 | Phase 1.7 merged (PR #14). Phase 1.8: Ticker + Compare pages and APIs; facts refreshed for non-members. |
+| 2026-11-03 | PRs #20 and #21 merged. Review after 1.14: Outlook pack integration, four pack defects, unattended runs, coverage gaps and Ticker density recorded; proposed order integration → operations → Book → Ticker consolidation → 1.9 (pending operator decision). |
 | 2026-11-03 | Phase 1.14: FINRA short interest (all stored names, 1y) + Yahoo EPS revisions on the Ticker page; targets and recommendation counts dropped by operator decision. |
 | 2026-11-03 | Phase 1.12 merged (PR #19). Phase 1.13: Kalshi index ranges + Fed / recession pairs on Live, CFTC TFF positioning on Dynamics; `odds_snapshot` keyed by source + slot. |
 | 2026-11-01 | Phase 1.11 merged (PR #18). Phase 1.12: options read (Yahoo chains + `option_stats`, vol indices on the tape, Cboe put/call with backfill; Ticker + Dynamics panels). |

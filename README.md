@@ -2,7 +2,7 @@
 
 Personal US market research terminal. Delayed data, no trading. UI name: **Sector Panel**.
 
-v1 is shipped: Live, Outlook, Dynamics, Valuation, Opportunities, Watchlist — all from Postgres. Vendors and the writer LLM are never called from the UI.
+v1 is shipped: Live, Outlook, Dynamics, Valuation, Opportunities, Watchlist, plus Ticker and Compare pages — all from Postgres. Market signals on top (2026-11): peer comps, FRED credit curve and equity-implied credit bucket, options read (Yahoo chains, VIX term, Cboe put/call), Kalshi index ranges and Fed / recession odds, CFTC positioning, FINRA short interest and street EPS revisions. Vendors and the writer LLM are never called from the UI.
 
 | Doc | Use |
 |-----|-----|
@@ -33,3 +33,7 @@ First load and recurring recipes: [pipelines.md](docs/pipelines.md). Serve with 
 | `config/polymarket_slugs.yaml` | Odds slots + match rules (ingest rotates Gamma slugs) |
 | `config/news_queries.yaml` | Google News RSS buckets |
 | `config/catalysts.yaml` | FOMC / CPI / elections (hand-maintained) |
+| `config/sic_sectors.yaml` | SEC SIC code ranges → sector |
+| `config/credit_calibration.yaml` | Agency ratings that anchor the implied credit bucket (operator-reviewed) |
+| `config/kalshi_series.yaml` | Kalshi series → Live slots (index ranges, Fed, recession) |
+| `config/cftc_contracts.yaml` | CFTC TFF contracts on the positioning table |

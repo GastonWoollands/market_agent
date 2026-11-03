@@ -54,6 +54,9 @@ config/     yaml catalogs
 Canonical examples: `ingest/yahoo/client.py`, `ingest/fred/client.py`,
 `jobs/ingest_yahoo.py`, `store/repos.py`, `api/live.py`,
 `web/lib/api.ts`, `agent/outlook.py`.
+New JSON vendors subclass `ingest/http.py` `JsonApiClient` (see `ingest/kalshi/`, `ingest/cftc/`,
+`ingest/finra/`). Readers and analytics are classes (`api/odds.py`, `analytics/positioning.py`).
+Format only the files you touch (`ruff format <files>`): older files would be rewritten.
 
 ## Commands
 
