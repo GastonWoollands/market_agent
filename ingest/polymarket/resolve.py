@@ -73,7 +73,9 @@ def ranked_open_slugs(
     if not slug_prefix:
         return []
     matched = [
-        event for event in hits if isinstance(event, dict) and _matches_prefix(event, slug_prefix)
+        event
+        for event in hits
+        if isinstance(event, dict) and _matches_prefix(event, slug_prefix)
     ]
     if pick == PICK_FIRST:
         ordered = matched

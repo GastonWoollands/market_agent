@@ -105,7 +105,9 @@ def _classify_growth(payrolls: Points, unrate: Points) -> tuple[str, float, dict
     if len(payroll_points) < 3 or len(unrate_points) < 3:
         return "unknown", 0.0, {"reason": "insufficient data"}
 
-    recent_changes = [float(payroll_points[i][1] - payroll_points[i - 1][1]) for i in range(-3, 0)]
+    recent_changes = [
+        float(payroll_points[i][1] - payroll_points[i - 1][1]) for i in range(-3, 0)
+    ]
     avg_payroll_change = mean(recent_changes) if recent_changes else None
 
     current_unrate = float(unrate_points[-1][1])
@@ -155,7 +157,7 @@ def _classify_inflation(core_pce_points: Points) -> tuple[str, float, dict]:
             current = float(points[i][1])
             prior = float(points[i - 1][1])
             if prior != 0:
-                mom_pct = (current / prior - 1) * 100
+                mom_pct = ((current / prior - 1) * 100)
                 mom_values.append(mom_pct)
 
     if len(mom_values) < 3:

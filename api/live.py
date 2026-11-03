@@ -152,7 +152,9 @@ def build_live(
         for item in items:
             row = by_ticker.get(item.ticker)
             meta = tape_meta.get(item.ticker)
-            name = item.label or (row.name if row else None) or (meta.name if meta else item.ticker)
+            name = (
+                item.label or (row.name if row else None) or (meta.name if meta else item.ticker)
+            )
             role = meta.role if meta else None
             out.append(_quote_from_row(ticker=item.ticker, name=name, role=role, row=row))
         return out
@@ -204,7 +206,9 @@ def build_live(
 
 
 def _watchlist_outliers(rows: list[LiveTapeRow]) -> list[LiveQuote]:
-    quotes = [_quote_from_row(ticker=row.ticker, name=row.name, role=None, row=row) for row in rows]
+    quotes = [
+        _quote_from_row(ticker=row.ticker, name=row.name, role=None, row=row) for row in rows
+    ]
     quotes.sort(
         key=lambda item: (item.change_pct is None, -abs(item.change_pct or 0.0), item.ticker)
     )

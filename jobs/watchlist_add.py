@@ -87,7 +87,9 @@ def _hydrate(ticker: str, yahoo_symbol: str, *, need_chart: bool, need_quote: bo
         if bars:
             upsert_daily_bars(session, instrument.id, bars)
         if quotes:
-            mapped = [(instrument.id, snap) for snap in quotes if snap.yahoo_symbol == yahoo_symbol]
+            mapped = [
+                (instrument.id, snap) for snap in quotes if snap.yahoo_symbol == yahoo_symbol
+            ]
             upsert_quotes(session, mapped)
         if intraday:
             upsert_intraday_bars(session, instrument.id, intraday)

@@ -102,7 +102,9 @@ class FinnhubClient:
         try:
             response = http_get(self._http, self._bucket, url, params=params)
         except httpx.HTTPError as exc:
-            raise FinnhubHttpError(f"{label}: request failed ({exc.__class__.__name__})") from exc
+            raise FinnhubHttpError(
+                f"{label}: request failed ({exc.__class__.__name__})"
+            ) from exc
         if response.status_code == 429:
             raise FinnhubHttpError(f"{label}: Finnhub rate limited", status_code=429)
         if response.status_code == 401:

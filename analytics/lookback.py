@@ -13,7 +13,9 @@ def sort_points(points: Sequence[tuple[date, Decimal]]) -> list[tuple[date, Deci
     return sorted(points, key=lambda item: item[0])
 
 
-def value_on_or_before(points: Sequence[tuple[date, Decimal]], target: date) -> Decimal | None:
+def value_on_or_before(
+    points: Sequence[tuple[date, Decimal]], target: date
+) -> Decimal | None:
     ordered = sort_points(points)
     if not ordered:
         return None

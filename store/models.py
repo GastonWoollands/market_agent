@@ -89,7 +89,9 @@ class JobRun(Base):
     error: Mapped[str | None] = mapped_column(Text)
     extra: Mapped[dict[str, Any] | None] = mapped_column("meta", JSONB)
 
-    __table_args__ = (CheckConstraint("status IN ('running', 'ok', 'error')", name="status"),)
+    __table_args__ = (
+        CheckConstraint("status IN ('running', 'ok', 'error')", name="status"),
+    )
 
 
 class BarDaily(Base):
@@ -268,7 +270,9 @@ class OptionChainSnapshot(Base):
     iv: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
     last_trade_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
-    __table_args__ = (CheckConstraint("kind IN ('C', 'P')", name="ck_option_chain_snapshot_kind"),)
+    __table_args__ = (
+        CheckConstraint("kind IN ('C', 'P')", name="ck_option_chain_snapshot_kind"),
+    )
 
 
 class OptionStats(Base):

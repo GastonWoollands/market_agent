@@ -162,7 +162,9 @@ def snapshot_from_chart_meta(symbol: str, meta: dict[str, Any] | None) -> QuoteS
     )
 
 
-def option_quotes_from_frame(frame: Any, symbol: str, expiry: date, kind: str) -> list[OptionQuote]:
+def option_quotes_from_frame(
+    frame: Any, symbol: str, expiry: date, kind: str
+) -> list[OptionQuote]:
     """One side of `option_chain(expiry)`. Rows without a strike are dropped."""
     if frame is None or getattr(frame, "empty", True):
         return []

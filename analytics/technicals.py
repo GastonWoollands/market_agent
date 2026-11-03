@@ -78,14 +78,16 @@ def technicals(closes: Series, adj_closes: Series) -> Technicals | None:
         change_1d=trailing_return(values, 1),
         sma=sma_values,
         vs_sma={
-            window: (last / value - 1.0) if value else None for window, value in sma_values.items()
+            window: (last / value - 1.0) if value else None
+            for window, value in sma_values.items()
         },
         rsi_14=rsi(values),
         high_52w=high,
         low_52w=min(year),
         vs_high_52w=last / high - 1.0 if high > 0 else None,
         returns={
-            label: trailing_return(adjusted, sessions) for label, sessions in RETURN_WINDOWS.items()
+            label: trailing_return(adjusted, sessions)
+            for label, sessions in RETURN_WINDOWS.items()
         },
     )
 

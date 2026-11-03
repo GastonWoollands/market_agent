@@ -154,13 +154,14 @@ class YahooClient:
             except YahooHttpError:
                 raise
             except Exception as exc:
-                raise YahooHttpError(f"request failed ({exc.__class__.__name__})") from exc
+                raise YahooHttpError(
+                    f"request failed ({exc.__class__.__name__})"
+                ) from exc
 
         return retry_call(
             once,
-            retryable=lambda exc: (
-                isinstance(exc, YahooHttpError) and retryable_status(exc.status_code)
-            ),
+            retryable=lambda exc: isinstance(exc, YahooHttpError)
+            and retryable_status(exc.status_code),
         )
 
     def _ticker(self, symbol: str) -> yf.Ticker:

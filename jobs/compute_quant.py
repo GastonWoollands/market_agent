@@ -51,7 +51,9 @@ def compute() -> dict[str, object]:
         ids = [item.id for item in instruments]
         cik_map = {item.id: item.cik for item in instruments}
         fy_by_id = {
-            instrument_id: [_canonical_fy(cik_map.get(instrument_id, ""), row) for row in rows]
+            instrument_id: [
+                _canonical_fy(cik_map.get(instrument_id, ""), row) for row in rows
+            ]
             for instrument_id, rows in metric_fy_history(session, ids).items()
         }
         closes = closes_for_instrument_ids(session, ids, start=start)
@@ -71,9 +73,11 @@ def compute() -> dict[str, object]:
         if not years:
             skipped.append(instrument.ticker)
             continue
-        shares, fcf, ttm_revenue, ev = valuation.get(instrument.id, (None, None, None, None))
+        shares, fcf, ttm_revenue, ev = valuation.get(
+            instrument.id, (None, None, None, None)
+        )
         price_rows = closes.get(instrument.id, [])
-        price_day, price = price_rows[-1] if price_rows else (None, None)
+        price_day, price = (price_rows[-1] if price_rows else (None, None))
         scored = score_quant(
             years,
             price=price,

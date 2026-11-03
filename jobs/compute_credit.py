@@ -179,6 +179,7 @@ def compute(*, today: date | None = None) -> dict[str, object]:
     }
 
 
+
 def _dec(value: float | None, digits: int) -> Decimal | None:
     return None if value is None else Decimal(str(round(value, digits)))
 

@@ -144,7 +144,9 @@ BODY_MAX = 2500
 ARTICLE_START = re.compile(r"""<div\s+id=["']article["']""", re.IGNORECASE)
 ARTICLE_END = re.compile(r"""<div\s+id=["']lastUpdate["']""", re.IGNORECASE)
 # A paragraph may not contain another <p>, so an unclosed earlier <p> cannot swallow the body.
-PARAGRAPH_RE = re.compile(r"<p(?:\s[^>]*)?>((?:(?!<p[\s>]).)*?)</p>", re.IGNORECASE | re.DOTALL)
+PARAGRAPH_RE = re.compile(
+    r"<p(?:\s[^>]*)?>((?:(?!<p[\s>]).)*?)</p>", re.IGNORECASE | re.DOTALL
+)
 BOILERPLATE = (
     "for media inquiries",
     "implementation note issued",
