@@ -368,7 +368,7 @@ Method in Northstar §9. Spike (2026-10-31, scratch only, 65 rated names + CRWV 
 
 **Run:** `make cftc-backfill kalshi`; then `ingest_kalshi` in session and `ingest_cftc` on Fridays.
 
-**Limits:** CPI has no Kalshi pair (Kalshi lists core CPI month-over-month, Polymarket year-over-year), so that row stays Polymarket only. Kalshi is shown only for the outcome Polymarket ranks first and only at the same FOMC meeting. Kalshi's recession contract is NBER "starts this year", Polymarket's is "by end of 2026": the definition is in the row tooltip. Outlook pack still reads Polymarket only.
+**Limits:** CPI has no Kalshi pair (Kalshi lists core CPI month-over-month, Polymarket year-over-year), so that row stays Polymarket only. Kalshi is shown only for the outcome Polymarket ranks first and only at the same FOMC meeting. Kalshi's recession contract is NBER "starts this year", Polymarket's is "by end of 2026": the definition is in the row tooltip, and the pair shows only when both name the same year. `ingest_kalshi` skips events past their strike (Kalshi keeps them open until settlement). Outlook pack still reads Polymarket only.
 
 ## Phase 1.14 — Street consensus + short interest
 

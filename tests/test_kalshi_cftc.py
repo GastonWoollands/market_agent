@@ -14,7 +14,7 @@ from ingest.cftc.errors import CftcParseError
 from ingest.cftc.parse import reports_from_rows
 from ingest.kalshi.errors import KalshiParseError
 from ingest.kalshi.parse import events_from_payload
-from jobs.ingest_kalshi import KalshiSnapshotBuilder
+from jobs.ingest_kalshi import KalshiSnapshotBuilder, first_open_point
 from store.canonical import KalshiMarket
 from store.catalog import load_cftc, load_kalshi
 
@@ -193,3 +193,36 @@ def test_positioning_read_net_share_and_percentile() -> None:
 def test_catalogs_load() -> None:
     assert load_cftc().codes() == ["13874+", "20974+", "239742", "042601", "043602", "1170E1"]
     assert set(load_kalshi().paired()) == {"front_fomc", "recession"}
+
+
+def test_first_open_point_skips_an_event_past_its_strike() -> None:
+    today = _event("KXINX")
+    friday = today.model_copy(
+        update={
+            "ticker": "KXINX-26NOV06H1600",
+            "strike_date": datetime(2026, 11, 6, 21, tzinfo=UTC),
+        }
+    )
+    evening = datetime(2026, 11, 3, 22, 0, tzinfo=UTC)
+    point = first_open_point(_series("spx_close"), [today, friday], now=evening)
+    assert point is not None and point.slug == "KXINX-26NOV06H1600"
+    morning = first_open_point(_series("spx_close"), [today, friday], now=NOW)
+    assert morning is not None and morning.slug == "KXINX-26NOV03H1600"
+
+
+def test_recession_pairs_only_the_same_year() -> None:
+    recession = KalshiSnapshotBuilder(_series("recession"), now=NOW).build(_event("KXRECSSNBER"))
+    row = SimpleNamespace(
+        **recession.model_dump(include={"slot", "question", "implied_yes", "raw"}), as_of=NOW
+    )
+    view = KalshiLiveView([row], load_kalshi(), now=NOW)
+
+    def polymarket(question: str) -> LiveOdds:
+        return LiveOdds(
+            slot="recession", slug="x", label="Recession", category="growth", question=question
+        )
+
+    [same] = view.with_alt([polymarket("US recession by end of 2026?")])
+    assert same.alt is not None and same.alt.implied_yes == pytest.approx(0.025)
+    [other] = view.with_alt([polymarket("US recession by end of 2027?")])
+    assert other.alt is None

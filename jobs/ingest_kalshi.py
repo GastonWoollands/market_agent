@@ -106,6 +106,19 @@ class KalshiSnapshotBuilder:
         )
 
 
+def first_open_point(
+    series: KalshiSeries, events: list[KalshiEvent], *, now: datetime
+) -> OddsPoint | None:
+    """Soonest event still before its strike: Kalshi keeps an event open until settlement."""
+    builder = KalshiSnapshotBuilder(series, now=now)
+    for event in events:
+        if event.strike_date is not None and event.strike_date <= now:
+            continue
+        if (point := builder.build(event)) is not None:
+            return point
+    return None
+
+
 def ingest(*, now: datetime | None = None) -> dict[str, object]:
     clock = now or datetime.now(UTC)
     catalog = load_kalshi()
@@ -120,14 +133,7 @@ def ingest(*, now: datetime | None = None) -> dict[str, object]:
                     raise
                 failures.append(f"{series.slot}: {exc}")
                 continue
-            point = next(
-                (
-                    built
-                    for event in events
-                    if (built := KalshiSnapshotBuilder(series, now=clock).build(event))
-                ),
-                None,
-            )
+            point = first_open_point(series, events, now=clock)
             if point is None:
                 failures.append(f"{series.slot}: no open event with a quoted book")
                 continue

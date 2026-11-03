@@ -19,6 +19,7 @@ _MONTH_YEAR = re.compile(
     r"|December) (\d{4})\b",
     re.IGNORECASE,
 )
+_YEAR = re.compile(r"\b(20\d{2})\b")
 _FED_MOVE = re.compile(r"\b(increase|hike|decrease|cut)\D{0,30}?(\d+)\s*(\+)?\s*bps")
 
 
@@ -83,6 +84,8 @@ class KalshiLiveView:
         if close_at is not None and close_at <= self._now:
             return None
         if series.kind == "binary":
+            if not _same_year(item.question, f"{raw.get('title', '')} {raw.get('sub_title', '')}"):
+                return None
             yes = float(row.implied_yes)
         else:
             yes = self._matching_outcome(raw, item, close_at)
@@ -115,6 +118,12 @@ class KalshiLiveView:
             if market.get("key") == key:
                 return None if market.get("yes") is None else float(market["yes"])
         return None
+
+
+def _same_year(left: str, right: str) -> bool:
+    """False only when both texts name a year and the years differ."""
+    years = [set(_YEAR.findall(text)) for text in (left, right)]
+    return not (years[0] and years[1]) or bool(years[0] & years[1])
 
 
 def _time(value: Any) -> datetime | None:
