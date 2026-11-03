@@ -1,5 +1,6 @@
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from analytics.lookback import chart_window, window_deltas
 from analytics.risk_on import CYCLICALS, DEFENSIVES, compute_risk_on
@@ -45,6 +46,15 @@ _STATE_RANK = {
     "POSTPOST": 4,
     "CLOSED": 5,
 }
+_ET = ZoneInfo("America/New_York")
+# Session state by ET wall clock: the last row whose start is <= now applies.
+_CLOCK_STATES = (
+    (time(0, 0), "CLOSED"),
+    (time(4, 0), "PRE"),
+    (time(9, 30), "REGULAR"),
+    (time(16, 0), "POST"),
+    (time(20, 0), "CLOSED"),
+)
 _CHANGE_KIND = {
     "REGULAR": "session",
     "PRE": "gap",
@@ -102,7 +112,8 @@ def _quote_from_row(
     )
 
 
-def _session_state(quotes: list[LiveQuote]) -> str | None:
+def _session_state(quotes: list[LiveQuote], now: datetime) -> str:
+    """Best state any quote reports; the ET clock when quotes carry none (no holiday calendar)."""
     best: tuple[int, str] | None = None
     for quote in quotes:
         if not quote.market_state:
@@ -112,7 +123,18 @@ def _session_state(quotes: list[LiveQuote]) -> str | None:
             continue
         if best is None or rank < best[0]:
             best = (rank, quote.market_state)
-    return None if best is None else best[1]
+    return best[1] if best is not None else _clock_state(now)
+
+
+def _clock_state(now: datetime) -> str:
+    local = _aware(now).astimezone(_ET)
+    if local.weekday() >= 5:
+        return "CLOSED"
+    state = "CLOSED"
+    for start, name in _CLOCK_STATES:
+        if local.time() >= start:
+            state = name
+    return state
 
 
 def _is_stale(as_of: datetime | None, now: datetime) -> bool:
@@ -183,7 +205,7 @@ def build_live(
     as_of = max(quote_times) if quote_times else None
     return LiveResponse(
         as_of=as_of,
-        market_state=_session_state(header),
+        market_state=_session_state(header, clock),
         stale=_is_stale(as_of, clock),
         header=header,
         intl=intl,

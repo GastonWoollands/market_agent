@@ -128,6 +128,30 @@ def test_judgment_names_be_vs_cpi_and_watch_print() -> None:
     assert judgment["watch"][0]["last_print"] == "PAYEMS print_change -23.0"
 
 
+def test_judgment_policy_follows_front_meeting_not_later_hold() -> None:
+    judgment = build_judgment(
+        facts={},
+        macro=[],
+        odds=[
+            {
+                "slot": "next_fomc",
+                "label": "Fed path",
+                "top_outcome": "Hold",
+                "top_implied_yes": 0.695,
+            },
+            {
+                "slot": "front_fomc",
+                "label": "Next FOMC",
+                "top_outcome": "Hike 25bp",
+                "top_implied_yes": 0.735,
+            },
+        ],
+        events=[],
+        risk_on=None,
+    )
+    assert judgment["regime"]["policy"] == "hike_base"
+
+
 def test_judgment_ranks_fomc_above_ism_and_speech_attaches_dgs2() -> None:
     judgment = build_judgment(
         facts={"dgs2": 4.31},

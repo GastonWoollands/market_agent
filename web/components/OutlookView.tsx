@@ -176,7 +176,8 @@ function StatusChips({ tape }: { tape: OutlookTape }) {
   const ten = tape.facts?.dgs10;
   const risk = tape.judgment?.regime?.policy;
   const stance = tape.judgment?.policy_comms?.stance;
-  const hold = tape.odds?.find((item) => (item.top_outcome ?? "").toLowerCase().includes("hold"));
+  // Chip shows the next meeting's top outcome, the same base case the headline and regime use.
+  const front = tape.odds?.find((item) => item.slot === "front_fomc" && item.top_outcome);
   return (
     <div className="flex flex-wrap items-center gap-3 text-[13px] text-slate-500">
       {tape.as_of ? <span className="tabular-nums">{tape.as_of}</span> : <span>no pack</span>}
@@ -186,9 +187,9 @@ function StatusChips({ tape }: { tape: OutlookTape }) {
           10Y {ten.toFixed(2)}%
         </span>
       ) : null}
-      {hold?.top_implied_yes != null ? (
+      {front?.top_implied_yes != null ? (
         <span className="rounded-md border border-slate-700/50 bg-slate-800/40 px-2.5 py-1 text-[12px] tabular-nums text-slate-300">
-          Hold {formatImplied(hold.top_implied_yes)}
+          Next FOMC {front.top_outcome} {formatImplied(front.top_implied_yes)}
         </span>
       ) : null}
       {stance && stance !== "unavailable" ? (
@@ -967,8 +968,20 @@ function formatWhen(value: string | null): string {
   if (!value) {
     return "—";
   }
-  if (value.length >= 16 && value.includes("T")) {
-    return `${value.slice(0, 10)} ${value.slice(11, 16)}`;
+  const parsed = new Date(value);
+  if (!value.includes("T") || Number.isNaN(parsed.getTime())) {
+    return value.slice(0, 10);
   }
-  return value.slice(0, 10);
+  // Stored timestamps are UTC; the desk reads ET.
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(parsed);
+  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")} ${part("hour")}:${part("minute")} ET`;
 }

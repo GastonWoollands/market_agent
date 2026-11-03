@@ -5,7 +5,16 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/cn";
-import { fetchHealth, fetchLive, type Health, type JobStatus, type LiveRiskOn } from "@/lib/api";
+import {
+  fetchFreshness,
+  fetchHealth,
+  fetchLive,
+  type Freshness,
+  type FreshnessItem,
+  type Health,
+  type JobStatus,
+  type LiveRiskOn,
+} from "@/lib/api";
 
 const TABS = [
   { href: "/", label: "Live", live: true },
@@ -22,11 +31,16 @@ export function AppChrome() {
   const router = useRouter();
   const [health, setHealth] = useState<Health | null>(null);
   const [riskOn, setRiskOn] = useState<LiveRiskOn | null>(null);
+  const [freshness, setFreshness] = useState<Freshness | null>(null);
 
   useEffect(() => {
     void fetchHealth().then(setHealth);
     void fetchLive().then((tape) => setRiskOn(tape?.risk_on ?? null));
   }, []);
+
+  useEffect(() => {
+    void fetchFreshness().then(setFreshness);
+  }, [pathname]);
 
   const dbOk = health?.ok === true;
   const jobError = health?.jobs.some((job) => job.status === "error") ?? false;
@@ -95,8 +109,50 @@ export function AppChrome() {
           />
         </div>
       </div>
+      <FreshnessStrip freshness={freshness} />
     </header>
   );
+}
+
+function FreshnessStrip({ freshness }: { freshness: Freshness | null }) {
+  if (freshness == null) {
+    return null;
+  }
+  return (
+    <div className="flex h-7 items-center gap-4 overflow-x-auto border-t border-line px-4 text-[11px] text-mute">
+      <span className="shrink-0 uppercase tracking-wide">Data</span>
+      {freshness.items.map((item) => (
+        <span
+          key={item.key}
+          className={cn("inline-flex shrink-0 items-center gap-1.5 tabular-nums", item.status !== "ok" && "text-warning")}
+          title={item.note ?? undefined}
+        >
+          {item.status !== "ok" ? <span className="h-1.5 w-1.5 rounded-full bg-warning" aria-hidden /> : null}
+          {item.label} {formatFreshness(item)}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function formatFreshness(item: FreshnessItem): string {
+  if (item.as_of == null) {
+    return "none";
+  }
+  if (!item.as_of.includes("T")) {
+    return item.as_of.slice(5);
+  }
+  const stamp = new Date(item.as_of);
+  if (Number.isNaN(stamp.getTime())) {
+    return item.as_of;
+  }
+  return `${stamp.toLocaleString("en-US", {
+    timeZone: "America/New_York",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "numeric",
+    minute: "2-digit",
+  })} ET`;
 }
 
 function healthTitle(health: Health | null, dbOk: boolean): string {

@@ -401,11 +401,32 @@ def _policy_read(odds: list[dict[str, Any]]) -> tuple[str | None, str | None]:
         yes = row.get("implied_yes")
         if top and top_yes is not None:
             bits.append(f"{label} top_outcome {top} implied_yes {top_yes}")
-            if policy is None and "hold" in str(top).lower():
-                policy = "hold_base"
-            if policy is None and "no cut" in str(top).lower():
+            if policy is None and _is_hold(top):
                 policy = "hold_base"
         elif label and yes is not None:
             bits.append(f"{label} implied_yes {yes}")
+    # The next meeting sets the base case; a later "Hold" must not override a front-meeting hike.
+    front = next(
+        (row for row in odds if isinstance(row, dict) and row.get("slot") == "front_fomc"),
+        None,
+    )
+    if front is not None and front.get("top_outcome"):
+        policy = _front_policy(str(front["top_outcome"]))
     odds_read = "; ".join(bits[:2]) if bits else None
     return policy, odds_read
+
+
+def _is_hold(outcome: object) -> bool:
+    text = str(outcome).lower()
+    return "hold" in text or "no cut" in text or "no change" in text
+
+
+def _front_policy(outcome: str) -> str | None:
+    text = outcome.lower()
+    if _is_hold(text):
+        return "hold_base"
+    if "hike" in text or "increase" in text:
+        return "hike_base"
+    if "cut" in text or "decrease" in text:
+        return "cut_base"
+    return None

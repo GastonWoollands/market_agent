@@ -1793,3 +1793,57 @@ def latest_eps_revisions(session: Session, instrument_id: int) -> list[EpsRevisi
             )
         )
     )
+
+
+@dataclass(frozen=True)
+class FreshnessDates:
+    """Latest stored date per data domain, for the freshness strip. No vendor I/O."""
+
+    quotes_as_of: datetime | None
+    spy_last_bar: date | None
+    dgs10_last: date | None
+    sec_finished_at: datetime | None
+    ttm_names: int
+    ttm_older_than_cutoff: int
+    scores_as_of: date | None
+    rrg_as_of: date | None
+    outlook_as_of: date | None
+
+
+def freshness_dates(session: Session, *, ttm_cutoff: date) -> FreshnessDates:
+    latest_ttm = (
+        select(MetricTtm.instrument_id, func.max(MetricTtm.as_of).label("as_of"))
+        .join(UniverseMember, UniverseMember.instrument_id == MetricTtm.instrument_id)
+        .join(Universe, Universe.id == UniverseMember.universe_id)
+        .where(Universe.name == "valuation")
+        .group_by(MetricTtm.instrument_id)
+        .subquery()
+    )
+    ttm_names, ttm_old = session.execute(
+        select(
+            func.count(),
+            func.count().filter(latest_ttm.c.as_of < ttm_cutoff),
+        ).select_from(latest_ttm)
+    ).one()
+    spy_last_bar = session.scalar(
+        select(func.max(BarDaily.date))
+        .join(Instrument, Instrument.id == BarDaily.instrument_id)
+        .where(Instrument.ticker == "SPY")
+    )
+    return FreshnessDates(
+        quotes_as_of=session.scalar(select(func.max(QuoteLatest.as_of))),
+        spy_last_bar=spy_last_bar,
+        dgs10_last=session.scalar(
+            select(func.max(MacroObservation.date)).where(MacroObservation.series_id == "DGS10")
+        ),
+        sec_finished_at=session.scalar(
+            select(func.max(JobRun.finished_at)).where(
+                JobRun.job_name == "ingest_sec", JobRun.status == "ok"
+            )
+        ),
+        ttm_names=int(ttm_names or 0),
+        ttm_older_than_cutoff=int(ttm_old or 0),
+        scores_as_of=session.scalar(select(func.max(OpportunityScore.as_of))),
+        rrg_as_of=session.scalar(select(func.max(RrgPoint.as_of))),
+        outlook_as_of=session.scalar(select(func.max(OutlookReport.as_of))),
+    )
