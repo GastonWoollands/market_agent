@@ -82,6 +82,7 @@ def _event(
 
 def events_from_yaml(catalog: CatalystsFile) -> list[CalendarEvent]:
     out: list[CalendarEvent] = []
+
     def timed(kind: str, item: CatalystItem, extra: dict | None = None) -> dict | None:
         at = item.time or catalog.default_times.get(kind)
         if not at:
@@ -106,9 +107,7 @@ def events_from_yaml(catalog: CatalystsFile) -> list[CalendarEvent]:
         ("treasury", catalog.treasury),
     ):
         for item in items:
-            out.append(
-                _event(day=item.date, title=item.title, kind=kind, extra=timed(kind, item))
-            )
+            out.append(_event(day=item.date, title=item.title, kind=kind, extra=timed(kind, item)))
     for item in catalog.other:
         kind = item.type if item.type in YAML_KINDS else "other"
         out.append(_event(day=item.date, title=item.title, kind=kind, extra=timed(kind, item)))

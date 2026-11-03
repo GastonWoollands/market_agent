@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from analytics.lookback import chart_window, window_deltas
 from analytics.risk_on import CYCLICALS, DEFENSIVES, compute_risk_on
+from api.odds import KalshiLiveView
 from api.schemas import (
     LiveAnomaly,
     LiveBrief,
@@ -135,6 +136,7 @@ def build_live(
     anomalies: list[LiveAnomaly] | None = None,
     odds_rows: list[OddsSnapshot] | None = None,
     polymarket: PolymarketFile | None = None,
+    kalshi: KalshiLiveView | None = None,
     events: list[LiveEvent] | None = None,
     brief: LiveBrief | None = None,
     outliers: list[LiveOutlier] | None = None,
@@ -150,9 +152,7 @@ def build_live(
         for item in items:
             row = by_ticker.get(item.ticker)
             meta = tape_meta.get(item.ticker)
-            name = (
-                item.label or (row.name if row else None) or (meta.name if meta else item.ticker)
-            )
+            name = item.label or (row.name if row else None) or (meta.name if meta else item.ticker)
             role = meta.role if meta else None
             out.append(_quote_from_row(ticker=item.ticker, name=name, role=role, row=row))
         return out
@@ -193,7 +193,8 @@ def build_live(
         regime=regime,
         liquidity=liquidity,
         anomalies=list(anomalies or []),
-        odds=_odds_items(odds_rows or [], polymarket),
+        odds=_odds_items(odds_rows or [], polymarket, kalshi),
+        ranges=kalshi.ranges() if kalshi is not None else [],
         events=list(events or []),
         brief=brief,
         outliers=list(outliers or []),
@@ -203,9 +204,7 @@ def build_live(
 
 
 def _watchlist_outliers(rows: list[LiveTapeRow]) -> list[LiveQuote]:
-    quotes = [
-        _quote_from_row(ticker=row.ticker, name=row.name, role=None, row=row) for row in rows
-    ]
+    quotes = [_quote_from_row(ticker=row.ticker, name=row.name, role=None, row=row) for row in rows]
     quotes.sort(
         key=lambda item: (item.change_pct is None, -abs(item.change_pct or 0.0), item.ticker)
     )
@@ -472,7 +471,11 @@ def risk_on_from_store(
     )
 
 
-def _odds_items(rows: list[OddsSnapshot], catalog: PolymarketFile | None) -> list[LiveOdds]:
+def _odds_items(
+    rows: list[OddsSnapshot],
+    catalog: PolymarketFile | None,
+    kalshi: KalshiLiveView | None = None,
+) -> list[LiveOdds]:
     if catalog is None:
         return []
     by_slot = {row.slot: row for row in rows}
@@ -514,4 +517,4 @@ def _odds_items(rows: list[OddsSnapshot], catalog: PolymarketFile | None) -> lis
                 outcomes=outcomes,
             )
         )
-    return items
+    return kalshi.with_alt(items) if kalshi is not None else items

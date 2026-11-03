@@ -40,8 +40,7 @@ def index_to_100(
     if base == 0:
         return []
     return [
-        (day, 100.0 * close / base)
-        for day, close in zip(slice_dates, slice_closes, strict=True)
+        (day, 100.0 * close / base) for day, close in zip(slice_dates, slice_closes, strict=True)
     ]
 
 

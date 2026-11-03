@@ -89,8 +89,7 @@ def stored_from_rows(
                 rs_momentum=float(point.rs_momentum),
                 quadrant=point.quadrant,
                 trail=[
-                    (row.as_of, float(row.rs_ratio), float(row.rs_momentum))
-                    for row in trail_rows
+                    (row.as_of, float(row.rs_ratio), float(row.rs_momentum)) for row in trail_rows
                 ],
                 ret_1w=float(stat.ret_1w) if stat and stat.ret_1w is not None else None,
                 ret_1m=float(stat.ret_1m) if stat and stat.ret_1m is not None else None,
@@ -218,9 +217,7 @@ def _corr(
     matrix = corr_matrix(series, tickers)
     if all(cell is None for row in matrix for cell in row):
         return None
-    rounded = [
-        [None if cell is None else round(cell, 4) for cell in row] for row in matrix
-    ]
+    rounded = [[None if cell is None else round(cell, 4) for cell in row] for row in matrix]
     return DynamicsCorr(window=CORR_WINDOW, tickers=tickers, matrix=rounded)
 
 

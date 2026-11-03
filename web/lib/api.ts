@@ -117,6 +117,26 @@ export type LiveOdds = {
   thin: boolean;
   as_of: string | null;
   outcomes: LiveOddsOutcome[];
+  alt?: LiveOddsAlt | null;
+};
+
+export type LiveOddsAlt = {
+  source: string;
+  implied_yes: number;
+  question: string;
+  thin: boolean;
+};
+
+export type LiveRange = {
+  slot: string;
+  label: string;
+  close_at: string | null;
+  p10: number | null;
+  p50: number | null;
+  p90: number | null;
+  thin: boolean;
+  as_of: string | null;
+  unavailable: string | null;
 };
 
 export type LiveEvent = {
@@ -190,6 +210,7 @@ export type LiveTape = {
   liquidity?: LiveLiquidity | null;
   anomalies?: LiveAnomaly[];
   odds: LiveOdds[];
+  ranges?: LiveRange[];
   events?: LiveEvent[];
   brief?: LiveBrief | null;
   outliers?: LiveOutlier[];
@@ -971,6 +992,31 @@ export async function fetchCreditCurve(): Promise<Fetched<CreditCurve>> {
 
 export async function fetchMarketOptions(): Promise<Fetched<MarketOptions>> {
   return fetchTyped<MarketOptions>("/options/market");
+}
+
+export type PositioningTrader = {
+  net: number;
+  share_oi: number;
+  change_1w: number | null;
+  pct_3y: number | null;
+};
+
+export type PositioningRow = {
+  key: string;
+  label: string;
+  report_date: string | null;
+  open_interest: number | null;
+  asset_managers: PositioningTrader | null;
+  leveraged_funds: PositioningTrader | null;
+};
+
+export type Positioning = {
+  as_of: string | null;
+  rows: PositioningRow[];
+};
+
+export async function fetchPositioning(): Promise<Fetched<Positioning>> {
+  return fetchTyped<Positioning>("/positioning");
 }
 
 export async function fetchCompare(tickers: string[]): Promise<Fetched<CompareTape>> {

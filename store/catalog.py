@@ -276,3 +276,60 @@ def load_credit_calibration() -> CreditCalibrationFile:
     with path.open(encoding="utf-8") as handle:
         raw = safe_load(handle)
     return CreditCalibrationFile.model_validate(raw)
+
+
+KalshiKind = Literal["range", "outcomes", "binary"]
+
+
+class KalshiSeries(BaseModel):
+    slot: str
+    series: str
+    kind: KalshiKind
+    label: str
+    pairs_with: str | None = None
+    outcomes: dict[str, str] = Field(default_factory=dict)
+
+    def outcome_key(self, market_ticker: str) -> str | None:
+        """Outcome key for a market ticker such as `KXFEDDECISION-26DEC-H25`."""
+        return self.outcomes.get(market_ticker.rsplit("-", 1)[-1])
+
+
+class KalshiFile(BaseModel):
+    series: list[KalshiSeries] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def unique_slots(self) -> Self:
+        slots = [item.slot for item in self.series]
+        if len(slots) != len(set(slots)):
+            raise ValueError("kalshi_series.yaml has duplicate slots")
+        return self
+
+    def by_kind(self, kind: KalshiKind) -> list[KalshiSeries]:
+        return [item for item in self.series if item.kind == kind]
+
+    def paired(self) -> dict[str, KalshiSeries]:
+        """Polymarket slot -> the Kalshi series shown on the same Live row."""
+        return {item.pairs_with: item for item in self.series if item.pairs_with}
+
+
+def load_kalshi() -> KalshiFile:
+    with (CONFIG_DIR / "kalshi_series.yaml").open(encoding="utf-8") as handle:
+        return KalshiFile.model_validate(safe_load(handle))
+
+
+class CftcContract(BaseModel):
+    key: str
+    label: str
+    code: str
+
+
+class CftcFile(BaseModel):
+    contracts: list[CftcContract] = Field(default_factory=list)
+
+    def codes(self) -> list[str]:
+        return [item.code for item in self.contracts]
+
+
+def load_cftc() -> CftcFile:
+    with (CONFIG_DIR / "cftc_contracts.yaml").open(encoding="utf-8") as handle:
+        return CftcFile.model_validate(safe_load(handle))

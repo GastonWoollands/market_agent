@@ -50,9 +50,7 @@ def detect_anomalies(series_map: Mapping[str, Series], as_of: date) -> list[Anom
     return anomalies[:3]
 
 
-def _detect_correlation_breaks(
-    series_map: Mapping[str, Series], anomalies: list[Anomaly]
-) -> None:
+def _detect_correlation_breaks(series_map: Mapping[str, Series], anomalies: list[Anomaly]) -> None:
     """
     Detect SPY vs 10Y correlation breakdowns.
 
@@ -82,7 +80,7 @@ def _detect_correlation_breaks(
             spy_change < -0.5 and dgs10_change < -0.05
         ):
             desc = (
-                f"SPY {spy_change:+.1%} with 10Y {dgs10_change*100:+.0f}bp "
+                f"SPY {spy_change:+.1%} with 10Y {dgs10_change * 100:+.0f}bp "
                 f"(historical correlation {hist_corr:.2f})"
             )
             anomalies.append(
@@ -99,9 +97,7 @@ def _detect_correlation_breaks(
             )
 
 
-def _detect_z_score_extremes(
-    series_map: Mapping[str, Series], anomalies: list[Anomaly]
-) -> None:
+def _detect_z_score_extremes(series_map: Mapping[str, Series], anomalies: list[Anomaly]) -> None:
     """Detect extreme moves (>2 standard deviations) in any series."""
     for series_id, series in series_map.items():
         if len(series) < 60:
@@ -132,9 +128,7 @@ def _detect_z_score_extremes(
                 )
 
 
-def _detect_breadth_divergence(
-    series_map: Mapping[str, Series], anomalies: list[Anomaly]
-) -> None:
+def _detect_breadth_divergence(series_map: Mapping[str, Series], anomalies: list[Anomaly]) -> None:
     """
     Detect breadth divergence (SPY up while equal weight / small caps down).
 
@@ -153,8 +147,7 @@ def _detect_breadth_divergence(
 
     if spy_chg > 0.5 and rsp_chg < 0 and iwm_chg < 0:
         desc = (
-            f"SPY +{spy_chg:.1%} while RSP {rsp_chg:+.1%}, "
-            f"IWM {iwm_chg:+.1%} (narrow leadership)"
+            f"SPY +{spy_chg:.1%} while RSP {rsp_chg:+.1%}, IWM {iwm_chg:+.1%} (narrow leadership)"
         )
         anomalies.append(
             Anomaly(

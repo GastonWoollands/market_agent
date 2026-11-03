@@ -1,0 +1,111 @@
+{
+ "cursor": "CgYI3P_o2gYSE0tYRkVEREVDSVNJT04tMjdKQU4",
+ "events": [
+  {
+   "category": "Economics",
+   "collateral_return_type": "MECNET",
+   "event_ticker": "KXFEDDECISION-26DEC",
+   "exchange_index": 0,
+   "last_updated_ts": "2026-10-27T18:37:20.007868Z",
+   "markets": [
+    {
+     "ticker": "KXFEDDECISION-26DEC-C26",
+     "event_ticker": "KXFEDDECISION-26DEC",
+     "strike_type": "custom",
+     "floor_strike": null,
+     "cap_strike": null,
+     "yes_sub_title": "Cut >25bps",
+     "yes_bid_dollars": "0.0000",
+     "yes_ask_dollars": "0.0100",
+     "last_price_dollars": "0.0100",
+     "volume_fp": "171429.56",
+     "open_interest_fp": "163091.26",
+     "status": "active",
+     "close_time": "2026-12-09T18:59:00Z",
+     "updated_time": "2026-10-27T18:37:20.014572Z"
+    },
+    {
+     "ticker": "KXFEDDECISION-26DEC-C25",
+     "event_ticker": "KXFEDDECISION-26DEC",
+     "strike_type": "custom",
+     "floor_strike": null,
+     "cap_strike": null,
+     "yes_sub_title": "Cut 25bps",
+     "yes_bid_dollars": "0.0000",
+     "yes_ask_dollars": "0.0100",
+     "last_price_dollars": "0.0100",
+     "volume_fp": "424901.16",
+     "open_interest_fp": "384718.25",
+     "status": "active",
+     "close_time": "2026-12-09T18:59:00Z",
+     "updated_time": "2026-10-27T18:37:20.014572Z"
+    },
+    {
+     "ticker": "KXFEDDECISION-26DEC-H0",
+     "event_ticker": "KXFEDDECISION-26DEC",
+     "strike_type": "custom",
+     "floor_strike": null,
+     "cap_strike": null,
+     "yes_sub_title": "Fed maintains rate",
+     "yes_bid_dollars": "0.2400",
+     "yes_ask_dollars": "0.2500",
+     "last_price_dollars": "0.2500",
+     "volume_fp": "892503.63",
+     "open_interest_fp": "491591.53",
+     "status": "active",
+     "close_time": "2026-12-09T18:59:00Z",
+     "updated_time": "2026-10-27T18:37:20.014572Z"
+    },
+    {
+     "ticker": "KXFEDDECISION-26DEC-H25",
+     "event_ticker": "KXFEDDECISION-26DEC",
+     "strike_type": "custom",
+     "floor_strike": null,
+     "cap_strike": null,
+     "yes_sub_title": "Hike 25bps",
+     "yes_bid_dollars": "0.7400",
+     "yes_ask_dollars": "0.7500",
+     "last_price_dollars": "0.7500",
+     "volume_fp": "674178.74",
+     "open_interest_fp": "386389.03",
+     "status": "active",
+     "close_time": "2026-12-09T18:59:00Z",
+     "updated_time": "2026-10-27T18:37:20.014572Z"
+    },
+    {
+     "ticker": "KXFEDDECISION-26DEC-H26",
+     "event_ticker": "KXFEDDECISION-26DEC",
+     "strike_type": "custom",
+     "floor_strike": null,
+     "cap_strike": null,
+     "yes_sub_title": "Hike >25bps",
+     "yes_bid_dollars": "0.0100",
+     "yes_ask_dollars": "0.0200",
+     "last_price_dollars": "0.0200",
+     "volume_fp": "529666.26",
+     "open_interest_fp": "438872.11",
+     "status": "active",
+     "close_time": "2026-12-09T18:59:00Z",
+     "updated_time": "2026-10-27T18:37:20.014572Z"
+    }
+   ],
+   "mutually_exclusive": true,
+   "product_metadata": {
+    "competition": "US FED",
+    "competition_scope": "Fed Decision"
+   },
+   "series_ticker": "KXFEDDECISION",
+   "settlement_sources": [
+    {
+     "name": "Federal Reserve",
+     "url": "https://www.federalreserve.gov"
+    }
+   ],
+   "strike_date": "2026-12-09T19:00:00Z",
+   "strike_period": "",
+   "sub_title": "On Dec 9, 2026",
+   "title": "Fed decision in Dec 2026?"
+  }
+ ],
+ "milestones": []
+}

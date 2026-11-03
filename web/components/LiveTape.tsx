@@ -13,6 +13,7 @@ import type {
   LiveLiquidity,
   LiveMacro,
   LiveOdds,
+  LiveRange,
   LiveOutlier,
   LiveQuote,
   LiveRegime,
@@ -145,7 +146,7 @@ export function LiveTapeView({ tape }: { tape: LiveTape | null }) {
           selected={tape.drilldown?.series_id ?? "DGS10"}
           today={printedToday ? today : null}
         />
-        <OddsPanel items={tape.odds ?? []} />
+        <OddsPanel items={tape.odds ?? []} ranges={tape.ranges ?? []} />
       </aside>
     </div>
   );
@@ -667,24 +668,48 @@ function WatchChip({ item }: { item: LiveWatch }) {
   );
 }
 
-function OddsPanel({ items }: { items: LiveOdds[] }) {
+function OddsPanel({ items, ranges }: { items: LiveOdds[]; ranges: LiveRange[] }) {
   return (
     <div>
       <div className="mb-2 flex items-baseline justify-between gap-2">
         <h2 className="text-[11px] uppercase tracking-wide text-mute">Market-implied</h2>
         <span className="text-[11px] text-mute">not a forecast</span>
       </div>
-      {items.length === 0 ? (
+      {items.length === 0 && ranges.length === 0 ? (
         <p className="text-[12px] leading-5 text-mute">
           No odds yet. Run <code className="text-white">python -m jobs.ingest_polymarket</code>.
         </p>
       ) : (
         <div className="overflow-hidden rounded border border-line">
+          {ranges.map((range) => (
+            <RangeRow key={range.slot} range={range} />
+          ))}
           {items.map((item, index) => (
             <OddsRow key={item.slot || item.slug} item={item} last={index === items.length - 1} />
           ))}
         </div>
       )}
+      <p className="mt-1.5 text-[11px] leading-5 text-mute">
+        Polymarket, with Kalshi beside it where it lists the same outcome. Index closes are
+        Kalshi range markets: median and the 10–90% band.
+      </p>
+    </div>
+  );
+}
+
+function RangeRow({ range }: { range: LiveRange }) {
+  return (
+    <div className="border-b border-line bg-panel px-3 py-2.5">
+      <div className="flex items-baseline justify-between gap-2">
+        <div className="min-w-0 truncate text-[13px]">{range.label}</div>
+        <div className="shrink-0 text-right text-[13px] tabular-nums">
+          {range.p50 == null ? "—" : formatLevel(range.p50)}
+        </div>
+      </div>
+      <div className="mt-0.5 truncate text-[11px] text-mute">
+        {range.unavailable ??
+          `${range.thin ? "thin book · " : ""}10–90% ${formatLevel(range.p10)}–${formatLevel(range.p90)} · ${formatClose(range.close_at)}`}
+      </div>
     </div>
   );
 }
@@ -701,8 +726,17 @@ function OddsRow({ item, last }: { item: LiveOdds; last: boolean }) {
       </div>
       <div className="mt-0.5 truncate text-[11px] text-mute" title={item.question}>
         {item.thin ? "thin book · " : null}
-        {shortQuestion(item.question)}
+        {shortQuestion(item.outcomes.length > 1 ? item.outcomes[0].label : item.question)}
       </div>
+      {item.alt ? (
+        <div
+          className="mt-0.5 flex justify-between gap-2 text-[11px] text-text-secondary"
+          title={item.alt.question}
+        >
+          <span>Kalshi, same outcome{item.alt.thin ? " · thin book" : ""}</span>
+          <span className="tabular-nums">{formatImplied(item.alt.implied_yes)}</span>
+        </div>
+      ) : null}
       {extras.length > 0 ? (
         <div className="mt-1 space-y-0.5">
           {extras.map((outcome) => (
@@ -715,6 +749,23 @@ function OddsRow({ item, last }: { item: LiveOdds; last: boolean }) {
       ) : null}
     </div>
   );
+}
+
+function formatLevel(value: number | null): string {
+  return value == null ? "—" : Math.round(value).toLocaleString("en-US");
+}
+
+function formatClose(value: string | null): string {
+  if (value == null) {
+    return "—";
+  }
+  const label = new Date(value).toLocaleString("en-US", {
+    timeZone: "America/New_York",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+  });
+  return `close ${label} ET`;
 }
 
 function formatImplied(value: number | null): string {

@@ -107,6 +107,15 @@ class LiveOddsOutcome(BaseModel):
     implied_yes: float
 
 
+class LiveOddsAlt(BaseModel):
+    """The same outcome priced on a second venue (Kalshi), shown on the Polymarket row."""
+
+    source: str
+    implied_yes: float
+    question: str
+    thin: bool = False
+
+
 class LiveOdds(BaseModel):
     slot: str
     slug: str
@@ -118,6 +127,21 @@ class LiveOdds(BaseModel):
     thin: bool = False
     as_of: datetime | None = None
     outcomes: list[LiveOddsOutcome] = Field(default_factory=list)
+    alt: LiveOddsAlt | None = None
+
+
+class LiveRange(BaseModel):
+    """Kalshi close-range markets read as a distribution of the next index close."""
+
+    slot: str
+    label: str
+    close_at: datetime | None = None
+    p10: float | None = None
+    p50: float | None = None
+    p90: float | None = None
+    thin: bool = False
+    as_of: datetime | None = None
+    unavailable: str | None = None
 
 
 class LiveEvent(BaseModel):
@@ -195,6 +219,7 @@ class LiveResponse(BaseModel):
     liquidity: LiveLiquidity | None = None
     anomalies: list[LiveAnomaly] = Field(default_factory=list)
     odds: list[LiveOdds] = Field(default_factory=list)
+    ranges: list[LiveRange] = Field(default_factory=list)
     events: list[LiveEvent] = Field(default_factory=list)
     brief: LiveBrief | None = None
     outliers: list[LiveOutlier] = Field(default_factory=list)
@@ -921,3 +946,24 @@ class MarketOptionsResponse(BaseModel):
     put_call_as_of: date | None = None
     put_call: list[PutCallLatest] = Field(default_factory=list)
     put_call_history: list[PutCallPoint] = Field(default_factory=list)
+
+
+class PositioningTrader(BaseModel):
+    net: int
+    share_oi: float
+    change_1w: int | None = None
+    pct_3y: float | None = None
+
+
+class PositioningRow(BaseModel):
+    key: str
+    label: str
+    report_date: date | None = None
+    open_interest: int | None = None
+    asset_managers: PositioningTrader | None = None
+    leveraged_funds: PositioningTrader | None = None
+
+
+class PositioningResponse(BaseModel):
+    as_of: date | None = None
+    rows: list[PositioningRow] = Field(default_factory=list)

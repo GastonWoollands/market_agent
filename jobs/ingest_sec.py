@@ -99,12 +99,7 @@ def ingest(
 
     with session_scope() as session:
         members = universe_size(session, "valuation")
-    if (
-        not fy_only
-        and tickers is None
-        and limit is None
-        and not (BAND[0] <= members <= BAND[1])
-    ):
+    if not fy_only and tickers is None and limit is None and not (BAND[0] <= members <= BAND[1]):
         raise RuntimeError(f"valuation membership {members} is outside {BAND[0]}–{BAND[1]}")
     return {
         "members": members,

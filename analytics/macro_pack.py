@@ -170,8 +170,8 @@ def compute_net_liquidity(rows: Sequence[dict[str, Any]]) -> dict[str, Any] | No
 
     wow_change_bn = None
     if walcl_row.get("w1") and rrp_row.get("w1") and tga_row.get("w1"):
-        prior_net_liq = (fed_bs - walcl_row["w1"]) - (rrp_level - rrp_row["w1"]) - (
-            tga_level - tga_row["w1"]
+        prior_net_liq = (
+            (fed_bs - walcl_row["w1"]) - (rrp_level - rrp_row["w1"]) - (tga_level - tga_row["w1"])
         )
         wow_change_bn = (net_liq_mn - prior_net_liq) / 1000
 

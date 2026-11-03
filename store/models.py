@@ -89,9 +89,7 @@ class JobRun(Base):
     error: Mapped[str | None] = mapped_column(Text)
     extra: Mapped[dict[str, Any] | None] = mapped_column("meta", JSONB)
 
-    __table_args__ = (
-        CheckConstraint("status IN ('running', 'ok', 'error')", name="status"),
-    )
+    __table_args__ = (CheckConstraint("status IN ('running', 'ok', 'error')", name="status"),)
 
 
 class BarDaily(Base):
@@ -178,9 +176,12 @@ class MacroObservation(Base):
 
 
 class OddsSnapshot(Base):
-    __tablename__ = "odds_snapshot"
-    __table_args__ = (UniqueConstraint("slug", name="uq_odds_snapshot_slug"),)
+    """Latest prediction-market read per (source, slot): Polymarket and Kalshi."""
 
+    __tablename__ = "odds_snapshot"
+    __table_args__ = (UniqueConstraint("source", "slug", name="uq_odds_snapshot_source_slug"),)
+
+    source: Mapped[str] = mapped_column(String(16), primary_key=True, default="polymarket")
     slot: Mapped[str] = mapped_column(String(64), primary_key=True)
     slug: Mapped[str] = mapped_column(String(128), nullable=False)
     as_of: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -267,9 +268,7 @@ class OptionChainSnapshot(Base):
     iv: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
     last_trade_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
-    __table_args__ = (
-        CheckConstraint("kind IN ('C', 'P')", name="ck_option_chain_snapshot_kind"),
-    )
+    __table_args__ = (CheckConstraint("kind IN ('C', 'P')", name="ck_option_chain_snapshot_kind"),)
 
 
 class OptionStats(Base):
@@ -316,6 +315,23 @@ class OptionsMarketStats(Base):
     put_volume: Mapped[int] = mapped_column(BigInteger, nullable=False)
     call_oi: Mapped[int] = mapped_column(BigInteger, nullable=False)
     put_oi: Mapped[int] = mapped_column(BigInteger, nullable=False)
+
+
+class CotPosition(Base):
+    """CFTC Traders in Financial Futures, one weekly report per contract (futures only)."""
+
+    __tablename__ = "cot_position"
+
+    contract_code: Mapped[str] = mapped_column(String(16), primary_key=True)
+    report_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    market: Mapped[str] = mapped_column(Text, nullable=False)
+    open_interest: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    dealer_long: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    dealer_short: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    asset_mgr_long: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    asset_mgr_short: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    lev_money_long: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    lev_money_short: Mapped[int] = mapped_column(BigInteger, nullable=False)
 
 
 class RiskStats(Base):

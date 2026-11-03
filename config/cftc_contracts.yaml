@@ -1,0 +1,23 @@
+# CFTC Traders in Financial Futures, futures only (Socrata dataset gpe5-46if, no key).
+# Weekly: positions as of Tuesday, published Friday. Codes are CFTC contract market codes.
+# Russell has no consolidated code; the E-mini is the bulk of open interest.
+
+contracts:
+  - key: spx
+    label: S&P 500
+    code: "13874+"
+  - key: ndx
+    label: Nasdaq-100
+    code: "20974+"
+  - key: rty
+    label: Russell 2000
+    code: "239742"
+  - key: ust2y
+    label: UST 2Y
+    code: "042601"
+  - key: ust10y
+    label: UST 10Y
+    code: "043602"
+  - key: vix
+    label: VIX
+    code: "1170E1"

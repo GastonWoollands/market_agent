@@ -145,9 +145,7 @@ def build_judgment(
         takeaways.append(f"DGS10 {dgs10}{w1}.{slope}.")
     if be is not None and cpi_yoy is not None:
         pce_bit = f" PCEPILFE yoy_pct {pce_yoy}." if pce_yoy is not None else ""
-        takeaways.append(
-            f"breakeven_10y {be} vs CPIAUCSL yoy_pct {cpi_yoy}.{pce_bit}"
-        )
+        takeaways.append(f"breakeven_10y {be} vs CPIAUCSL yoy_pct {cpi_yoy}.{pce_bit}")
     if pay_chg is not None:
         takeaways.append(f"PAYEMS print_change {pay_chg}.")
     if claims is not None:
@@ -239,9 +237,7 @@ def _policy_comms(
 ) -> dict[str, Any] | None:
     if not items:
         return None
-    ranked = [
-        item for item in items if isinstance(item, dict) and item.get("title")
-    ]
+    ranked = [item for item in items if isinstance(item, dict) and item.get("title")]
     ranked.sort(key=lambda item: 0 if item.get("kind") == "speech" else 1)
     first = ranked[0] if ranked else None
     if first is None:
@@ -369,9 +365,7 @@ def _watch_print(kind: str, title: str) -> tuple[str, str] | None:
     return ("ECBDFR", "value")
 
 
-def _curve_regime(
-    curve_w: float | None, dgs2_w: float | None, dgs10_w: float | None
-) -> str | None:
+def _curve_regime(curve_w: float | None, dgs2_w: float | None, dgs10_w: float | None) -> str | None:
     if curve_w is None:
         return None
     if curve_w > 0 and dgs2_w is not None and dgs10_w is not None:

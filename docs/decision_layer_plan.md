@@ -39,7 +39,7 @@ This file is **not** the product contract. If intent, sources, universes, pages,
 | 1.10 | Peer comps + credit curve | **Done** (branch `feat/peer-comps-credit-curve`) | Ticker-page peer table and EV/EBITDA vs growth scatter (no new data); FRED rating-bucket OAS / yields, DGS1, Baa–Aaa, NFCI, STLFSI4 |
 | 1.11 | Equity-implied credit bucket | **Done** (branch `feat/implied-credit`) | Merton DD → implied rating bucket on the FRED curve; `config/credit_calibration.yaml` reviewed before ship |
 | 1.12 | Options read | **Done** (branch `feat/options-read`) | Yahoo chains (scoped names), ^VIX9D / ^VIX3M / ^VVIX / ^SKEW, Cboe market put/call |
-| 1.13 | Kalshi + CFTC | Not started | S&P / Nasdaq range distribution, macro odds beside Polymarket; TFF positioning |
+| 1.13 | Kalshi + CFTC | **Done** (branch `feat/kalshi-cftc`) | S&P / Nasdaq range distribution, Fed + recession beside Polymarket; TFF positioning |
 | 1.14 | Street consensus + short interest | Not started | Yahoo recommendation / target / revisions; FINRA short interest + days to cover |
 | 2 | Gems universe D | Not started | Flag only on B; membership + Yahoo gems later. No F-score gate |
 | 3 | Book (portfolio CRUD + current risk) | Not started | Watchlist stays unsized. After 1.5 for user value |
@@ -49,7 +49,7 @@ This file is **not** the product contract. If intent, sources, universes, pages,
 | 6 | Recommendation writer | Not started | Pack desk metrics + citation gate; Python fills snapshot |
 | 7 | Three-zone cards + Gems tab | Not started | Schema/`api.ts` before components. No F/Z drawer |
 
-Last tracker update: 2026-10-31.
+Last tracker update: 2026-11-03.
 
 ---
 
@@ -359,10 +359,16 @@ Method in Northstar §9. Spike (2026-10-31, scratch only, 65 rated names + CRWV 
 
 **Known limits:** run before the close; weekend runs leave some ETF IVs empty. Put/call per name counts the stored monthlies ±30%, not the whole chain. The expected move covers spot to the first expiry after earnings, so a monthly far from the date overstates the event. IV rank is blank until 252 sessions are stored (~Nov 2027). Cboe ratios are Cboe-listed volume only.
 
-## Phase 1.13 — Kalshi + CFTC
+## Phase 1.13 — Kalshi + CFTC (done)
 
-- Kalshi `KXINX` / Nasdaq range series → implied distribution of the next close(s) (median, 10/90 band) on Live; Fed / CPI / recession slots beside Polymarket in `odds_snapshot`.
-- CFTC TFF (Socrata `gpe5-46if`): asset manager / leveraged funds net and its 3y percentile for S&P 500, Nasdaq-100, Russell 2000, 2Y / 10Y, VIX.
+- Kalshi `KXINX` / `KXNASDAQ100` range series → implied distribution of the next close (median, 10/90 band) on Live. `KXFEDDECISION` and `KXRECSSNBER` sit on the Polymarket `front_fomc` / `recession` rows in `odds_snapshot` (now keyed `source + slot`).
+- CFTC TFF (Socrata `gpe5-46if`, futures only): asset manager / leveraged funds net as a share of open interest and its 3y percentile for S&P 500, Nasdaq-100, Russell 2000, UST 2Y / 10Y, VIX → `cot_position`, table on Dynamics.
+
+**Shipped:** `ingest/http.py` (`JsonApiClient` base for new JSON vendors), `ingest/kalshi/`, `ingest/cftc/`, `analytics/prediction_markets.py` (`RangeDistribution`), `analytics/positioning.py` (`PositioningRead`), `jobs/ingest_kalshi.py`, `jobs/ingest_cftc.py`, `api/odds.py` (`KalshiLiveView`), `api/positioning.py`, `GET /positioning`, Live Market-implied panel rows, `PositioningPanel.tsx`.
+
+**Run:** `make cftc-backfill kalshi`; then `ingest_kalshi` in session and `ingest_cftc` on Fridays.
+
+**Limits:** CPI has no Kalshi pair (Kalshi lists core CPI month-over-month, Polymarket year-over-year), so that row stays Polymarket only. Kalshi is shown only for the outcome Polymarket ranks first and only at the same FOMC meeting. Kalshi's recession contract is NBER "starts this year", Polymarket's is "by end of 2026": the definition is in the row tooltip. Outlook pack still reads Polymarket only.
 
 ## Phase 1.14 — Street consensus + short interest
 
@@ -433,6 +439,7 @@ Next concrete PR: **Phase 1.9 rotation panels**, then **Phase 3 Book** (with 3.5
 | 2026-10-31 | Phases 1.6–1.9 added after a single-name deep-dive exposed TTM / debt defects. Northstar: Ticker + Compare pages; interest coverage in scope. |
 | 2026-10-31 | Phase 1.6 merged (PR #13). Phase 1.7: SIC sectors, `risk_stats`, EBIT / interest TTM, additive partial `ingest_sec`. |
 | 2026-10-31 | Phase 1.7 merged (PR #14). Phase 1.8: Ticker + Compare pages and APIs; facts refreshed for non-members. |
+| 2026-11-03 | Phase 1.12 merged (PR #19). Phase 1.13: Kalshi index ranges + Fed / recession pairs on Live, CFTC TFF positioning on Dynamics; `odds_snapshot` keyed by source + slot. |
 | 2026-11-01 | Phase 1.11 merged (PR #18). Phase 1.12: options read (Yahoo chains + `option_stats`, vol indices on the tape, Cboe put/call with backfill; Ticker + Dynamics panels). |
 | 2026-10-31 | Phase 1.11: equity-implied credit bucket (verified 106-name calibration set, `compute_credit`, Ticker panel). |
 | 2026-10-31 | Phase 1.10: peer comps + scatter on Ticker, FRED rating curve (`GET /credit/curve`), `in_pack` flag. |

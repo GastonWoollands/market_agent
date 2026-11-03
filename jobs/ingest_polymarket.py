@@ -29,11 +29,7 @@ def ingest(
         items = [item for item in items if item.slot.lower() in wanted]
     if slugs:
         wanted = {item.lower() for item in slugs}
-        items = [
-            item
-            for item in items
-            if item.slug is not None and item.slug.lower() in wanted
-        ]
+        items = [item for item in items if item.slug is not None and item.slug.lower() in wanted]
     if not items:
         raise RuntimeError("Polymarket catalog is empty")
 
@@ -95,9 +91,7 @@ def _commit_odds(points: list[OddsPoint], current_by_slot: dict[str, str]) -> No
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Ingest Polymarket Gamma odds for curated slots."
-    )
+    parser = argparse.ArgumentParser(description="Ingest Polymarket Gamma odds for curated slots.")
     parser.add_argument(
         "--slots",
         help="Optional comma-separated catalog slots (default: full catalog).",
