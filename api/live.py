@@ -1,10 +1,9 @@
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from zoneinfo import ZoneInfo
 
 from analytics.lookback import chart_window, window_deltas
 from analytics.risk_on import CYCLICALS, DEFENSIVES, compute_risk_on
-from api.freshness import last_session
+from analytics.session import ET, MarketClock
 from api.odds import KalshiLiveView
 from api.schemas import (
     LiveAnomaly,
@@ -46,15 +45,6 @@ _STATE_RANK = {
     "POSTPOST": 4,
     "CLOSED": 5,
 }
-_ET = ZoneInfo("America/New_York")
-# Session state by ET wall clock: the last row whose start is <= now applies.
-_CLOCK_STATES = (
-    (time(0, 0), "CLOSED"),
-    (time(4, 0), "PRE"),
-    (time(9, 30), "REGULAR"),
-    (time(16, 0), "POST"),
-    (time(20, 0), "CLOSED"),
-)
 _CHANGE_KIND = {
     "REGULAR": "session",
     "PRE": "gap",
@@ -123,25 +113,14 @@ def _session_state(quotes: list[LiveQuote], now: datetime) -> str:
             continue
         if best is None or rank < best[0]:
             best = (rank, quote.market_state)
-    return best[1] if best is not None else _clock_state(now)
-
-
-def _clock_state(now: datetime) -> str:
-    local = _aware(now).astimezone(_ET)
-    if local.weekday() >= 5:
-        return "CLOSED"
-    state = "CLOSED"
-    for start, name in _CLOCK_STATES:
-        if local.time() >= start:
-            state = name
-    return state
+    return best[1] if best is not None else MarketClock(now).state
 
 
 def _is_stale(as_of: datetime | None, now: datetime) -> bool:
     """Same rule as the freshness strip: no quote from the last opened ET session."""
     if as_of is None:
         return True
-    return _aware(as_of).astimezone(_ET).date() < last_session(_aware(now))
+    return _aware(as_of).astimezone(ET).date() < MarketClock(now).last_session()
 
 
 def build_live(

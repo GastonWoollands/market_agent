@@ -1,6 +1,7 @@
 from datetime import UTC, date, datetime
 
-from api.freshness import FreshnessView, last_close, last_session, sessions_between
+from analytics.session import MarketClock, sessions_between
+from api.freshness import FreshnessView
 from store.repos import FreshnessDates
 
 # Tuesday 2026-11-03 13:02 ET, cash session open.
@@ -28,12 +29,12 @@ def _status(view: FreshnessView) -> dict[str, str]:
 
 
 def test_session_dates_follow_the_et_clock() -> None:
-    assert last_session(INTRADAY) == date(2026, 11, 3)
-    assert last_close(INTRADAY) == date(2026, 11, 2)
+    assert MarketClock(INTRADAY).last_session() == date(2026, 11, 3)
+    assert MarketClock(INTRADAY).last_close() == date(2026, 11, 2)
     # Monday 08:00 ET: neither has happened today, so both fall back to Friday.
     monday_pre = datetime(2026, 11, 2, 13, 0, tzinfo=UTC)
-    assert last_session(monday_pre) == date(2026, 10, 30)
-    assert last_close(monday_pre) == date(2026, 10, 30)
+    assert MarketClock(monday_pre).last_session() == date(2026, 10, 30)
+    assert MarketClock(monday_pre).last_close() == date(2026, 10, 30)
     assert sessions_between(date(2026, 10, 30), date(2026, 11, 3)) == 2
 
 
