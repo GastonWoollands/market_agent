@@ -135,6 +135,8 @@ python -m jobs.ingest_sec --fy-only
 python -m jobs.compute_quant
 ```
 
+`--fy-only` reads the zip (add `--per-cik` to skip the 1.4 GB download when the local copy is older than 7 days) and does not move the Filings date.
+
 `ingest_sec --rebuild` downloads `companyfacts.zip` (~1.4 GB) into `data/sec/` (gitignored) and re-downloads it when the copy is older than 7 days. Set `SEC_USER_AGENT` to a real email.
 
 After the first load, plain `ingest_sec` refreshes stored names only (valuation ∪ watchlist) from per-CIK JSON (~20 min for ~1000 names) and never changes membership: names that fall below the floor stay members, and new names never enter. Run `--rebuild` monthly so the universe does not drift. Each full run (no `--tickers` / `--limit`) records `meta.facts_as_of` (the SEC data date), which the freshness strip shows as Filings.

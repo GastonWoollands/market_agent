@@ -73,12 +73,10 @@ def ingest(
 
     with session_scope() as session:
         stored = universe_size(session, "valuation")
-        refresh_set = {
-            item.ticker for item in instruments_in_universes(session, REFRESH_UNIVERSES)
-        }
+        refresh_set = {item.ticker for item in instruments_in_universes(session, REFRESH_UNIVERSES)}
     mode = run_mode(rebuild=rebuild, fy_only=fy_only, members=stored)
-    # Only a run over every name dates the whole dataset for the freshness strip.
-    partial = tickers is not None or limit is not None
+    # Only a TTM run over every name dates the whole dataset for the freshness strip.
+    partial = tickers is not None or limit is not None or mode == "fy_only"
     if mode == "refresh":
         per_cik = True
         tickers = tickers or refresh_set
