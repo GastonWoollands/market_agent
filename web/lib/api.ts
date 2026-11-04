@@ -227,6 +227,31 @@ export async function fetchHealth(): Promise<Health | null> {
   }
 }
 
+export type FreshnessItem = {
+  key: string;
+  label: string;
+  as_of: string | null;
+  status: "ok" | "late" | "missing";
+  note: string | null;
+};
+
+export type Freshness = {
+  session: string;
+  items: FreshnessItem[];
+};
+
+export async function fetchFreshness(): Promise<Freshness | null> {
+  try {
+    const response = await fetch(`${API_URL}/freshness`, { cache: "no-store" });
+    if (!response.ok) {
+      return null;
+    }
+    return (await response.json()) as Freshness;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchLive(lever = "DGS10"): Promise<LiveTape | null> {
   try {
     const query = new URLSearchParams({ lever });

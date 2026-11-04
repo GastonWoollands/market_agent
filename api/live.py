@@ -1,8 +1,9 @@
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from analytics.lookback import chart_window, window_deltas
 from analytics.risk_on import CYCLICALS, DEFENSIVES, compute_risk_on
+from analytics.session import ET, MarketClock
 from api.odds import KalshiLiveView
 from api.schemas import (
     LiveAnomaly,
@@ -36,7 +37,6 @@ from store.repos import LiveMacroRow, LiveTapeRow
 DEFAULT_LEVER = "DGS10"
 HISTORY_DAYS = 400
 THIN_LIQUIDITY = Decimal("10000")
-_QUOTE_STALE_AFTER = timedelta(days=3)
 _STATE_RANK = {
     "REGULAR": 0,
     "PRE": 1,
@@ -102,7 +102,8 @@ def _quote_from_row(
     )
 
 
-def _session_state(quotes: list[LiveQuote]) -> str | None:
+def _session_state(quotes: list[LiveQuote], now: datetime) -> str:
+    """Best state any quote reports; the ET clock when quotes carry none (no holiday calendar)."""
     best: tuple[int, str] | None = None
     for quote in quotes:
         if not quote.market_state:
@@ -112,13 +113,14 @@ def _session_state(quotes: list[LiveQuote]) -> str | None:
             continue
         if best is None or rank < best[0]:
             best = (rank, quote.market_state)
-    return None if best is None else best[1]
+    return best[1] if best is not None else MarketClock(now).state
 
 
 def _is_stale(as_of: datetime | None, now: datetime) -> bool:
+    """Same rule as the freshness strip: no quote from the last opened ET session."""
     if as_of is None:
         return True
-    return _aware(now) - _aware(as_of) > _QUOTE_STALE_AFTER
+    return _aware(as_of).astimezone(ET).date() < MarketClock(now).last_session()
 
 
 def build_live(
@@ -183,7 +185,7 @@ def build_live(
     as_of = max(quote_times) if quote_times else None
     return LiveResponse(
         as_of=as_of,
-        market_state=_session_state(header),
+        market_state=_session_state(header, clock),
         stale=_is_stale(as_of, clock),
         header=header,
         intl=intl,

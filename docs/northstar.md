@@ -318,6 +318,7 @@ GET /compare?tickers=A,B,...
 GET /watchlist
 POST /watchlist  DELETE /watchlist/{ticker}
 GET /search?q=
+GET /freshness
 GET /health
 ```
 

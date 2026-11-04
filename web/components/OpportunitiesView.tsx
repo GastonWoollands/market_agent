@@ -86,7 +86,7 @@ export function OpportunitiesView({
                   <th
                     key={col.id}
                     className={cn(
-                      "sticky top-12 z-10 bg-ink px-3 py-2 font-normal",
+                      "sticky top-[var(--chrome-h)] z-10 bg-ink px-3 py-2 font-normal",
                       col.align === "right" ? "text-right" : "text-left",
                     )}
                     title={col.title}

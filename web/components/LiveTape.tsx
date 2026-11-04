@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { StaleBadge } from "@/components/StaleBadge";
 import { MacroChart } from "@/components/MacroChart";
 import { cn } from "@/lib/cn";
+import { fmtDay, fmtEt } from "@/lib/format";
 import type {
   LiveAnomaly,
   LiveBrief,
@@ -92,7 +93,7 @@ export function LiveTapeView({ tape }: { tape: LiveTape | null }) {
             {tape.as_of ? (
               <>
                 <span className="mx-2 text-line">·</span>
-                as of {formatAsOf(tape.as_of)}
+                as of {fmtEt(tape.as_of)}
               </>
             ) : null}
             {tape.stale ? (
@@ -214,7 +215,7 @@ function RegimeBand({
       <div className="flex items-baseline justify-between gap-2 border-b border-line px-3 py-2">
         <h2 className="text-[11px] uppercase tracking-wide text-mute">Regime &amp; conditions</h2>
         <span className="text-[11px] text-mute">
-          {regime?.as_of ? `as of ${formatDateOnly(regime.as_of)}` : "read-time"}
+          {regime?.as_of ? `as of ${fmtDay(regime.as_of)}` : "read-time"}
         </span>
       </div>
       <div className="grid grid-cols-2 gap-px bg-line sm:grid-cols-3 lg:grid-cols-6">
@@ -534,7 +535,7 @@ function MacroSidebar({
       <div className="mb-2 flex items-baseline justify-between gap-2">
         <h2 className="text-[11px] uppercase tracking-wide text-mute">Macro</h2>
         <span className="text-[11px] text-mute">
-          {tenYear?.as_of ? `10Y as of ${formatDateOnly(tenYear.as_of)}` : "FRED"}
+          {tenYear?.as_of ? `10Y as of ${fmtDay(tenYear.as_of)}` : "FRED"}
         </span>
       </div>
       <div className="space-y-3">
@@ -623,7 +624,7 @@ function Drilldown({ panel }: { panel: LiveDrilldown }) {
         <div className="text-right">
           <div className="text-xl tabular-nums">{formatMacroValue(panel.unit, panel.value)}</div>
           <div className="text-[12px] text-mute">
-            {panel.as_of ? `as of ${formatDateOnly(panel.as_of)}` : "no print"}
+            {panel.as_of ? `as of ${fmtDay(panel.as_of)}` : "no print"}
           </div>
         </div>
       </div>
@@ -708,7 +709,7 @@ function RangeRow({ range }: { range: LiveRange }) {
       </div>
       <div className="mt-0.5 truncate text-[11px] text-mute">
         {range.unavailable ??
-          `${range.thin ? "thin book · " : ""}10–90% ${formatLevel(range.p10)}–${formatLevel(range.p90)} · ${formatClose(range.close_at)}`}
+          `${range.thin ? "thin book · " : ""}10–90% ${formatLevel(range.p10)}–${formatLevel(range.p90)} · ${range.close_at ? `close ${fmtEt(range.close_at)}` : "—"}`}
       </div>
     </div>
   );
@@ -753,19 +754,6 @@ function OddsRow({ item, last }: { item: LiveOdds; last: boolean }) {
 
 function formatLevel(value: number | null): string {
   return value == null ? "—" : Math.round(value).toLocaleString("en-US");
-}
-
-function formatClose(value: string | null): string {
-  if (value == null) {
-    return "—";
-  }
-  const label = new Date(value).toLocaleString("en-US", {
-    timeZone: "America/New_York",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-  });
-  return `close ${label} ET`;
 }
 
 function formatImplied(value: number | null): string {
@@ -854,32 +842,6 @@ function formatSignedBn(bn: number): string {
     return `-${body}`;
   }
   return body;
-}
-
-function formatAsOf(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-  return parsed.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short",
-  });
-}
-
-function formatDateOnly(value: string): string {
-  const parts = value.split("-").map(Number);
-  if (parts.length < 3 || parts.some((part) => Number.isNaN(part))) {
-    return value;
-  }
-  const [year, month, day] = parts;
-  return new Date(year, month - 1, day).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
 }
 
 function formatMacroValue(unit: string, value: number | null): string {

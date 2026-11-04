@@ -2,10 +2,20 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/cn";
-import { fetchHealth, fetchLive, type Health, type JobStatus, type LiveRiskOn } from "@/lib/api";
+import { fmtDay, fmtEt } from "@/lib/format";
+import {
+  fetchFreshness,
+  fetchHealth,
+  fetchLive,
+  type Freshness,
+  type FreshnessItem,
+  type Health,
+  type JobStatus,
+  type LiveRiskOn,
+} from "@/lib/api";
 
 const TABS = [
   { href: "/", label: "Live", live: true },
@@ -22,18 +32,48 @@ export function AppChrome() {
   const router = useRouter();
   const [health, setHealth] = useState<Health | null>(null);
   const [riskOn, setRiskOn] = useState<LiveRiskOn | null>(null);
+  // undefined = loading, null = request failed.
+  const [freshness, setFreshness] = useState<Freshness | null | undefined>(undefined);
+  const headerRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    // Sticky table headers below read --chrome-h instead of a hardcoded offset.
+    const header = headerRef.current;
+    if (!header) {
+      return;
+    }
+    const root = document.documentElement;
+    const observer = new ResizeObserver(() => {
+      root.style.setProperty("--chrome-h", `${header.offsetHeight}px`);
+    });
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     void fetchHealth().then(setHealth);
     void fetchLive().then((tape) => setRiskOn(tape?.risk_on ?? null));
   }, []);
 
+  useEffect(() => {
+    let current = true;
+    void fetchFreshness().then((value) => {
+      // Fast tab switches overlap; only the latest navigation may write.
+      if (current) {
+        setFreshness(value);
+      }
+    });
+    return () => {
+      current = false;
+    };
+  }, [pathname]);
+
   const dbOk = health?.ok === true;
   const jobError = health?.jobs.some((job) => job.status === "error") ?? false;
   const jobRunning = health?.jobs.some((job) => job.status === "running") ?? false;
 
   return (
-    <header className="sticky top-0 z-20 border-b border-line bg-ink/95 backdrop-blur">
+    <header ref={headerRef} className="sticky top-0 z-20 border-b border-line bg-ink/95 backdrop-blur">
       <div className="flex h-12 items-center gap-6 px-4">
         <Link href="/" className="flex shrink-0 items-center gap-2 text-sm font-semibold tracking-tight">
           <Logo />
@@ -95,8 +135,35 @@ export function AppChrome() {
           />
         </div>
       </div>
+      <FreshnessStrip freshness={freshness} />
     </header>
   );
+}
+
+function FreshnessStrip({ freshness }: { freshness: Freshness | null | undefined }) {
+  return (
+    <div className="flex h-7 items-center gap-4 overflow-x-auto border-t border-line px-4 text-[11px] text-mute">
+      <span className="shrink-0 uppercase tracking-wide">Data</span>
+      {freshness === null ? <span className="shrink-0 text-warning">unavailable</span> : null}
+      {(freshness?.items ?? []).map((item) => (
+        <span
+          key={item.key}
+          className={cn("inline-flex shrink-0 items-center gap-1.5 tabular-nums", item.status !== "ok" && "text-warning")}
+          title={item.note ?? undefined}
+        >
+          {item.status !== "ok" ? <span className="h-1.5 w-1.5 rounded-full bg-warning" aria-hidden /> : null}
+          {item.label} {formatFreshness(item)}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function formatFreshness(item: FreshnessItem): string {
+  if (item.as_of == null) {
+    return "none";
+  }
+  return item.as_of.includes("T") ? fmtEt(item.as_of) : fmtDay(item.as_of);
 }
 
 function healthTitle(health: Health | null, dbOk: boolean): string {

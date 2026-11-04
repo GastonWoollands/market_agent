@@ -6,10 +6,9 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
-from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
@@ -27,6 +26,7 @@ from analytics.risk_on import (
     VIX_SERIES,
     compute_risk_on,
 )
+from analytics.session import ET, SESSION_OPEN, MarketClock, close_at
 from store.catalog import load_fred_series, load_news_sources, load_polymarket, load_universes
 from store.display import resolve_price, resolve_yield_change_bp
 from store.models import (
@@ -400,21 +400,17 @@ def _driver_series(session: Session, as_of: date) -> dict[str, list[tuple[date, 
     return out
 
 
-ET = ZoneInfo("America/New_York")
-SESSION_OPEN = time(9, 30)
-SESSION_CLOSE = time(16, 0)
-
-
 def session_phase(as_of: date, now: datetime) -> dict[str, str]:
     """Where the US cash session stood when the pack was built (no holiday calendar)."""
-    local = now.astimezone(ET)
+    clock = MarketClock(now)
+    local = clock.local
     if as_of < local.date():
         phase = "after_close"
-    elif local.weekday() >= 5:
+    elif not clock.is_weekday:
         phase = "closed"
     elif local.time() < SESSION_OPEN:
         phase = "pre_open"
-    elif local.time() < SESSION_CLOSE:
+    elif clock.is_regular:
         phase = "intraday"
     else:
         phase = "after_close"
@@ -433,14 +429,9 @@ def _extended_hours(
     days = [row.last_date for row in rows if row.last_date is not None]
     if not days:
         return []
-    since = datetime.combine(min(days), SESSION_CLOSE, ET)
+    since = close_at(min(days))
     bars = intraday_closes_for_tickers(session, [row.ticker for row in rows], since=since)
     return extended_hours_rows(rows, bars)
-
-
-def _regular_session(ts: datetime) -> bool:
-    local = ts.astimezone(ET)
-    return local.weekday() < 5 and SESSION_OPEN <= local.time() < SESSION_CLOSE
 
 
 def extended_hours_rows(
@@ -455,9 +446,9 @@ def extended_hours_rows(
     for row in rows:
         if row.last_close is None or row.last_date is None or not row.last_close:
             continue
-        close_at = datetime.combine(row.last_date, SESSION_CLOSE, ET)
-        later = [(ts, price) for ts, price in bars.get(row.ticker, []) if ts >= close_at]
-        if not later or any(_regular_session(ts) for ts, _ in later):
+        closed = close_at(row.last_date)
+        later = [(ts, price) for ts, price in bars.get(row.ticker, []) if ts >= closed]
+        if not later or any(MarketClock(ts).is_regular for ts, _ in later):
             continue
         ts, price = later[-1]
         local = ts.astimezone(ET)

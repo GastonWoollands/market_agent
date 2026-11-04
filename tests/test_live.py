@@ -90,7 +90,38 @@ def test_build_live_uses_bar_fallback_and_yaml_order() -> None:
     assert tape.movers[0].price == 110.0
     assert tape.movers[0].change_pct == 10.0
     assert tape.stale is True
-    assert tape.market_state is None
+    # No quote reports a state: the ET clock decides (2026-08-13 20:00 ET).
+    assert tape.market_state == "CLOSED"
+
+
+def test_build_live_session_state_falls_back_to_et_clock() -> None:
+    def state_at(now: datetime) -> str | None:
+        return build_live([], _catalog(), now=now).market_state
+
+    assert state_at(datetime(2026, 11, 3, 18, 2, tzinfo=UTC)) == "REGULAR"  # 13:02 ET Tue
+    assert state_at(datetime(2026, 11, 3, 13, 0, tzinfo=UTC)) == "PRE"  # 08:00 ET
+    assert state_at(datetime(2026, 11, 3, 22, 0, tzinfo=UTC)) == "POST"  # 17:00 ET
+    assert state_at(datetime(2026, 11, 7, 18, 0, tzinfo=UTC)) == "CLOSED"  # Saturday
+
+
+def test_build_live_stale_follows_last_session() -> None:
+    def stale(as_of: datetime, now: datetime) -> bool:
+        row = LiveTapeRow(
+            ticker="^GSPC",
+            name="S&P 500",
+            quote_price=Decimal("5500"),
+            quote_change_pct=None,
+            market_state=None,
+            as_of=as_of,
+            last_close=None,
+            prev_close=None,
+            last_date=None,
+        )
+        return build_live([row], _catalog(), now=now).stale
+
+    monday_close = datetime(2026, 11, 2, 21, 0, tzinfo=UTC)
+    assert stale(monday_close, datetime(2026, 11, 3, 15, 0, tzinfo=UTC)) is True  # Tue 10:00 ET
+    assert stale(monday_close, datetime(2026, 11, 3, 13, 0, tzinfo=UTC)) is False  # Tue 08:00 ET
 
 
 def test_build_live_quote_wins_and_session_state() -> None:
@@ -516,6 +547,7 @@ def test_live_brief_empty_without_fields() -> None:
         body_json = {"macro_md": "DGS10 4.68"}
 
     assert live_brief(_Report()) is None
+
     class _Full:
         as_of = date(2026, 8, 18)
         status = "ok"

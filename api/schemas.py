@@ -13,6 +13,19 @@ class JobStatus(BaseModel):
     error: str | None
 
 
+class FreshnessItem(BaseModel):
+    key: str
+    label: str
+    as_of: str | None = None
+    status: Literal["ok", "late", "missing"]
+    note: str | None = None
+
+
+class FreshnessResponse(BaseModel):
+    session: date
+    items: list[FreshnessItem]
+
+
 class HealthResponse(BaseModel):
     ok: bool
     database: str

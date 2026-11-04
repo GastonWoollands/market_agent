@@ -24,6 +24,7 @@ from analytics.rrg import BENCHMARK, TRAIL_WEEKS
 from api.credit import build_credit_curve, load_credit_series, load_ticker_credit
 from api.dynamics import HISTORY_DAYS as DYNAMICS_LOOKBACK
 from api.dynamics import build_dynamics, stored_from_rows
+from api.freshness import FreshnessView
 from api.live import (
     HISTORY_DAYS,
     LIQUIDITY_SERIES,
@@ -51,6 +52,7 @@ from api.schemas import (
     CompareResponse,
     CreditCurveResponse,
     DynamicsResponse,
+    FreshnessResponse,
     HealthResponse,
     JobStatus,
     LiveResponse,
@@ -101,6 +103,7 @@ from store.repos import (
     closes_for_tickers,
     comparable_valuation_counts,
     drop_membership,
+    freshness_dates,
     instrument_by_ticker,
     intraday_closes_for_tickers,
     latest_jobs,
@@ -473,6 +476,14 @@ def credit_curve(db: Session = Depends(get_db)) -> CreditCurveResponse:
 @app.get("/options/market", response_model=MarketOptionsResponse)
 def options_market(db: Session = Depends(get_db)) -> MarketOptionsResponse:
     return load_market_options(db, today=date.today())
+
+
+@app.get("/freshness", response_model=FreshnessResponse)
+def freshness(db: Session = Depends(get_db)) -> FreshnessResponse:
+    now = datetime.now(UTC)
+    header = [item.ticker for item in load_universes().live.header]
+    dates = freshness_dates(db, ttm_cutoff=FreshnessView.ttm_cutoff(now), quote_tickers=header)
+    return FreshnessView(dates, now=now).response()
 
 
 @app.get("/positioning", response_model=PositioningResponse)
