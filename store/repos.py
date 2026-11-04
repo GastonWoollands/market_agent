@@ -1804,6 +1804,7 @@ class FreshnessDates:
     spy_last_bar: date | None
     dgs10_last: date | None
     sec_finished_at: datetime | None
+    sec_facts_as_of: date | None
     ttm_names: int
     ttm_older_than_cutoff: int
     scores_as_of: date | None
@@ -1839,17 +1840,22 @@ def freshness_dates(
         .join(Instrument, Instrument.id == QuoteLatest.instrument_id)
         .where(Instrument.ticker.in_(list(quote_tickers)))
     )
+    sec_ok = (JobRun.job_name == "ingest_sec", JobRun.status == "ok")
+    # The run date alone hides a stale bulk file; full ingest_sec runs record the data date.
+    sec_facts = session.scalar(
+        select(JobRun.extra["facts_as_of"].astext)
+        .where(*sec_ok, JobRun.extra.has_key("facts_as_of"))
+        .order_by(JobRun.finished_at.desc())
+        .limit(1)
+    )
     return FreshnessDates(
         quotes_as_of=quotes_as_of,
         spy_last_bar=spy_last_bar,
         dgs10_last=session.scalar(
             select(func.max(MacroObservation.date)).where(MacroObservation.series_id == "DGS10")
         ),
-        sec_finished_at=session.scalar(
-            select(func.max(JobRun.finished_at)).where(
-                JobRun.job_name == "ingest_sec", JobRun.status == "ok"
-            )
-        ),
+        sec_finished_at=session.scalar(select(func.max(JobRun.finished_at)).where(*sec_ok)),
+        sec_facts_as_of=date.fromisoformat(sec_facts) if sec_facts else None,
         ttm_names=int(ttm_names or 0),
         ttm_older_than_cutoff=int(ttm_old or 0),
         scores_as_of=session.scalar(select(func.max(OpportunityScore.as_of))),

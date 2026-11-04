@@ -14,6 +14,7 @@ def _dates(**overrides: object) -> FreshnessDates:
         "spy_last_bar": date(2026, 11, 3),
         "dgs10_last": date(2026, 10, 30),
         "sec_finished_at": datetime(2026, 10, 31, 18, 51, tzinfo=UTC),
+        "sec_facts_as_of": date(2026, 10, 31),
         "ttm_names": 973,
         "ttm_older_than_cutoff": 50,
         "scores_as_of": date(2026, 11, 2),
@@ -70,7 +71,24 @@ def test_missing_domain_and_filings_note() -> None:
     view = FreshnessView(_dates(outlook_as_of=None, ttm_older_than_cutoff=221), now=INTRADAY)
     items = {item.key: item for item in view.response().items}
     assert items["outlook"].status == "missing"
-    assert items["filings"].note == "221 of 973 names have a latest TTM older than 150 days"
+    assert items["filings"].note == (
+        "SEC data from 2026-10-31; 221 of 973 names have a latest TTM older than 150 days"
+    )
+
+
+def test_filings_late_when_sec_data_is_old_even_if_ttm_share_is_fine() -> None:
+    view = FreshnessView(_dates(sec_facts_as_of=date(2026, 8, 18)), now=INTRADAY)
+    filings = next(item for item in view.response().items if item.key == "filings")
+    assert filings.status == "late"
+    assert filings.as_of == "2026-08-18"
+    assert "(older than 10 days)" in (filings.note or "")
+
+
+def test_filings_falls_back_to_run_date_without_facts_date() -> None:
+    view = FreshnessView(_dates(sec_facts_as_of=None), now=INTRADAY)
+    filings = next(item for item in view.response().items if item.key == "filings")
+    assert filings.as_of == "2026-10-31"
+    assert filings.status == "ok"
 
 
 def test_stalled_bars_flag_scores_and_rotation() -> None:

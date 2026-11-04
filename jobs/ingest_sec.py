@@ -3,9 +3,11 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
 
+from analytics.session import ET
 from ingest.sec.client import CompanyFactsArchive, SecClient
 from ingest.sec.errors import SecError, SecHttpError, SecParseError
 from ingest.sec.parse import (
@@ -23,6 +25,7 @@ from store.repos import (
     ensure_membership,
     instrument_by_ticker,
     instruments_in_universe,
+    instruments_in_universes,
     prune_metric_ttm,
     replace_membership,
     universe_size,
@@ -37,33 +40,62 @@ log = logging.getLogger("jobs.ingest_sec")
 JOB_NAME = "ingest_sec"
 # Northstar: ~900 names. Revenue ≥ $1B plus usable EV/EBITDA XBRL, not a slice of a larger set.
 BAND = (700, 1000)
+# Default run: fresh per-CIK facts for every stored name; membership only changes on --rebuild.
+REFRESH_UNIVERSES = ("valuation", "watchlist")
+
+
+def run_mode(*, rebuild: bool, fy_only: bool, members: int) -> str:
+    """fy_only, rebuild (screen every SEC listing) or refresh (stored names, per CIK)."""
+    if fy_only:
+        return "fy_only"
+    if rebuild:
+        return "rebuild"
+    if members == 0:
+        raise RuntimeError("valuation universe is empty — run ingest_sec --rebuild first")
+    return "refresh"
 
 
 def ingest(
     *,
+    rebuild: bool = False,
     refresh_zip: bool = False,
     zip_path: str | None = None,
     per_cik: bool = False,
     limit: int | None = None,
     tickers: set[str] | None = None,
     fy_only: bool = False,
-) -> dict[str, int | list[str]]:
+) -> dict[str, int | str | list[str] | None]:
     catalog = load_universes().valuation
     floor = Decimal(catalog.min_revenue_usd)
     ua = settings.sec_user_agent.strip()
     if not ua:
         raise RuntimeError("SEC_USER_AGENT is missing")
 
+    with session_scope() as session:
+        stored = universe_size(session, "valuation")
+        refresh_set = {
+            item.ticker for item in instruments_in_universes(session, REFRESH_UNIVERSES)
+        }
+    mode = run_mode(rebuild=rebuild, fy_only=fy_only, members=stored)
+    # Only a run over every name dates the whole dataset for the freshness strip.
+    partial = tickers is not None or limit is not None
+    if mode == "refresh":
+        per_cik = True
+        tickers = tickers or refresh_set
+
     failures: list[str] = []
     kept = 0
     fy_written = 0
     listed = 0
+    # Date of the SEC data itself: today for per-CIK JSON, the file date for a zip.
+    facts_as_of = datetime.now(UTC).astimezone(ET).date()
     with SecClient(ua) as client:
         archive: CompanyFactsArchive | None = None
         if not per_cik:
             try:
                 path = Path(zip_path) if zip_path else client.ensure_facts_zip(refresh=refresh_zip)
                 archive = CompanyFactsArchive(path)
+                facts_as_of = _file_date(path)
             except (SecHttpError, SecError) as exc:
                 log.warning("companyfacts.zip unavailable (%s); per-CIK JSON", exc)
                 failures.append(f"zip: {exc}")
@@ -79,6 +111,11 @@ def ingest(
                 if tickers:
                     wanted = {item.upper() for item in tickers}
                     rows = [item for item in rows if item.ticker.upper() in wanted]
+                    # ETFs, foreign filers and share classes collapsed per CIK: say so.
+                    found = {item.ticker.upper() for item in rows}
+                    failures.extend(
+                        f"{name}: not in SEC ticker list" for name in sorted(wanted - found)
+                    )
                 rows.sort(key=lambda item: item.ticker)
                 if limit is not None:
                     rows = rows[:limit]
@@ -112,7 +149,13 @@ def ingest(
         "fy_written": fy_written,
         "listed": listed,
         "failures": failures,
+        "mode": mode,
+        "facts_as_of": None if partial else facts_as_of.isoformat(),
     }
+
+
+def _file_date(path: Path) -> date:
+    return datetime.fromtimestamp(path.stat().st_mtime, UTC).astimezone(ET).date()
 
 
 def _write_members(
@@ -270,17 +313,27 @@ def _preferred(new: str, old: str) -> bool:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Build the valuation universe from SEC companyfacts TTM and FY snapshots."
+        description=(
+            "Refresh SEC TTM and FY facts per CIK for stored names (default), "
+            "or rebuild the valuation universe from companyfacts.zip (--rebuild)."
+        )
+    )
+    parser.add_argument(
+        "--rebuild",
+        action="store_true",
+        help="Screen every SEC listing and replace valuation membership (zip unless --per-cik).",
     )
     parser.add_argument("--refresh-zip", action="store_true")
     parser.add_argument("--zip", dest="zip_path", help="Path to an existing companyfacts.zip")
     parser.add_argument(
         "--per-cik",
         action="store_true",
-        help="Use companyfacts JSON instead of the zip.",
+        help="Rebuild from companyfacts JSON instead of the zip (refresh always is).",
     )
     parser.add_argument("--limit", type=int, help="Cap listed tickers (debug).")
-    parser.add_argument("--tickers", help="Optional comma-separated tickers.")
+    parser.add_argument(
+        "--tickers", help="Comma-separated tickers; refresh these instead of every stored name."
+    )
     parser.add_argument(
         "--fy-only",
         action="store_true",
@@ -293,7 +346,7 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
-    result: dict[str, int | list[str]] = {
+    result: dict[str, int | str | list[str] | None] = {
         "members": 0,
         "written": 0,
         "fy_written": 0,
@@ -301,6 +354,7 @@ def main() -> None:
     }
     try:
         result = ingest(
+            rebuild=args.rebuild,
             refresh_zip=args.refresh_zip,
             zip_path=args.zip_path,
             per_cik=args.per_cik,
@@ -329,10 +383,14 @@ def main() -> None:
             "fy_written": result["fy_written"],
             "failures": result["failures"],
             "source": "sec",
+            "mode": result["mode"],
+            **({"facts_as_of": result["facts_as_of"]} if result["facts_as_of"] else {}),
         },
     )
     log.info(
-        "ingest_sec members=%s written=%s fy=%s listed=%s failures=%s",
+        "ingest_sec mode=%s facts_as_of=%s members=%s written=%s fy=%s listed=%s failures=%s",
+        result["mode"],
+        result["facts_as_of"],
         result["members"],
         result["written"],
         result["fy_written"],
