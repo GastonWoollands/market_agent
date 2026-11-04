@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from datetime import timedelta
 from pathlib import Path
@@ -27,6 +28,7 @@ FACTS_ZIP_URLS = (
 )
 FACTS_JSON_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
 SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik}.json"
+log = logging.getLogger(__name__)
 DEFAULT_CACHE = REPO_ROOT / "data" / "sec"
 # SEC rebuilds the bulk file nightly; an older copy silently serves stale quarters.
 ZIP_MAX_AGE = timedelta(days=7)
@@ -110,7 +112,8 @@ class SecClient:
     ) -> Path:
         self._cache.mkdir(parents=True, exist_ok=True)
         path = self._cache / "companyfacts.zip"
-        if path.exists() and path.stat().st_size > 1_000_000 and not refresh:
+        usable = path.exists() and path.stat().st_size > 1_000_000
+        if usable and not refresh:
             age = time.time() - path.stat().st_mtime
             if max_age is None or age <= max_age.total_seconds():
                 return path
@@ -123,6 +126,10 @@ class SecClient:
                 last_error = exc
                 continue
             tmp.replace(path)
+            return path
+        if usable:
+            # An old local copy beats thousands of per-CIK requests; its date shows as late.
+            log.warning("companyfacts.zip download failed (%s); using the local copy", last_error)
             return path
         raise SecHttpError(f"companyfacts.zip download failed ({last_error})")
 

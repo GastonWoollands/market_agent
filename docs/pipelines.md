@@ -139,7 +139,7 @@ python -m jobs.compute_quant
 
 `ingest_sec --rebuild` downloads `companyfacts.zip` (~1.4 GB) into `data/sec/` (gitignored) and re-downloads it when the copy is older than 7 days. Set `SEC_USER_AGENT` to a real email.
 
-After the first load, plain `ingest_sec` refreshes stored names only (valuation ∪ watchlist) from per-CIK JSON (~20 min for ~1000 names) and never changes membership: names that fall below the floor stay members, and new names never enter. Run `--rebuild` monthly so the universe does not drift. Each full run (no `--tickers` / `--limit`) records `meta.facts_as_of` (the SEC data date), which the freshness strip shows as Filings.
+After the first load, plain `ingest_sec` refreshes stored names only (valuation ∪ watchlist) by their stored CIK from per-CIK JSON (~20 min for ~1000 names), committing every 50 names. It never changes membership: names that fall below the floor stay members, and new names never enter. Names without a CIK (ETFs, foreign filers) are listed under `meta.no_cik`, not `failures`. `--tickers` narrows the refresh to stored names; `--rebuild --tickers A,B` adds new ones. `--zip` / `--refresh-zip` / `--per-cik` need `--rebuild` or `--fy-only`. Run `--rebuild` monthly so the universe does not drift. A full run (no `--tickers` / `--limit`, at most 5% failed fetches) records `meta.facts_as_of` — the fetch date, or the zip file's mtime (a copied old zip reads as new) — which the freshness strip shows as Filings. If the zip is older than 7 days and the download fails, the old copy is used and Filings shows its date as late.
 
 If Yahoo dies mid-universe:
 
