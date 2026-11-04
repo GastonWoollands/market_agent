@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date
 from typing import Any
 
@@ -406,19 +407,23 @@ def _policy_read(odds: list[dict[str, Any]]) -> tuple[str | None, str | None]:
         elif label and yes is not None:
             bits.append(f"{label} implied_yes {yes}")
     # The next meeting sets the base case; a later "Hold" must not override a front-meeting hike.
+    # An unclassified front outcome leaves policy unset rather than borrowing a later meeting.
     front = next(
         (row for row in odds if isinstance(row, dict) and row.get("slot") == "front_fomc"),
         None,
     )
     if front is not None and front.get("top_outcome"):
-        policy = _front_policy(str(front["top_outcome"])) or policy
+        policy = _front_policy(str(front["top_outcome"]))
     odds_read = "; ".join(bits[:2]) if bits else None
     return policy, odds_read
 
 
+_NEGATED_MOVE = re.compile(r"\bno(?:t)?\s+(?:hike|increase|cut|decrease|change)")
+
+
 def _is_hold(outcome: object) -> bool:
     text = str(outcome).lower()
-    return "hold" in text or "no cut" in text or "no change" in text
+    return "hold" in text or _NEGATED_MOVE.search(text) is not None
 
 
 def _front_policy(outcome: str) -> str | None:

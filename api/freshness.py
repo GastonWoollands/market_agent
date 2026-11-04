@@ -119,12 +119,16 @@ class FreshnessView:
     def _vs_last_bar(self, key: str, label: str, as_of: date | None) -> FreshnessItem:
         if as_of is None:
             return _missing(key, label)
-        # Today's partial bar is not a close yet; compare with the last completed session.
         bar = self._dates.spy_last_bar
-        closed = min(bar, self._close) if bar is not None else None
-        late = closed is not None and as_of < closed
-        note = f"Last daily close {closed.isoformat()}" if closed is not None else None
-        return _item(key, label, as_of.isoformat(), late, note)
+        if bar is None:
+            return _item(key, label, as_of.isoformat(), True, "No SPY daily bars stored")
+        if bar < self._close:
+            # Bars stopped: the computed output cannot be current either.
+            note = f"Daily bars stop at {bar.isoformat()}; last close {self._close.isoformat()}"
+            return _item(key, label, as_of.isoformat(), True, note)
+        # Today's partial bar is not a close yet; compare with the last completed session.
+        late = as_of < self._close
+        return _item(key, label, as_of.isoformat(), late, f"Last daily close {self._close}")
 
 
 def _item(key: str, label: str, as_of: str, late: bool, note: str | None) -> FreshnessItem:

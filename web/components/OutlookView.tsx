@@ -177,7 +177,11 @@ function StatusChips({ tape }: { tape: OutlookTape }) {
   const risk = tape.judgment?.regime?.policy;
   const stance = tape.judgment?.policy_comms?.stance;
   // Chip shows the next meeting's top outcome, the same base case the headline and regime use.
-  const front = tape.odds?.find((item) => item.slot === "front_fomc" && item.top_outcome);
+  // Packs stored before odds carried `slot` fall back to the first market with a top outcome.
+  const hasSlots = tape.odds?.some((item) => item.slot != null) ?? false;
+  const front = tape.odds?.find((item) =>
+    item.top_outcome && (hasSlots ? item.slot === "front_fomc" : true),
+  );
   return (
     <div className="flex flex-wrap items-center gap-3 text-[13px] text-slate-500">
       {tape.as_of ? <span className="tabular-nums">{tape.as_of}</span> : <span>no pack</span>}

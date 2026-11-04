@@ -70,3 +70,22 @@ def test_missing_domain_and_filings_note() -> None:
     items = {item.key: item for item in view.response().items}
     assert items["outlook"].status == "missing"
     assert items["filings"].note == "221 of 973 names have a latest TTM older than 150 days"
+
+
+def test_stalled_bars_flag_scores_and_rotation() -> None:
+    stalled = _status(
+        FreshnessView(
+            _dates(
+                spy_last_bar=date(2026, 10, 28),
+                scores_as_of=date(2026, 10, 28),
+                rrg_as_of=date(2026, 10, 28),
+            ),
+            now=INTRADAY,
+        )
+    )
+    assert stalled["scores"] == "late"
+    assert stalled["rotation"] == "late"
+    no_bars = FreshnessView(_dates(spy_last_bar=None), now=INTRADAY).response().items
+    rotation = next(item for item in no_bars if item.key == "rotation")
+    assert rotation.status == "late"
+    assert rotation.note == "No SPY daily bars stored"

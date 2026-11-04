@@ -31,7 +31,8 @@ export function AppChrome() {
   const router = useRouter();
   const [health, setHealth] = useState<Health | null>(null);
   const [riskOn, setRiskOn] = useState<LiveRiskOn | null>(null);
-  const [freshness, setFreshness] = useState<Freshness | null>(null);
+  // undefined = loading, null = request failed.
+  const [freshness, setFreshness] = useState<Freshness | null | undefined>(undefined);
 
   useEffect(() => {
     void fetchHealth().then(setHealth);
@@ -39,7 +40,16 @@ export function AppChrome() {
   }, []);
 
   useEffect(() => {
-    void fetchFreshness().then(setFreshness);
+    let current = true;
+    void fetchFreshness().then((value) => {
+      // Fast tab switches overlap; only the latest navigation may write.
+      if (current) {
+        setFreshness(value);
+      }
+    });
+    return () => {
+      current = false;
+    };
   }, [pathname]);
 
   const dbOk = health?.ok === true;
@@ -114,12 +124,12 @@ export function AppChrome() {
   );
 }
 
-function FreshnessStrip({ freshness }: { freshness: Freshness | null }) {
+function FreshnessStrip({ freshness }: { freshness: Freshness | null | undefined }) {
   // Always rendered: sticky table headers below assume the chrome keeps this height.
   return (
     <div className="flex h-7 items-center gap-4 overflow-x-auto border-t border-line px-4 text-[11px] text-mute">
       <span className="shrink-0 uppercase tracking-wide">Data</span>
-      {freshness == null ? <span className="shrink-0">unavailable</span> : null}
+      {freshness === null ? <span className="shrink-0 text-warning">unavailable</span> : null}
       {(freshness?.items ?? []).map((item) => (
         <span
           key={item.key}

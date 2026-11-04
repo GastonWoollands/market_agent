@@ -152,7 +152,7 @@ def test_judgment_policy_follows_front_meeting_not_later_hold() -> None:
     assert judgment["regime"]["policy"] == "hike_base"
 
 
-def test_judgment_policy_keeps_hold_when_front_outcome_is_unclassified() -> None:
+def test_judgment_policy_unset_when_front_outcome_is_unclassified() -> None:
     judgment = build_judgment(
         facts={},
         macro=[],
@@ -170,6 +170,17 @@ def test_judgment_policy_keeps_hold_when_front_outcome_is_unclassified() -> None
                 "top_implied_yes": 0.6,
             },
         ],
+        events=[],
+        risk_on=None,
+    )
+    assert judgment["regime"]["policy"] is None
+
+
+def test_judgment_policy_reads_negated_move_as_hold() -> None:
+    judgment = build_judgment(
+        facts={},
+        macro=[],
+        odds=[{"slot": "front_fomc", "top_outcome": "No hike", "top_implied_yes": 0.8}],
         events=[],
         risk_on=None,
     )

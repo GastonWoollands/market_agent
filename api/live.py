@@ -1,9 +1,10 @@
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from analytics.lookback import chart_window, window_deltas
 from analytics.risk_on import CYCLICALS, DEFENSIVES, compute_risk_on
+from api.freshness import last_session
 from api.odds import KalshiLiveView
 from api.schemas import (
     LiveAnomaly,
@@ -37,7 +38,6 @@ from store.repos import LiveMacroRow, LiveTapeRow
 DEFAULT_LEVER = "DGS10"
 HISTORY_DAYS = 400
 THIN_LIQUIDITY = Decimal("10000")
-_QUOTE_STALE_AFTER = timedelta(days=3)
 _STATE_RANK = {
     "REGULAR": 0,
     "PRE": 1,
@@ -138,9 +138,10 @@ def _clock_state(now: datetime) -> str:
 
 
 def _is_stale(as_of: datetime | None, now: datetime) -> bool:
+    """Same rule as the freshness strip: no quote from the last opened ET session."""
     if as_of is None:
         return True
-    return _aware(now) - _aware(as_of) > _QUOTE_STALE_AFTER
+    return _aware(as_of).astimezone(_ET).date() < last_session(_aware(now))
 
 
 def build_live(
