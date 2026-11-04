@@ -1,4 +1,4 @@
-// Shared number formats for the Ticker and Compare pages. "—" means not stored.
+// Shared number and ET time formats. "—" means not stored.
 
 export const DASH = "—";
 
@@ -61,4 +61,51 @@ export function signedClass(value: number | null | undefined): string {
     return "text-mute";
   }
   return value > 0 ? "text-up" : "text-down";
+}
+
+// Stored timestamps are UTC; the desk reads them in New York time.
+export const ET_ZONE = "America/New_York";
+
+export type EtStyle = "short" | "iso";
+
+/** "Nov 3, 1:02 PM ET" (short) or "2026-11-03 13:02 ET" (iso); the input if unparsable. */
+export function fmtEt(value: string, style: EtStyle = "short"): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  if (style === "short") {
+    const label = parsed.toLocaleString("en-US", {
+      timeZone: ET_ZONE,
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+    return `${label} ET`;
+  }
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: ET_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(parsed);
+  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")} ${part("hour")}:${part("minute")} ET`;
+}
+
+/** Calendar date "YYYY-MM-DD" as "Nov 3"; no time zone shift. */
+export function fmtDay(value: string): string {
+  const parts = value.split("-").map(Number);
+  if (parts.length < 3 || parts.some((part) => Number.isNaN(part))) {
+    return value;
+  }
+  const [year, month, day] = parts;
+  return new Date(year, month - 1, day).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
 }

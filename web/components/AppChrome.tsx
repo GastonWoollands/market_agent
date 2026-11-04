@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/cn";
+import { fmtDay, fmtEt } from "@/lib/format";
 import {
   fetchFreshness,
   fetchHealth,
@@ -33,6 +34,21 @@ export function AppChrome() {
   const [riskOn, setRiskOn] = useState<LiveRiskOn | null>(null);
   // undefined = loading, null = request failed.
   const [freshness, setFreshness] = useState<Freshness | null | undefined>(undefined);
+  const headerRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    // Sticky table headers below read --chrome-h instead of a hardcoded offset.
+    const header = headerRef.current;
+    if (!header) {
+      return;
+    }
+    const root = document.documentElement;
+    const observer = new ResizeObserver(() => {
+      root.style.setProperty("--chrome-h", `${header.offsetHeight}px`);
+    });
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     void fetchHealth().then(setHealth);
@@ -57,7 +73,7 @@ export function AppChrome() {
   const jobRunning = health?.jobs.some((job) => job.status === "running") ?? false;
 
   return (
-    <header className="sticky top-0 z-20 border-b border-line bg-ink/95 backdrop-blur">
+    <header ref={headerRef} className="sticky top-0 z-20 border-b border-line bg-ink/95 backdrop-blur">
       <div className="flex h-12 items-center gap-6 px-4">
         <Link href="/" className="flex shrink-0 items-center gap-2 text-sm font-semibold tracking-tight">
           <Logo />
@@ -125,7 +141,6 @@ export function AppChrome() {
 }
 
 function FreshnessStrip({ freshness }: { freshness: Freshness | null | undefined }) {
-  // Always rendered: sticky table headers below assume the chrome keeps this height.
   return (
     <div className="flex h-7 items-center gap-4 overflow-x-auto border-t border-line px-4 text-[11px] text-mute">
       <span className="shrink-0 uppercase tracking-wide">Data</span>
@@ -148,20 +163,7 @@ function formatFreshness(item: FreshnessItem): string {
   if (item.as_of == null) {
     return "none";
   }
-  if (!item.as_of.includes("T")) {
-    return item.as_of.slice(5);
-  }
-  const stamp = new Date(item.as_of);
-  if (Number.isNaN(stamp.getTime())) {
-    return item.as_of;
-  }
-  return `${stamp.toLocaleString("en-US", {
-    timeZone: "America/New_York",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "numeric",
-    minute: "2-digit",
-  })} ET`;
+  return item.as_of.includes("T") ? fmtEt(item.as_of) : fmtDay(item.as_of);
 }
 
 function healthTitle(health: Health | null, dbOk: boolean): string {

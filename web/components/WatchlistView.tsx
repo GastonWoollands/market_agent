@@ -8,6 +8,7 @@ import { TickerLink } from "@/components/TickerLink";
 import { TradingViewChart } from "@/components/TradingViewChart";
 import { BROWSER_API, type WatchlistMember, type WatchlistTape } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import { fmtEt } from "@/lib/format";
 
 export function WatchlistView({
   tape,
@@ -92,7 +93,7 @@ export function WatchlistView({
           {tape.as_of ? (
             <>
               <span className="mx-2 text-line">·</span>
-              as of {formatAsOf(tape.as_of)}
+              as of {fmtEt(tape.as_of)}
             </>
           ) : null}
           {tape.stale ? (
@@ -287,19 +288,4 @@ function changeClass(value: number | null): string {
     return "text-mute";
   }
   return value > 0 ? "text-up" : "text-down";
-}
-
-function formatAsOf(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-  return parsed.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: "America/New_York",
-    timeZoneName: "short",
-  });
 }

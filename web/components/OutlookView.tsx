@@ -4,6 +4,7 @@ import { Fragment, useState } from "react";
 
 import { StaleBadge } from "@/components/StaleBadge";
 import { cn } from "@/lib/cn";
+import { fmtEt } from "@/lib/format";
 import type {
   OutlookEvent,
   OutlookJudgment,
@@ -972,20 +973,5 @@ function formatWhen(value: string | null): string {
   if (!value) {
     return "—";
   }
-  const parsed = new Date(value);
-  if (!value.includes("T") || Number.isNaN(parsed.getTime())) {
-    return value.slice(0, 10);
-  }
-  // Stored timestamps are UTC; the desk reads ET.
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/New_York",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(parsed);
-  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? "";
-  return `${part("year")}-${part("month")}-${part("day")} ${part("hour")}:${part("minute")} ET`;
+  return value.includes("T") ? fmtEt(value, "iso") : value.slice(0, 10);
 }
