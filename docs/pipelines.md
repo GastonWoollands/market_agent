@@ -51,7 +51,7 @@ Activate `.venv` in every terminal before `python -m jobs…`.
 | Weekday morning | Tape Yahoo + FRED + regime, then Outlook chain (news → Fed RSS → calendar → pack → outlook) |
 | During the session | Polymarket and Kalshi anytime; tape Yahoo for delayed quotes; options chains before 15:45 ET |
 | After the close (~16:30) | Tape Yahoo daily bars, then Dynamics; Cboe after 18:00 ET |
-| Nightly | SEC (monthly is enough after the first zip), valuation Yahoo, valuation, quant, scores, risk, credit, estimates, memos |
+| Nightly | SEC refresh (weekly is enough; daily in earnings season), valuation Yahoo, valuation, quant, scores, risk, credit, estimates, memos |
 | Friday after 15:30 ET | CFTC positioning |
 | ~8 business days after the 15th and month-end | FINRA short interest |
 | After Ctrl-C on Yahoo | `--resume` on the same job |
@@ -120,7 +120,7 @@ Calendar still writes FOMC/CPI dates if Finnhub is unset; earnings just stay emp
 
 | # | Command | Why |
 |---|---------|-----|
-| 11 | `python -m jobs.ingest_sec` | SEC tickers + TTM + fiscal-year snapshots; builds the ~700–1000 name universe |
+| 11 | `python -m jobs.ingest_sec --rebuild` | SEC tickers + TTM + fiscal-year snapshots; screens every listing into the ~700–1000 name universe (zip) |
 | 12 | `python -m jobs.ingest_yahoo --universe valuation` | Daily bars for those names (≤2 req/s — long) |
 | 13 | `python -m jobs.compute_valuation` | EV/EBITDA, 5y percentile, growth × re-rating |
 | 14 | `python -m jobs.compute_quant` | Gem-candidate flag + ratio snapshot (`quant_score`). F-score / Z are not computed |
@@ -135,7 +135,11 @@ python -m jobs.ingest_sec --fy-only
 python -m jobs.compute_quant
 ```
 
-First `ingest_sec` downloads `companyfacts.zip` into `data/sec/` (gitignored). Set `SEC_USER_AGENT` to a real email.
+`--fy-only` reads the zip (add `--per-cik` to skip the 1.4 GB download when the local copy is older than 7 days) and does not move the Filings date.
+
+`ingest_sec --rebuild` downloads `companyfacts.zip` (~1.4 GB) into `data/sec/` (gitignored) and re-downloads it when the copy is older than 7 days. Set `SEC_USER_AGENT` to a real email.
+
+After the first load, plain `ingest_sec` refreshes stored names only (valuation ∪ watchlist) by their stored CIK from per-CIK JSON (~20 min for ~1000 names), committing every 50 names. It never changes membership: names that fall below the floor stay members, and new names never enter. Names without a CIK (ETFs, foreign filers) are listed under `meta.no_cik`, not `failures`. `--tickers` narrows the refresh to stored names; `--rebuild --tickers A,B` adds new ones. `--zip` / `--refresh-zip` / `--per-cik` need `--rebuild` or `--fy-only`. Run `--rebuild` monthly so the universe does not drift. A full run (no `--tickers` / `--limit`, at most 5% failed fetches) records `meta.facts_as_of` — the fetch date, or the zip file's mtime (a copied old zip reads as new) — which the freshness strip shows as Filings. If the zip is older than 7 days and the download fails, the old copy is used and Filings shows its date as late.
 
 If Yahoo dies mid-universe:
 
@@ -201,7 +205,7 @@ Make equivalent of A–F:
 
 ```bash
 make db migrate seed yahoo fred regime poly dynamics news fed-rss calendar pack outlook \
-  sec sec-profile yahoo-val valuation quant scores risk memos yahoo-watch intraday \
+  sec-rebuild sec-profile yahoo-val valuation quant scores risk memos yahoo-watch intraday \
   cboe-backfill options cftc-backfill kalshi finra-backfill estimates
 
 make yahoo yahoo-watch fred regime poly dynamics news fed-rss calendar pack outlook
@@ -320,7 +324,8 @@ python -m jobs.generate_outlook
 ### Nightly / monthly (Valuation + Opportunities)
 
 ```bash
-python -m jobs.ingest_sec            # monthly after the first zip; --refresh-zip when you want a new bulk file
+python -m jobs.ingest_sec            # per-CIK refresh of stored names; weekly, daily in earnings season
+python -m jobs.ingest_sec --rebuild  # monthly: re-screen every listing (zip, auto-refreshed after 7 days)
 python -m jobs.ingest_yahoo --universe valuation --resume
 python -m jobs.compute_valuation
 python -m jobs.compute_quant
@@ -405,7 +410,7 @@ Both write to `outlook_report` table. UI displays latest for the date.
 | `jobs.ingest_calendar` | `event_item` | `--skip-finnhub` |
 | `jobs.build_pack` | `evidence_pack` | `--as-of YYYY-MM-DD` |
 | `jobs.generate_outlook` | `outlook_report` | `--template`, `--as-of`, `--provider`, `--model` |
-| `jobs.ingest_sec` | valuation membership, `metric_ttm`, `metric_fy` | `--refresh-zip`, `--zip PATH`, `--tickers`, `--limit`, `--fy-only` |
+| `jobs.ingest_sec` | `metric_ttm`, `metric_fy`; valuation membership only with `--rebuild` | `--rebuild`, `--refresh-zip`, `--zip PATH`, `--per-cik`, `--tickers`, `--limit`, `--fy-only` |
 | `jobs.compute_valuation` | `valuation_daily` | — |
 | `jobs.compute_quant` | `quant_score` (gem flag / ratios) | — |
 | `jobs.compute_scores` | `opportunity_score` (prunes names outside the run) | — |

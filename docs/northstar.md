@@ -140,7 +140,7 @@ Frozen for v1. A new vendor is a contract change: update this section first. Cat
 | Earnings calendar + EPS/rev est. | Finnhub free | 07:00 ET |
 | FOMC, CPI, PCE, NFP, GDP, JOLTS, Chair/Jackson Hole speeches, FOMC minutes, Beige Book, ISM, Treasury refunding, ECB/BoE/BoJ, elections | curated `config/catalysts.yaml` | hand, yearly |
 | TTM metrics + valuation membership | SEC EDGAR companyfacts (bulk zip, then incremental) | nightly / monthly |
-| Fiscal-year snapshots (growth, accrual, gems inputs) | Same companyfacts zip; curated columns only | with `ingest_sec` |
+| Fiscal-year snapshots (growth, accrual, gems inputs) | Same companyfacts (zip or per-CIK JSON); curated columns only | with `ingest_sec` |
 | Charts | TradingView widget | client-side, no ingest |
 | Credit curve: ICE BofA OAS + effective yield by rating (AAA…CCC), DGS1, Moody's Baa–Aaa, NFCI, STLFSI4 | FRED (catalog expansion, not a new vendor) | 06:00 ET |
 | Vol indices ^VIX9D, ^VIX3M, ^VVIX, ^SKEW | Yahoo, tape catalog in `config/universes.yaml` | 16:30 ET |

@@ -14,6 +14,8 @@ from store.repos import FreshnessDates
 
 TTM_MAX_AGE = timedelta(days=150)
 TTM_LATE_SHARE = 0.10
+# Weekly `make sec` plus slack; older SEC data misses newly filed quarters.
+SEC_MAX_AGE = timedelta(days=10)
 MACRO_LAG_SESSIONS = 2
 
 
@@ -63,12 +65,18 @@ class FreshnessView:
         finished = self._dates.sec_finished_at
         if finished is None:
             return _missing("filings", "Filings")
+        # Runs before facts_as_of was recorded fall back to the run date.
+        facts = self._dates.sec_facts_as_of or finished.astimezone(ET).date()
+        aged = self._now.astimezone(ET).date() - facts > SEC_MAX_AGE
         names = self._dates.ttm_names
         old = self._dates.ttm_older_than_cutoff
-        late = names > 0 and old / names > TTM_LATE_SHARE
-        note = f"{old} of {names} names have a latest TTM older than {TTM_MAX_AGE.days} days"
-        stamp = finished.astimezone(ET).date().isoformat()
-        return _item("filings", "Filings", stamp, late, note)
+        thin = names > 0 and old / names > TTM_LATE_SHARE
+        note = (
+            f"SEC data from {facts.isoformat()}"
+            f"{f' (older than {SEC_MAX_AGE.days} days)' if aged else ''}; "
+            f"{old} of {names} names have a latest TTM older than {TTM_MAX_AGE.days} days"
+        )
+        return _item("filings", "Filings", facts.isoformat(), aged or thin, note)
 
     def _scores(self) -> FreshnessItem:
         return self._vs_last_bar("scores", "Valuation", self._dates.scores_as_of)

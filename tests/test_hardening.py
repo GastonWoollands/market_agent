@@ -173,3 +173,15 @@ def test_yahoo_rerun_does_not_duplicate_daily_or_intraday_bars() -> None:
         session.execute(delete(Instrument).where(Instrument.id == iid))
     assert daily_n == 1
     assert intra_n == 1
+
+
+@pytest.mark.skipif(not _postgres_up(), reason="postgres not available")
+def test_catalog_upsert_keeps_stored_cik() -> None:
+    ticker = "ZZCIK"
+    with session_scope() as session:
+        sec = CatalogInstrument(ticker=ticker, yahoo=ticker, name="SEC row", cik="0000000001")
+        iid = upsert_instrument(session, sec).id
+        catalog = CatalogInstrument(ticker=ticker, yahoo=ticker, name="Catalog row")
+        kept = upsert_instrument(session, catalog).cik
+        session.execute(delete(Instrument).where(Instrument.id == iid))
+    assert kept == "0000000001"

@@ -1,4 +1,4 @@
-.PHONY: db migrate seed yahoo yahoo-watch fred poly dynamics regime news finnhub-news fed-rss calendar pack outlook outlook-manual sec sec-profile yahoo-val valuation quant scores risk credit options cboe cboe-backfill kalshi cftc cftc-backfill finra finra-backfill estimates memos intraday backfill dump restore api web test
+.PHONY: db migrate seed yahoo yahoo-watch fred poly dynamics regime news finnhub-news fed-rss calendar pack outlook outlook-manual sec sec-rebuild sec-profile yahoo-val valuation quant scores risk credit options cboe cboe-backfill kalshi cftc cftc-backfill finra finra-backfill estimates memos intraday backfill dump restore api web test
 
 db:
 	docker compose up -d db
@@ -56,6 +56,9 @@ outlook-manual:
 
 sec:
 	.venv/bin/python -m jobs.ingest_sec
+
+sec-rebuild:
+	.venv/bin/python -m jobs.ingest_sec --rebuild
 
 sec-profile:
 	.venv/bin/python -m jobs.ingest_sec_profile --resume
