@@ -80,7 +80,8 @@ def upsert_instrument(session: Session, item: CatalogInstrument) -> Instrument:
             # Most catalog rows carry no sector; keep the SIC-derived value already stored.
             "sector": func.coalesce(stmt.excluded.sector, Instrument.sector),
             "industry": func.coalesce(stmt.excluded.industry, Instrument.industry),
-            "cik": item.cik,
+            # Catalog and watchlist rows carry no CIK; never erase the one SEC stored.
+            "cik": func.coalesce(stmt.excluded.cik, Instrument.cik),
             "is_active": True,
             "updated_at": func.now(),
         },
