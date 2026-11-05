@@ -471,6 +471,62 @@ def test_component_from_an_older_period_is_dropped() -> None:
     assert not usable_ttm(metric)
 
 
+def _drop_revenue(payload: dict, *spans: tuple[str, str]) -> None:
+    usd = payload["facts"]["us-gaap"]["Revenues"]["units"]["USD"]
+    usd[:] = [item for item in usd if (item["start"], item["end"]) not in spans]
+
+
+def test_ttm_bridges_missing_quarter_with_ytd() -> None:
+    payload = _ytd_payload()
+    # SEC companyfacts can skip a 10-Q: Q1'26 is gone, the Q2 10-Q's 6M YTD remains.
+    _drop_revenue(payload, ("2026-01-01", "2026-03-31"))
+    metric = ttm_from_facts(payload, require_quarters=True)
+    assert metric is not None
+    assert metric.as_of == date(2026, 6, 30)
+    # FY'25 140 + 6M'26 130 − 6M'25 50, same as the full quarter chain.
+    assert metric.revenue == Decimal("220")
+
+
+def test_ytd_needs_prior_year_ytd() -> None:
+    payload = _ytd_payload()
+    _drop_revenue(payload, ("2026-01-01", "2026-03-31"), ("2025-01-01", "2025-06-30"))
+    metric = ttm_from_facts(payload, require_quarters=True)
+    assert metric is not None
+    assert metric.as_of == date(2025, 12, 31)
+
+
+def test_fiscal_year_is_the_ttm_when_its_last_10q_is_missing() -> None:
+    payload = _ytd_payload()
+    _drop_revenue(payload, ("2025-07-01", "2025-09-30"), ("2025-01-01", "2025-09-30"))
+    metric = ttm_from_facts(payload, require_quarters=True, through=date(2025, 12, 31))
+    assert metric is not None
+    assert metric.as_of == date(2025, 12, 31)
+    assert metric.revenue == Decimal("140")
+
+
+def test_ytd_tolerates_52_53_week_drift() -> None:
+    revenue = [
+        _q("2024-09-29", "2025-09-27", 400, "10-K"),
+        _q("2024-09-29", "2025-03-29", 190, "10-Q"),
+        _q("2025-09-28", "2026-03-28", 210, "10-Q"),
+        _q("2025-12-28", "2026-03-28", 100, "10-Q"),
+    ]
+    payload = {"cik": 1, "facts": {"us-gaap": {"Revenues": {"units": {"USD": revenue}}}}}
+    metric = ttm_from_facts(payload, require_quarters=True)
+    assert metric is not None
+    assert metric.as_of == date(2026, 3, 28)
+    assert metric.revenue == Decimal("420")
+
+
+def test_revenue_reads_regulated_and_unregulated_total() -> None:
+    payload = _ytd_payload()
+    gaap = payload["facts"]["us-gaap"]
+    gaap["RegulatedAndUnregulatedOperatingRevenue"] = gaap.pop("Revenues")
+    metric = ttm_from_facts(payload, require_quarters=True)
+    assert metric is not None
+    assert metric.revenue == Decimal("220")
+
+
 def test_restated_period_uses_latest_filing() -> None:
     payload = _ytd_payload()
     payload["facts"]["us-gaap"]["Revenues"]["units"]["USD"].append(
