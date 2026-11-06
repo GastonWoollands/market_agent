@@ -26,6 +26,8 @@ REVENUE_CONCEPTS = (
     # Utilities (SR, DUK, IDA) tag total revenue only here.
     ("us-gaap", "RegulatedAndUnregulatedOperatingRevenue"),
 )
+# Gross of excise tax (BF-A, SAM): a fallback tag, never the larger-revenue pick.
+GROSS_OF_TAX_REVENUE = ("us-gaap", "RevenueFromContractWithCustomerIncludingAssessedTax")
 EBIT_CONCEPTS = (("us-gaap", "OperatingIncomeLoss"), ("ifrs-full", "OperatingIncomeLoss"))
 DA_CONCEPTS = (
     ("us-gaap", "DepreciationDepletionAndAmortization"),
@@ -211,7 +213,7 @@ def ttm_from_facts(
     if raw_cik is None:
         return None
     cik = pad_cik(raw_cik)
-    revenue, as_of, method = _flow_ttm(facts, REVENUE_CONCEPTS, through=through)
+    revenue, as_of, method = _flow_ttm(facts, REVENUE_CONCEPTS, through=through, prefer_larger=True)
     if revenue is None or as_of is None:
         return None
     if require_quarters and method not in ("quarters", "ytd"):
@@ -490,24 +492,31 @@ def _flow_ttm(
     concepts: tuple[tuple[str, str], ...],
     *,
     through: date | None = None,
+    prefer_larger: bool = False,
 ) -> tuple[Decimal | None, date | None, str | None]:
     """TTM by four discrete quarters, else fiscal year + YTD, else the latest annual.
 
     The YTD method covers a quarter SEC never published: one missing 10-Q would
     otherwise freeze the TTM until four new contiguous quarters exist. The freshest
     of quarters and YTD wins; quarters on a tie, so complete chains are unchanged.
+    `prefer_larger` breaks a same-date tie (between synonyms or methods) by value:
+    a revenue tag can be a part (contract revenue) of the total (`Revenues`).
+    Revenue gross of excise tax never wins that way.
     """
     best_q: tuple[date, Decimal] | None = None
     best_y: tuple[date, Decimal] | None = None
+    y_sized = prefer_larger
     best_a: tuple[date, Decimal] | None = None
     # Merged synonyms first; each concept alone as a fallback when the merge leaves a gap.
     for group in (concepts, *((item,) for item in concepts)):
+        sized = prefer_larger and group != (GROSS_OF_TAX_REVENUE,)
         picked = _last_quarters(_discrete_quarters(facts, group, through=through), 4)
-        if len(picked) == 4 and (best_q is None or picked[0][0] > best_q[0]):
-            best_q = (picked[0][0], sum((value for _end, value in picked), Decimal("0")))
+        if len(picked) == 4:
+            total = (picked[0][0], sum((value for _end, value in picked), Decimal("0")))
+            best_q = _newer(total, best_q, prefer_larger=sized)
         ytd = _ytd_ttm(facts, group, through=through)
-        if ytd is not None and (best_y is None or ytd[0] > best_y[0]):
-            best_y = ytd
+        if ytd is not None and _newer(ytd, best_y, prefer_larger=sized) is ytd:
+            best_y, y_sized = ytd, sized
     for taxonomy, concept in concepts:
         points = _duration_points(facts, taxonomy, concept)
         if through is not None:
@@ -517,13 +526,28 @@ def _flow_ttm(
             _span, end, value = annual[0]
             if best_a is None or end > best_a[0]:
                 best_a = (end, value)
-    if best_y is not None and (best_q is None or best_y[0] > best_q[0]):
+    if best_y is not None and _newer(best_y, best_q, prefer_larger=y_sized) is best_y:
         return best_y[1], best_y[0], "ytd"
     if best_q is not None:
         return best_q[1], best_q[0], "quarters"
     if best_a is not None:
         return best_a[1], best_a[0], "annual"
     return None, None, None
+
+
+def _newer(
+    candidate: tuple[date, Decimal] | None,
+    best: tuple[date, Decimal] | None,
+    *,
+    prefer_larger: bool,
+) -> tuple[date, Decimal] | None:
+    if candidate is None:
+        return best
+    if best is None or candidate[0] > best[0]:
+        return candidate
+    if prefer_larger and candidate[0] == best[0] and candidate[1] > best[1]:
+        return candidate
+    return best
 
 
 def _ytd_ttm(

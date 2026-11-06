@@ -527,6 +527,31 @@ def test_revenue_reads_regulated_and_unregulated_total() -> None:
     assert metric.revenue == Decimal("220")
 
 
+def test_revenue_prefers_total_over_contract_part() -> None:
+    payload = _ytd_payload()
+    gaap = payload["facts"]["us-gaap"]
+    # URI-style: contract revenue (priority tag) is a slice of the `Revenues` total.
+    part = [{**item, "val": item["val"] // 10} for item in gaap["Revenues"]["units"]["USD"]]
+    gaap["RevenueFromContractWithCustomerExcludingAssessedTax"] = {"units": {"USD": part}}
+    metric = ttm_from_facts(payload, require_quarters=True)
+    assert metric is not None
+    assert metric.revenue == Decimal("220")
+    _drop_revenue(payload, ("2026-01-01", "2026-03-31"))
+    bridged = ttm_from_facts(payload, require_quarters=True)
+    assert bridged is not None
+    assert bridged.revenue == Decimal("220")
+
+
+def test_revenue_gross_of_excise_tax_never_wins_by_size() -> None:
+    payload = _ytd_payload()
+    gaap = payload["facts"]["us-gaap"]
+    gross = [{**item, "val": item["val"] * 2} for item in gaap["Revenues"]["units"]["USD"]]
+    gaap["RevenueFromContractWithCustomerIncludingAssessedTax"] = {"units": {"USD": gross}}
+    metric = ttm_from_facts(payload, require_quarters=True)
+    assert metric is not None
+    assert metric.revenue == Decimal("220")
+
+
 def test_restated_period_uses_latest_filing() -> None:
     payload = _ytd_payload()
     payload["facts"]["us-gaap"]["Revenues"]["units"]["USD"].append(
