@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -499,24 +500,25 @@ def _flow_ttm(
     The YTD method covers a quarter SEC never published: one missing 10-Q would
     otherwise freeze the TTM until four new contiguous quarters exist. The freshest
     of quarters and YTD wins; quarters on a tie, so complete chains are unchanged.
-    `prefer_larger` breaks a same-date tie (between synonyms or methods) by value:
-    a revenue tag can be a part (contract revenue) of the total (`Revenues`).
+    `prefer_larger` breaks a same-date, same-method tie between synonyms: a revenue
+    tag can be a part (contract revenue) of the total (`Revenues`). The total must be
+    no smaller in any summed period and larger in most, so one quarter inflated by a
+    restatement (FY from the old 10-K minus a restated 9M) does not win, while a
+    merged chain that borrowed one quarter from the total still loses to it.
     Revenue gross of excise tax never wins that way.
     """
-    best_q: tuple[date, Decimal] | None = None
-    best_y: tuple[date, Decimal] | None = None
-    y_sized = prefer_larger
+    best_q: _Ttm | None = None
+    best_y: _Ttm | None = None
     best_a: tuple[date, Decimal] | None = None
     # Merged synonyms first; each concept alone as a fallback when the merge leaves a gap.
     for group in (concepts, *((item,) for item in concepts)):
         sized = prefer_larger and group != (GROSS_OF_TAX_REVENUE,)
         picked = _last_quarters(_discrete_quarters(facts, group, through=through), 4)
         if len(picked) == 4:
-            total = (picked[0][0], sum((value for _end, value in picked), Decimal("0")))
+            parts = tuple(value for _end, value in picked)
+            total = _Ttm(picked[0][0], sum(parts, Decimal("0")), parts)
             best_q = _newer(total, best_q, prefer_larger=sized)
-        ytd = _ytd_ttm(facts, group, through=through)
-        if ytd is not None and _newer(ytd, best_y, prefer_larger=sized) is ytd:
-            best_y, y_sized = ytd, sized
+        best_y = _newer(_ytd_ttm(facts, group, through=through), best_y, prefer_larger=sized)
     for taxonomy, concept in concepts:
         points = _duration_points(facts, taxonomy, concept)
         if through is not None:
@@ -526,26 +528,36 @@ def _flow_ttm(
             _span, end, value = annual[0]
             if best_a is None or end > best_a[0]:
                 best_a = (end, value)
-    if best_y is not None and _newer(best_y, best_q, prefer_larger=y_sized) is best_y:
-        return best_y[1], best_y[0], "ytd"
+    if best_y is not None and (best_q is None or best_y.end > best_q.end):
+        return best_y.value, best_y.end, "ytd"
     if best_q is not None:
-        return best_q[1], best_q[0], "quarters"
+        return best_q.value, best_q.end, "quarters"
     if best_a is not None:
         return best_a[1], best_a[0], "annual"
     return None, None, None
 
 
-def _newer(
-    candidate: tuple[date, Decimal] | None,
-    best: tuple[date, Decimal] | None,
-    *,
-    prefer_larger: bool,
-) -> tuple[date, Decimal] | None:
+@dataclass(frozen=True)
+class _Ttm:
+    """A TTM candidate; `parts` are the summed periods, compared one by one on a tie."""
+
+    end: date
+    value: Decimal
+    parts: tuple[Decimal, ...]
+
+
+def _newer(candidate: _Ttm | None, best: _Ttm | None, *, prefer_larger: bool) -> _Ttm | None:
     if candidate is None:
         return best
-    if best is None or candidate[0] > best[0]:
+    if best is None or candidate.end > best.end:
         return candidate
-    if prefer_larger and candidate[0] == best[0] and candidate[1] > best[1]:
+    if not prefer_larger or candidate.end != best.end:
+        return best
+    if len(candidate.parts) != len(best.parts):
+        return best
+    pairs = list(zip(candidate.parts, best.parts, strict=True))
+    larger = sum(new > old for new, old in pairs)
+    if all(new >= old for new, old in pairs) and larger * 2 > len(pairs):
         return candidate
     return best
 
@@ -555,8 +567,8 @@ def _ytd_ttm(
     concepts: tuple[tuple[str, str], ...],
     *,
     through: date | None = None,
-) -> tuple[date, Decimal] | None:
-    """Newest (end, TTM) as FY + YTD − prior-year YTD, or a fiscal year ending there.
+) -> _Ttm | None:
+    """Newest TTM as FY + YTD − prior-year YTD, or a fiscal year ending there.
 
     Only for quarterly filers: a 10-K-only filer has no quarter in the trailing year.
     """
@@ -570,7 +582,7 @@ def _ytd_ttm(
             continue
         for (_start, fy_end), value in annual.items():
             if fy_end == end:
-                return end, value
+                return _Ttm(end, value, (value,))
         for (start, ytd_end), ytd in spans.items():
             if ytd_end != end or not QUARTER_DAYS[0] <= (end - start).days < lo:
                 continue
@@ -579,7 +591,7 @@ def _ytd_ttm(
                     continue
                 prior = _span_near(spans, fy_start, end - timedelta(days=365), slack)
                 if prior is not None:
-                    return end, fy + ytd - prior
+                    return _Ttm(end, fy + ytd - prior, (fy, ytd, prior))
     return None
 
 

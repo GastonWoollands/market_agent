@@ -533,13 +533,34 @@ def test_revenue_prefers_total_over_contract_part() -> None:
     # URI-style: contract revenue (priority tag) is a slice of the `Revenues` total.
     part = [{**item, "val": item["val"] // 10} for item in gaap["Revenues"]["units"]["USD"]]
     gaap["RevenueFromContractWithCustomerExcludingAssessedTax"] = {"units": {"USD": part}}
+    # Only the total tags a 3M Q4, so the merged chain borrows that one quarter.
+    gaap["Revenues"]["units"]["USD"].append(_q("2025-10-01", "2025-12-31", 50, "10-K"))
     metric = ttm_from_facts(payload, require_quarters=True)
     assert metric is not None
     assert metric.revenue == Decimal("220")
+    # URI: SEC dropped the same 10-Q for both tags, so both bridge by YTD.
     _drop_revenue(payload, ("2026-01-01", "2026-03-31"))
+    contract = gaap["RevenueFromContractWithCustomerExcludingAssessedTax"]["units"]["USD"]
+    contract[:] = [
+        item for item in contract if (item["start"], item["end"]) != ("2026-01-01", "2026-03-31")
+    ]
     bridged = ttm_from_facts(payload, require_quarters=True)
     assert bridged is not None
     assert bridged.revenue == Decimal("220")
+
+
+def test_restatement_inflated_quarter_does_not_win_by_size() -> None:
+    payload = _ytd_payload()
+    gaap = payload["facts"]["us-gaap"]
+    same = [dict(item) for item in gaap["Revenues"]["units"]["USD"]]
+    gaap["RevenueFromContractWithCustomerExcludingAssessedTax"] = {"units": {"USD": same}}
+    # APTV: FY from the pre-spin 10-K minus a restated 9M inflates the derived Q4.
+    for item in gaap["Revenues"]["units"]["USD"]:
+        if (item["start"], item["end"]) == ("2025-01-01", "2025-12-31"):
+            item["val"] = 200
+    metric = ttm_from_facts(payload, require_quarters=True)
+    assert metric is not None
+    assert metric.revenue == Decimal("220")
 
 
 def test_revenue_gross_of_excise_tax_never_wins_by_size() -> None:
