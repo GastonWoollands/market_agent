@@ -156,6 +156,8 @@ Found while re-running: filers switch synonym tags between 10-Q and 10-K (capex,
 
 **Result (2026-10-31, same Aug-18 zip):** 973 members (was 933); 860 ranked. Repeated latest FCF 755 → 1. Median rank move 99 places; 11 of the old top 25 remain. Out: names without a current standard capex / EBIT tag (e.g. APP, ABNB, BIIB) and CRWV (debt on custom tags) — candidates for a concept-coverage follow-up, not a fallback to stale data.
 
+**Follow-up (2026-11-06):** SEC companyfacts omits some 10-Qs that exist on EDGAR with XBRL (SO, DUK, V, HUM Q2 2026; checked with a cache-buster, not ours), which broke the quarter chain for a year. TTM now falls back to FY + YTD − prior-year YTD (or a fiscal year ending at the newest period), quarterly filers only; the freshest of quarters / YTD wins, so a years-old chain no longer beats current data (IDA read 2018). Revenue breaks a same-date tie between tags by size: `RevenueFromContractWithCustomer…` is often a part of `Revenues` (HIG 1.8B vs 29.9B, URI, GM, ANDE). The larger tag must be no smaller in any summed period and larger in most, so a quarter inflated by a restatement (FY from the pre-spin 10-K minus a restated 9M: APTV, HON) does not win; the gross-of-excise tag never wins by size (BF-A, SAM). Added `RegulatedAndUnregulatedOperatingRevenue` (SR). Old vs new parser over 1150 names: 72 change, 14 to a current date (stale or missing before), 58 same-date corrections (19 under 2%); TTM history is smoother (HIG max quarter-to-quarter step 5.1x → 1.05x).
+
 **Operator check:** CRWV TTM revenue at 2026-06-30 = 7.590B, a 2025-12-31 row exists, FCF differs quarter to quarter; `opportunity_score` has one row per ranked name.
 
 ## Phase 1.7 — Sector + per-name risk (done)
