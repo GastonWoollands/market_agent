@@ -139,7 +139,11 @@ python -m jobs.compute_quant
 
 `ingest_sec --rebuild` downloads `companyfacts.zip` (~1.4 GB) into `data/sec/` (gitignored) and re-downloads it when the copy is older than 7 days. Set `SEC_USER_AGENT` to a real email.
 
-After the first load, plain `ingest_sec` refreshes stored names only (valuation ∪ watchlist) by their stored CIK from per-CIK JSON (~20 min for ~1000 names), committing every 50 names. It never changes membership: names that fall below the floor stay members, and new names never enter. Names without a CIK (ETFs, foreign filers) are listed under `meta.no_cik`, not `failures`. `--tickers` narrows the refresh to stored names; `--rebuild --tickers A,B` adds new ones. `--zip` / `--refresh-zip` / `--per-cik` need `--rebuild` or `--fy-only`. Run `--rebuild` monthly so the universe does not drift. A full run (no `--tickers` / `--limit`, at most 5% failed fetches) records `meta.facts_as_of` — the fetch date, or the zip file's mtime (a copied old zip reads as new) — which the freshness strip shows as Filings. If the zip is older than 7 days and the download fails, the old copy is used and Filings shows its date as late.
+After the first load, plain `ingest_sec` refreshes stored names only (valuation ∪ watchlist) by their stored CIK from per-CIK JSON (~20 min for ~1000 names), committing every 50 names. It never changes membership: names that fall below the floor stay members, and new names never enter. Names without a CIK (ETFs, foreign filers) are listed under `meta.no_cik`, not `failures`. `--tickers` narrows the refresh to stored names; `--rebuild --tickers A,B` adds new ones. `--zip` / `--refresh-zip` / `--per-cik` need `--rebuild` or `--fy-only`. Run `--rebuild` monthly so the universe does not drift.
+
+**Foreign filers (Phase 1.15).** Every refresh or rebuild first syncs `config/universes.yaml` `valuation.foreign_filers` (NU, DLO, VIST): each curated name is upserted with its SEC CIK and kept as a `valuation` member, and a full `--rebuild` keeps them too. The same step fills a NULL CIK for any stored valuation / watchlist name found in the SEC ticker list (`meta.cik_filled`). After the SEC pass, Yahoo quarterly statements give those names TTM points newer than their latest SEC point (`metric_ttm.source = yahoo`; four Yahoo requests per name). `meta.yahoo_skipped` lists `non_usd` / `few_quarters` names, and `meta.yahoo_warnings` lists `shares_mismatch` (Yahoo shares ÷ ADR ratio more than 10% off the SEC count). To add a foreign filer: add one line to the yaml (USD reporters only, with the right `adr_ratio`; `bank: true` for banks), then run `ingest_sec --tickers T`, `ingest_yahoo --universe valuation --tickers T`, `ingest_sec_profile --tickers T`, and the compute jobs.
+
+A full run (no `--tickers` / `--limit`, at most 5% failed fetches) records `meta.facts_as_of` — the fetch date, or the zip file's mtime (a copied old zip reads as new) — which the freshness strip shows as Filings. If the zip is older than 7 days and the download fails, the old copy is used and Filings shows its date as late.
 
 If Yahoo dies mid-universe:
 
@@ -410,7 +414,7 @@ Both write to `outlook_report` table. UI displays latest for the date.
 | `jobs.ingest_calendar` | `event_item` | `--skip-finnhub` |
 | `jobs.build_pack` | `evidence_pack` | `--as-of YYYY-MM-DD` |
 | `jobs.generate_outlook` | `outlook_report` | `--template`, `--as-of`, `--provider`, `--model` |
-| `jobs.ingest_sec` | `metric_ttm`, `metric_fy`; valuation membership only with `--rebuild` | `--rebuild`, `--refresh-zip`, `--zip PATH`, `--per-cik`, `--tickers`, `--limit`, `--fy-only` |
+| `jobs.ingest_sec` | `metric_ttm` (`source` sec, or yahoo for curated foreign filers), `metric_fy`; valuation membership only with `--rebuild`, plus the curated foreign filers on every run | `--rebuild`, `--refresh-zip`, `--zip PATH`, `--per-cik`, `--tickers`, `--limit`, `--fy-only` |
 | `jobs.compute_valuation` | `valuation_daily` | — |
 | `jobs.compute_quant` | `quant_score` (gem flag / ratios) | — |
 | `jobs.compute_scores` | `opportunity_score` (prunes names outside the run) | — |
