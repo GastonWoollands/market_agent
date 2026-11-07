@@ -9,7 +9,14 @@ import { PeersPanel } from "@/components/PeersPanel";
 import { StaleBadge } from "@/components/StaleBadge";
 import { TradingViewChart } from "@/components/TradingViewChart";
 import { cn } from "@/lib/cn";
-import type { CreditCurve, TickerDesk, TickerRisk, TickerTape, TickerTechnicals } from "@/lib/api";
+import type {
+  CreditCurve,
+  TickerBank,
+  TickerDesk,
+  TickerRisk,
+  TickerTape,
+  TickerTechnicals,
+} from "@/lib/api";
 import {
   DASH,
   fmtMultiple,
@@ -95,8 +102,14 @@ export function TickerView({ tape, credit }: { tape: TickerTape; credit: CreditC
       </form>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <DeskPanel desk={tape.desk} />
-        <SolvencyPanel desk={tape.desk} />
+        {tape.bank ? (
+          <BankPanel bank={tape.bank} />
+        ) : (
+          <>
+            <DeskPanel desk={tape.desk} />
+            <SolvencyPanel desk={tape.desk} />
+          </>
+        )}
         <TechnicalsPanel tech={tape.technicals} sectorEtf={id.sector_etf} />
         <RiskPanel risk={tape.risk} />
       </div>
@@ -171,7 +184,7 @@ function DeskPanel({ desk }: { desk: TickerDesk | null }) {
   return (
     <Panel
       title="Valuation"
-      note={`TTM ${desk.ttm_as_of ?? DASH}${desk.ev_basis === "read_time" ? " · EV read-time" : ""}`}
+      note={`TTM ${desk.ttm_as_of ?? DASH}${sourceNote(desk.ttm_source)}${desk.ev_basis === "read_time" ? " · EV read-time" : ""}`}
     >
       <Stats>
         <Stat label="EV/EBITDA" value={fmtMultiple(desk.ev_ebitda)} />
@@ -202,9 +215,35 @@ function DeskPanel({ desk }: { desk: TickerDesk | null }) {
   );
 }
 
+function sourceNote(source: string | null | undefined): string {
+  return source === "yahoo" ? " · vendor quarters (Yahoo)" : "";
+}
+
+function BankPanel({ bank }: { bank: TickerBank }) {
+  return (
+    <Panel
+      title="Bank valuation"
+      note={`TTM ${bank.ttm_as_of}${sourceNote(bank.source)} · EV/EBITDA does not apply to banks`}
+    >
+      <Stats>
+        <Stat label="P/E" value={fmtMultiple(bank.pe)} note="mkt cap / TTM net income" />
+        <Stat label="P/B" value={fmtMultiple(bank.pb)} note="mkt cap / equity" />
+        <Stat
+          label="ROE"
+          value={fmtPct(bank.roe)}
+          note={bank.roe_basis === "ending" ? "on ending equity" : "on average equity"}
+        />
+        <Stat label="Net income" value={fmtUsd(bank.net_income)} note="TTM" />
+        <Stat label="Equity" value={fmtUsd(bank.equity)} />
+        <Stat label="Market cap" value={fmtUsd(bank.market_cap)} />
+      </Stats>
+    </Panel>
+  );
+}
+
 function SolvencyPanel({ desk }: { desk: TickerDesk | null }) {
   return (
-    <Panel title="Solvency & dilution" note="TTM, SEC">
+    <Panel title="Solvency & dilution" note={desk?.ttm_source === "yahoo" ? "TTM, Yahoo" : "TTM, SEC"}>
       <Stats>
         <Stat label="Interest cover" value={fmtMultiple(desk?.interest_coverage)} note="EBIT / interest" />
         <Stat
@@ -304,8 +343,12 @@ function TtmTable({ tape }: { tape: TickerTape }) {
     return null;
   }
   const rows = [...tape.ttm].reverse().slice(0, 12);
+  const vendor = rows.some((row) => row.source === "yahoo");
   return (
-    <Panel title="TTM history" note="trailing four quarters, SEC">
+    <Panel
+      title="TTM history"
+      note={vendor ? "trailing four quarters · * = Yahoo vendor quarters, else SEC" : "trailing four quarters, SEC"}
+    >
       <div className="overflow-x-auto">
         <table className="w-full text-left text-[13px]">
           <thead className="text-[11px] uppercase tracking-wide text-mute">
@@ -322,7 +365,10 @@ function TtmTable({ tape }: { tape: TickerTape }) {
           <tbody>
             {rows.map((row) => (
               <tr key={row.as_of} className="border-b border-line last:border-0">
-                <td className="px-2 py-1.5 tabular-nums">{row.as_of}</td>
+                <td className="px-2 py-1.5 tabular-nums">
+                  {row.as_of}
+                  {row.source === "yahoo" ? "*" : ""}
+                </td>
                 <Num value={fmtUsd(row.revenue)} />
                 <Num value={fmtUsd(row.ebitda)} />
                 <Num value={fmtUsd(row.ebit)} />

@@ -109,8 +109,12 @@ def build_ticker_credit(
     ladder: Sequence[Any],
     risk_free: float | None,
     calibration: CreditCalibrationFile,
+    bank: bool = False,
 ) -> TickerCredit:
-    """Stored row when there is one, else read-time on the stored ladder (names outside the job)."""
+    """Stored row when there is one, else read-time on the stored ladder (names outside the job).
+
+    `bank` marks a curated bank (Phase 1.15), which may have no SIC sector yet.
+    """
     rated = calibration.by_ticker().get(ticker)
     agency = (
         AgencyRating(
@@ -140,9 +144,10 @@ def build_ticker_credit(
             for row in rungs
         ],
     )
-    if sector in calibration.exclude_sectors or ticker in calibration.exclude_tickers:
+    if bank or sector in calibration.exclude_sectors or ticker in calibration.exclude_tickers:
+        label = "bank" if bank else sector or ticker
         base.unavailable = (
-            f"Not scored: {sector or ticker} liabilities are funding, float or custody, "
+            f"Not scored: {label} liabilities are funding, float or custody, "
             "not claims that force default."
         )
         return base
@@ -213,6 +218,7 @@ def load_ticker_credit(db: Any, item: Any, *, today: date) -> TickerCredit:
         ladder=latest_credit_anchors(db),
         risk_free=float(rate[-1][1]) / 100 if rate else None,
         calibration=load_credit_calibration(),
+        bank=item.bank,
     )
 
 

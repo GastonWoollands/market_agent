@@ -96,6 +96,7 @@ def _member(
         nd_ebitda=nd_ebitda(metric.net_debt, value.ebitda),
         accrual=accrual_from_fy(fy),
         comparable=bool(value.comparable),
+        ttm_source=str(getattr(metric, "source", "sec")),
     )
 
 

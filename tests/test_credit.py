@@ -168,3 +168,21 @@ def test_ticker_credit_read_time_and_exclusions() -> None:
         calibration=_calibration(),
     )
     assert missing.unavailable == "Not computed: no SEC TTM row."
+
+
+def test_curated_bank_without_a_sector_is_not_scored() -> None:
+    bars = _bars()
+    inputs, _ = credit_inputs(bars, bars, _ttm(), today=TODAY)
+    credit = build_ticker_credit(
+        ticker="NU",
+        sector=None,
+        stored=None,
+        inputs=inputs,
+        reason=None,
+        ladder=[],
+        risk_free=0.044,
+        calibration=_calibration(),
+        bank=True,
+    )
+    assert credit.source is None
+    assert credit.unavailable is not None and credit.unavailable.startswith("Not scored: bank")

@@ -560,6 +560,7 @@ export type ValuationMember = {
   nd_ebitda: number | null;
   accrual: boolean | null;
   comparable: boolean;
+  ttm_source: "sec" | "yahoo";
 };
 
 export type ValuationTape = {
@@ -734,6 +735,8 @@ export type TickerPrice = {
 
 export type TickerDesk = {
   ttm_as_of: string | null;
+  /** `sec` = filings; `yahoo` = vendor quarters (curated foreign filers only). */
+  ttm_source: "sec" | "yahoo" | null;
   valuation_as_of: string | null;
   ev_basis: "valuation_daily" | "read_time" | null;
   market_cap: number | null;
@@ -766,6 +769,22 @@ export type TickerTtmRow = {
   net_debt: number | null;
   interest_expense: number | null;
   shares: number | null;
+  net_income: number | null;
+  equity: number | null;
+  source: "sec" | "yahoo";
+};
+
+/** Curated banks: P/E, P/B, ROE instead of the EV/EBITDA desk. */
+export type TickerBank = {
+  ttm_as_of: string;
+  source: "sec" | "yahoo";
+  market_cap: number | null;
+  net_income: number | null;
+  equity: number | null;
+  pe: number | null;
+  pb: number | null;
+  roe: number | null;
+  roe_basis: "average" | "ending" | null;
 };
 
 export type TickerFyRow = {
@@ -999,6 +1018,7 @@ export type TickerTape = {
   identity: TickerIdentity | null;
   price: TickerPrice | null;
   desk: TickerDesk | null;
+  bank?: TickerBank | null;
   ttm: TickerTtmRow[];
   fy: TickerFyRow[];
   technicals: TickerTechnicals | null;

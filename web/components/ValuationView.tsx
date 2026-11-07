@@ -33,7 +33,8 @@ export function ValuationView({
           <p className="mt-2 max-w-3xl text-sm leading-6 text-mute">
             EV/EBITDA from stored prices and SEC TTM. Percentile is vs that name’s own 5y daily
             multiple. FCF yield is TTM FCF / EV. ND/EBITDA is TTM net debt / EBITDA. 1y change
-            splits into EBITDA growth × multiple re-rating.
+            splits into EBITDA growth × multiple re-rating. * = foreign filer on Yahoo vendor
+            quarters.
           </p>
         </div>
         <p className="text-[13px] text-mute">
@@ -150,6 +151,7 @@ function MemberRow({ item }: { item: ValuationMember }) {
     <tr className="border-b border-line last:border-0">
       <td className="px-3 py-2 font-medium">
         <TickerLink ticker={item.ticker} />
+        {item.ttm_source === "yahoo" ? <span className="text-mute">*</span> : null}
       </td>
       <td className="px-3 py-2 text-mute">{item.name}</td>
       <td className="px-3 py-2 text-right tabular-nums">

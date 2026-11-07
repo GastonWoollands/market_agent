@@ -522,6 +522,8 @@ class ValuationMember(BaseModel):
     nd_ebitda: float | None = None
     accrual: bool | None = None
     comparable: bool = False
+    # `yahoo` = vendor quarters (curated foreign filers, Phase 1.15); else SEC.
+    ttm_source: str = "sec"
 
 
 class ValuationResponse(BaseModel):
