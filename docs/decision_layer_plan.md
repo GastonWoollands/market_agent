@@ -50,7 +50,7 @@ This file is **not** the product contract. If intent, sources, universes, pages,
 | 6 | Recommendation writer | Not started | Pack desk metrics + citation gate; Python fills snapshot |
 | 7 | Three-zone cards + Gems tab | Not started | Schema/`api.ts` before components. No F/Z drawer |
 
-Last tracker update: 2026-11-07.
+Last tracker update: 2026-11-08.
 
 ---
 
@@ -461,6 +461,23 @@ IREN and MELI got their CIK / Q3 2026 SEC TTM. YPF is skipped as `non_usd`.
 - `GET /ticker/NU` shows the bank block and no EV/EBITDA.
 - DLO / VIST appear on Valuation.
 
+## Phase 1.16 — Ideas: score rules + sector-neutral 12-1 ranking (PR 1 of 3)
+
+**Why.** The UI audit (2026-11-03) found the Opportunities top 25 led by data artifacts (KODK FCF yield 79% from a one-off, AMN EBITDA +864% off a near-zero base) and 12 of 25 names in software that fell against its own history. Operator decisions (2026-11-07, prototype canvas): merge Valuation + Opportunities into one Ideas page, keep artifacts out of the rank but visible with the reason, rank within sectors, use 12-1 momentum.
+
+**Shipped in PR 1 (`compute_scores`, no UI yet).**
+- `analytics.scores.ScoreGate`, four rules: `fcf_one_off` (FCF TTM rose from a TTM at or below zero, within the last four, by more than 15% of revenue, or FCF yield above 30%), `base_effect` (|EBITDA 1y| > 300%), `extreme_multiple` (EV/EBITDA > 60x), `stale_ttm` (TTM older than `TTM_STALE_DAYS` = 150, the number the freshness strip uses). Failing names go to `score_exclusion` (rule + the numbers behind it), never to `opportunity_score`.
+- Quality, change and setup rank within the sector (`SECTOR_MIN_NAMES` = 10; smaller sectors ranked together). Cheap stays the name's own 5y percentile.
+- Setup = 12-1 momentum from adjusted closes (`opportunity_score.ret_12_1`); `ret_3m` stays for display.
+- `SSRM` → Materials (SIC 6795 "mineral royalty traders").
+- `compute_scores --dry-run` prints the top 25 and the exclusion counts without writing.
+
+**First run (2026-11-08, scores as of 2026-11-06).** 774 ranked, 81 excluded (`fcf_one_off` 25, `stale_ttm` 22, `base_effect` 19, `extreme_multiple` 18). 8 of the old top 25 stay; KODK, AMN, WLKP and SONO are excluded; software leaves the top 25 (12 → 0), mostly on 12-1 momentum (DOCU #1 → out). The top 25 drives the `ingest_estimates` and `ingest_options` scope and memo generation, so those move too.
+
+**Next.** PR 2: `GET /ideas` + the Ideas page (Shortlist / All / Excluded) replacing Valuation and Opportunities. PR 3: "What changed" (top-25 entries and exits, EBITDA-margin turns, EPS revisions once the universe-wide Yahoo test passes).
+
+**Known.** Health insurers (UNH, ELV, HUM, MOH; SIC 6324) and DLB sit in Financials by SIC; moving them changes the Merton credit scope, so it waits for an operator decision.
+
 ## Explicitly deferred
 
 | Item | Why |
@@ -573,6 +590,7 @@ Do not start Phase 7 until packs exist. Do not start a PR to “fix F-score for 
 | 2026-10-31 | Phases 1.6–1.9 added after a single-name deep-dive exposed TTM / debt defects. Northstar: Ticker + Compare pages; interest coverage in scope. |
 | 2026-10-31 | Phase 1.6 merged (PR #13). Phase 1.7: SIC sectors, `risk_stats`, EBIT / interest TTM, additive partial `ingest_sec`. |
 | 2026-10-31 | Phase 1.7 merged (PR #14). Phase 1.8: Ticker + Compare pages and APIs; facts refreshed for non-members. |
+| 2026-11-08 | Phase 1.16 PR 1: `ScoreGate` (four data-quality rules → `score_exclusion`), sector-neutral sleeves, 12-1 momentum as setup, SSRM → Materials. |
 | 2026-11-07 | Phase 1.15 shipped on `feat/foreign-filers`. NU / DLO / VIST live; IREN and MELI CIK / TTM refreshed. Limits recorded (unranked until comparable; operator accepted). IREN sector override → Information Technology. |
 | 2026-11-07 | Phase 1.15 contracted: curated foreign filers (US-listed 20-F / 6-K ADRs in USD) join B; Yahoo quarterly statements as labeled vendor TTM; `metric_ttm.net_income` / `equity`; bank read (P/E, P/B, ROE). YPF / PAM out (ARS, ADR ratio). |
 | 2026-11-03 | PRs #20 and #21 merged. Review after 1.14: Outlook pack integration, four pack defects, unattended runs, coverage gaps and Ticker density recorded; proposed order integration → operations → Book → Ticker consolidation → 1.9 (pending operator decision). |
