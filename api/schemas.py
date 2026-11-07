@@ -646,6 +646,8 @@ class TickerDesk(BaseModel):
     """Named desk metrics. `ev_basis` says whether EV is the stored daily or read-time."""
 
     ttm_as_of: date | None = None
+    # `sec` (filings) or `yahoo` (vendor quarters, curated foreign filers only).
+    ttm_source: str | None = None
     valuation_as_of: date | None = None
     ev_basis: str | None = None
     market_cap: float | None = None
@@ -678,6 +680,23 @@ class TickerTtmRow(BaseModel):
     net_debt: float | None = None
     interest_expense: float | None = None
     shares: float | None = None
+    net_income: float | None = None
+    equity: float | None = None
+    source: str = "sec"
+
+
+class TickerBank(BaseModel):
+    """P/E, P/B, ROE for curated banks (Phase 1.15). EV/EBITDA does not apply to them."""
+
+    ttm_as_of: date
+    source: str
+    market_cap: float | None = None
+    net_income: float | None = None
+    equity: float | None = None
+    pe: float | None = None
+    pb: float | None = None
+    roe: float | None = None
+    roe_basis: str | None = None
 
 
 class TickerFyRow(BaseModel):
@@ -887,6 +906,7 @@ class TickerResponse(BaseModel):
     identity: TickerIdentity | None = None
     price: TickerPrice | None = None
     desk: TickerDesk | None = None
+    bank: TickerBank | None = None
     ttm: list[TickerTtmRow] = Field(default_factory=list)
     fy: list[TickerFyRow] = Field(default_factory=list)
     technicals: TickerTechnicals | None = None

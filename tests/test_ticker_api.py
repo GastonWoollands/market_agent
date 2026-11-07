@@ -141,3 +141,35 @@ def test_compare_corr_overlay_and_missing() -> None:
 def test_parse_tickers_dedupes_and_caps() -> None:
     assert parse_tickers(" msft,META,msft,,nvda ") == ["MSFT", "META", "NVDA"]
     assert len(parse_tickers(",".join(f"T{i}" for i in range(10)))) == 6
+
+
+def test_bank_gets_the_bank_read_and_no_ev_desk() -> None:
+    ttm = [
+        _ttm(date(2025, 6, 30), net_income=50.0, equity=400.0, source="yahoo"),
+        _ttm(date(2026, 6, 30), net_income=80.0, equity=600.0, source="yahoo"),
+    ]
+    page = build_ticker(_name("BANKCO", ttm=ttm, bank=True), _bench(), today=TODAY)
+    assert page.desk is None
+    bank = page.bank
+    assert bank is not None and bank.source == "yahoo"
+    close = page.price.close
+    assert isclose(bank.pe, close * 10 / 80)
+    assert isclose(bank.pb, close * 10 / 600)
+    assert isclose(bank.roe, 80 / 500)
+    assert bank.roe_basis == "average"
+    assert page.ttm[-1].source == "yahoo"
+    compare = build_compare(
+        [_name("BANKCO", ttm=ttm, bank=True)],
+        _bench(),
+        requested=["BANKCO"],
+        missing=[],
+        today=TODAY,
+    )
+    assert compare.rows[0].desk is None
+
+
+def test_non_bank_desk_reports_its_ttm_source() -> None:
+    ttm = [_ttm(date(2026, 6, 30), source="yahoo")]
+    page = build_ticker(_name(ttm=ttm), _bench(), today=TODAY)
+    assert page.bank is None
+    assert page.desk is not None and page.desk.ttm_source == "yahoo"

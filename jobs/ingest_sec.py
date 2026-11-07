@@ -20,7 +20,7 @@ from ingest.sec.parse import (
     yahoo_symbol,
 )
 from ingest.yahoo.client import YahooClient
-from jobs.foreign_filers import ForeignFilerSync
+from jobs.foreign_filers import ForeignFilerReport, ForeignFilerSync
 from jobs.runtime import record_job
 from store.catalog import CatalogInstrument, load_universes
 from store.engine import session_scope
@@ -40,6 +40,7 @@ from store.repos import (
 from store.settings import settings
 
 log = logging.getLogger("jobs.ingest_sec")
+FOREIGN_META_KEYS = tuple(ForeignFilerReport().as_meta())
 JOB_NAME = "ingest_sec"
 # Northstar: ~900 names. Revenue ≥ $1B plus usable EV/EBITDA XBRL, not a slice of a larger set.
 BAND = (700, 1000)
@@ -504,6 +505,7 @@ def main() -> None:
             "source": "sec",
             "mode": result["mode"],
             **({"facts_as_of": result["facts_as_of"]} if result["facts_as_of"] else {}),
+            **{key: result[key] for key in FOREIGN_META_KEYS if key in result},
         },
     )
     log.info(
