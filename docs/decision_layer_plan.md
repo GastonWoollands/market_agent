@@ -448,7 +448,7 @@ IREN and MELI got their CIK / Q3 2026 SEC TTM. YPF is skipped as `non_usd`.
 **Limits.**
 - Opportunities ranks only `comparable` rows (≥ 750 sessions of own multiple history). DLO / VIST show on Valuation, but are unranked until that history exists. The Valuation grid shows "—" for a non-comparable EV/EBITDA; the Ticker page shows the number.
 - "Revenue 1y" / "Shares 1y" need a TTM row 300–430 days back. For DLO the SEC history jumps from 2024-12 to 2025-09, so those read "—" for now.
-- SEC SIC codes can mislabel: IREN is SIC 6199 (Finance Services) from its bitcoin-mining origin, so its Merton bucket is now excluded with the Financials sector. DLO maps to Industrials (business services).
+- SEC SIC codes can mislabel. IREN is SIC 6199 (Finance Services) from its bitcoin-mining origin. By operator decision (2026-11-07) a `tickers` override in `config/sic_sectors.yaml` maps it to Information Technology, which keeps its Merton bucket; the Financials exclusion stays sector-wide. DLO maps to Industrials (SIC 7389, business services).
 - Yahoo statements are vendor data, not filings: no restatement history, about 5 quarters deep, so the 5y percentile stays non-comparable for these names for years.
 - The ADR ratio is curated by hand.
 - Bank metrics have no loan-growth or NIM line in this phase.
@@ -573,7 +573,7 @@ Do not start Phase 7 until packs exist. Do not start a PR to “fix F-score for 
 | 2026-10-31 | Phases 1.6–1.9 added after a single-name deep-dive exposed TTM / debt defects. Northstar: Ticker + Compare pages; interest coverage in scope. |
 | 2026-10-31 | Phase 1.6 merged (PR #13). Phase 1.7: SIC sectors, `risk_stats`, EBIT / interest TTM, additive partial `ingest_sec`. |
 | 2026-10-31 | Phase 1.7 merged (PR #14). Phase 1.8: Ticker + Compare pages and APIs; facts refreshed for non-members. |
-| 2026-11-07 | Phase 1.15 shipped on `feat/foreign-filers`. NU / DLO / VIST live; IREN and MELI CIK / TTM refreshed. Limits recorded (unranked until comparable, IREN SIC 6199). |
+| 2026-11-07 | Phase 1.15 shipped on `feat/foreign-filers`. NU / DLO / VIST live; IREN and MELI CIK / TTM refreshed. Limits recorded (unranked until comparable; operator accepted). IREN sector override → Information Technology. |
 | 2026-11-07 | Phase 1.15 contracted: curated foreign filers (US-listed 20-F / 6-K ADRs in USD) join B; Yahoo quarterly statements as labeled vendor TTM; `metric_ttm.net_income` / `equity`; bank read (P/E, P/B, ROE). YPF / PAM out (ARS, ADR ratio). |
 | 2026-11-03 | PRs #20 and #21 merged. Review after 1.14: Outlook pack integration, four pack defects, unattended runs, coverage gaps and Ticker density recorded; proposed order integration → operations → Book → Ticker consolidation → 1.9 (pending operator decision). |
 | 2026-11-03 | Phase 1.14: FINRA short interest (all stored names, 1y) + Yahoo EPS revisions on the Ticker page; targets and recommendation counts dropped by operator decision. |
