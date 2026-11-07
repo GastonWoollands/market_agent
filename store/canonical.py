@@ -265,6 +265,34 @@ class MetricTtm(BaseModel):
     equity: Decimal | None = None
 
 
+class QuarterlyStatement(BaseModel):
+    """One quarter of Yahoo income / balance / cash-flow lines (vendor data, Phase 1.15).
+
+    Flows are for the three months ending `period_end`; balance lines are instants on it.
+    `capex` is positive. `debt` excludes lease liabilities, like the SEC parser.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    symbol: str
+    period_end: date
+    currency: str
+    revenue: Decimal | None = None
+    operating_income: Decimal | None = None
+    depreciation: Decimal | None = None
+    net_income: Decimal | None = None
+    interest_expense: Decimal | None = None
+    cfo: Decimal | None = None
+    capex: Decimal | None = None
+    debt: Decimal | None = None
+    cash: Decimal | None = None
+    equity: Decimal | None = None
+    total_liabilities: Decimal | None = None
+    current_liabilities: Decimal | None = None
+    deferred_revenue_current: Decimal | None = None
+    ordinary_shares: Decimal | None = None
+
+
 class MetricFy(BaseModel):
     """One fiscal-year snapshot from companyfacts. Not a fact warehouse."""
 

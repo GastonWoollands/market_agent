@@ -1,5 +1,6 @@
 import re
 from datetime import date
+from decimal import Decimal
 from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -37,11 +38,38 @@ class LiveTapeConfig(BaseModel):
     yields_section: list[LiveHeaderItem] = Field(default_factory=list)
 
 
+class ForeignFiler(BaseModel):
+    """A curated US-listed ADR of a 20-F / 6-K filer (Phase 1.15). Never auto-detected."""
+
+    model_config = ConfigDict(frozen=True)
+
+    ticker: str
+    name: str
+    yahoo: str | None = None
+    # Ordinary shares per ADR. Yahoo statements count ordinary shares; market cap uses ADRs.
+    adr_ratio: Decimal = Field(default=Decimal(1), gt=0)
+    # Banks get P/E, P/B, ROE; no EV/EBITDA, rank or Merton bucket.
+    bank: bool = False
+
+    @property
+    def yahoo_symbol(self) -> str:
+        return self.yahoo or self.ticker
+
+
 class ValuationConfig(BaseModel):
     description: str | None = None
     min_revenue_usd: int = 1_000_000_000
     exchanges: list[str] = Field(default_factory=lambda: ["NYSE", "Nasdaq", "NYSE American"])
     rebuild: str = "monthly"
+    foreign_filers: list[ForeignFiler] = Field(default_factory=list)
+
+    def foreign_filer(self, ticker: str) -> ForeignFiler | None:
+        wanted = ticker.upper()
+        return next((item for item in self.foreign_filers if item.ticker.upper() == wanted), None)
+
+    @property
+    def bank_tickers(self) -> frozenset[str]:
+        return frozenset(item.ticker.upper() for item in self.foreign_filers if item.bank)
 
 
 class GemsConfig(BaseModel):
