@@ -601,6 +601,24 @@ class OpportunityScore(Base):
     trap: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     fcf_margin: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
     ret_3m: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    ret_12_1: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+
+    instrument: Mapped[Instrument] = relationship()
+
+
+class ScoreExclusion(Base):
+    """Valuation members kept out of `opportunity_score` by a data-quality rule.
+
+    `reasons` = [{"rule": "fcf_one_off", "values": {...}}, ...] (`analytics.scores.ScoreGate`).
+    """
+
+    __tablename__ = "score_exclusion"
+
+    instrument_id: Mapped[int] = mapped_column(
+        ForeignKey("instrument.id", ondelete="CASCADE"), primary_key=True
+    )
+    as_of: Mapped[date] = mapped_column(Date, primary_key=True)
+    reasons: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False)
 
     instrument: Mapped[Instrument] = relationship()
 

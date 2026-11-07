@@ -8,11 +8,12 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
 
+from analytics.scores import TTM_STALE_DAYS
 from analytics.session import ET, MarketClock, sessions_between
 from api.schemas import FreshnessItem, FreshnessResponse
 from store.repos import FreshnessDates
 
-TTM_MAX_AGE = timedelta(days=150)
+TTM_MAX_AGE = timedelta(days=TTM_STALE_DAYS)
 TTM_LATE_SHARE = 0.10
 # Weekly `make sec` plus slack; older SEC data misses newly filed quarters.
 SEC_MAX_AGE = timedelta(days=10)

@@ -157,7 +157,7 @@ Smoke-test one name: `--tickers MSFT` (adds / refreshes that name; it does not s
 
 | # | Command | Why |
 |---|---------|-----|
-| 15 | `python -m jobs.compute_scores` | Rank from stored TTM + multiples + returns |
+| 15 | `python -m jobs.compute_scores` | Rank from stored TTM + multiples + 12-1 momentum, within sectors; names failing a data-quality rule go to `score_exclusion` |
 | 16 | `python -m jobs.generate_memos --template` | Pack-grounded memos for rank ≤ 20 |
 
 Drop `--template` when an LLM key is set.
@@ -417,7 +417,7 @@ Both write to `outlook_report` table. UI displays latest for the date.
 | `jobs.ingest_sec` | `metric_ttm` (`source` sec, or yahoo for curated foreign filers), `metric_fy`; valuation membership only with `--rebuild`, plus the curated foreign filers on every run | `--rebuild`, `--refresh-zip`, `--zip PATH`, `--per-cik`, `--tickers`, `--limit`, `--fy-only` |
 | `jobs.compute_valuation` | `valuation_daily` | — |
 | `jobs.compute_quant` | `quant_score` (gem flag / ratios) | — |
-| `jobs.compute_scores` | `opportunity_score` (prunes names outside the run) | — |
+| `jobs.compute_scores` | `opportunity_score` (prunes names outside the run), `score_exclusion` (replaced each run) | `--dry-run` |
 | `jobs.ingest_sec_profile` | `instrument.sector` / `instrument.industry` | `--tickers` (any stored name, also outside every universe), `--resume` |
 | `jobs.compute_risk` | `risk_stats` | — |
 | `jobs.compute_credit` | `credit_implied`, `credit_anchor` | — |

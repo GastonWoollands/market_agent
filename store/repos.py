@@ -51,6 +51,7 @@ from store.models import (
     ReturnStats,
     RiskStats,
     RrgPoint,
+    ScoreExclusion,
     ShortInterest,
     Universe,
     UniverseMember,
@@ -1418,9 +1419,18 @@ def upsert_opportunity_scores(session: Session, rows: Sequence[dict[str, object]
             "trap": stmt.excluded.trap,
             "fcf_margin": stmt.excluded.fcf_margin,
             "ret_3m": stmt.excluded.ret_3m,
+            "ret_12_1": stmt.excluded.ret_12_1,
         },
     )
     session.execute(stmt)
+    return len(rows)
+
+
+def replace_score_exclusions(session: Session, rows: Sequence[dict[str, object]]) -> int:
+    """Exclusions of the current run only: a name that passes again drops off the list."""
+    session.execute(delete(ScoreExclusion))
+    if rows:
+        session.execute(insert(ScoreExclusion).values(list(rows)))
     return len(rows)
 
 

@@ -30,6 +30,8 @@ tickers:
   # SIC 6199 "finance services" is left over from bitcoin mining; the business is AI cloud.
   # In Financials the sector-wide Merton exclusion would drop its credit bucket (2026-11-07).
   IREN: Information Technology
+  # SIC 6795 "mineral royalty traders": SSR Mining runs gold and silver mines (2026-11-08).
+  SSRM: Materials
   DASH: Consumer Discretionary
   CART: Consumer Staples
   Z: Real Estate

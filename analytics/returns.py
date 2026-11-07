@@ -26,6 +26,18 @@ def period_return(closes: Sequence[float], lookback: int) -> float | None:
     return (closes[-1] / start - 1) * 100.0
 
 
+def momentum_return(
+    closes: Sequence[float], *, lookback: int = LOOKBACK_1Y, skip: int = LOOKBACK_1M
+) -> float | None:
+    """12-1 momentum in percent: the year to a month ago, skipping the last month's reversal."""
+    if skip < 0 or lookback <= skip or len(closes) <= lookback:
+        return None
+    start = closes[-1 - lookback]
+    if start == 0:
+        return None
+    return (closes[-1 - skip] / start - 1) * 100.0
+
+
 def index_to_100(
     dates: Sequence[date],
     closes: Sequence[float],
