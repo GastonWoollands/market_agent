@@ -1055,6 +1055,24 @@ def upsert_metric_ttm(
     session.execute(stmt)
 
 
+def latest_ttm_as_of(session: Session, instrument_id: int, *, source: str) -> date | None:
+    """Newest TTM period stored for one name from one source."""
+    return session.execute(
+        select(func.max(MetricTtm.as_of)).where(
+            MetricTtm.instrument_id == instrument_id, MetricTtm.source == source
+        )
+    ).scalar_one_or_none()
+
+
+def set_instrument_cik(session: Session, instrument_id: int, cik: str) -> None:
+    """Fill a missing CIK (watchlist / curated names added without one). Never overwrites."""
+    session.execute(
+        update(Instrument)
+        .where(Instrument.id == instrument_id, Instrument.cik.is_(None))
+        .values(cik=cik, updated_at=func.now())
+    )
+
+
 def prune_metric_ttm(
     session: Session, instrument_id: int, keep: set[date], *, source: str = "sec"
 ) -> int:

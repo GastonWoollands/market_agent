@@ -19,6 +19,8 @@ from ingest.sec.parse import (
     usable_ttm,
     yahoo_symbol,
 )
+from ingest.yahoo.client import YahooClient
+from jobs.foreign_filers import ForeignFilerSync
 from jobs.runtime import record_job
 from store.catalog import CatalogInstrument, load_universes
 from store.engine import session_scope
@@ -134,6 +136,7 @@ def ingest(
     )
 
     tally = Tally()
+    foreign: ForeignFilerSync | None = None
     # Date of the SEC data itself: today for per-CIK JSON, the file date for a zip.
     facts_as_of = datetime.now(UTC).astimezone(ET).date()
     with SecClient(ua) as client:
@@ -148,6 +151,11 @@ def ingest(
                 tally.failures.append(f"zip: {exc}")
 
         try:
+            if plan.mode != "fy_only":
+                # Curated foreign filers and NULL CIKs first, so this run already refreshes them.
+                listed = client.fetch_tickers(exchanges=catalog.exchanges)
+                foreign = ForeignFilerSync(catalog, listed)
+                curated_ids = foreign.sync_identity(REFRESH_UNIVERSES)
             if plan.mode == "refresh":
                 _refresh_stored(client, tally, tickers=tickers, limit=limit)
             elif plan.mode == "fy_only":
@@ -155,8 +163,7 @@ def ingest(
                     client, archive, tally.failures, tickers=tickers, limit=limit
                 )
             else:
-                rows = client.fetch_tickers(exchanges=catalog.exchanges)
-                rows = _one_ticker_per_cik(rows)
+                rows = _one_ticker_per_cik(listed)
                 if tickers:
                     wanted = {item.upper() for item in tickers}
                     rows = [item for item in rows if item.ticker.upper() in wanted]
@@ -170,10 +177,24 @@ def ingest(
                 if not rows:
                     raise RuntimeError("no SEC tickers after exchange filter")
                 tally.listed = len(rows)
-                _write_members(client, rows, floor, archive, tally, enforce_band=plan.enforce_band)
+                _write_members(
+                    client,
+                    rows,
+                    floor,
+                    archive,
+                    tally,
+                    enforce_band=plan.enforce_band,
+                    keep_ids=curated_ids,
+                )
         finally:
             if archive is not None:
                 archive.close()
+
+    if foreign is not None:
+        # Vendor quarters only after the SEC pass, so they never shadow a newer filing.
+        with YahooClient() as yahoo:
+            foreign.write_yahoo_ttm(yahoo, foreign.selected(tickers))
+        tally.failures.extend(foreign.report.failures)
 
     with session_scope() as session:
         members = universe_size(session, "valuation")
@@ -193,6 +214,7 @@ def ingest(
         "no_cik": tally.no_cik,
         "mode": plan.mode,
         "facts_as_of": facts_as_of.isoformat() if dated else None,
+        **(foreign.report.as_meta() if foreign is not None else {}),
     }
 
 
@@ -254,9 +276,19 @@ def _file_date(path: Path) -> date:
 
 
 def _write_members(
-    client, listed, floor: Decimal, archive, tally: Tally, *, enforce_band: bool
+    client,
+    listed,
+    floor: Decimal,
+    archive,
+    tally: Tally,
+    *,
+    enforce_band: bool,
+    keep_ids: list[int] | None = None,
 ) -> None:
-    """Screen SEC listings into valuation; one transaction so a bad rebuild rolls back."""
+    """Screen SEC listings into valuation; one transaction so a bad rebuild rolls back.
+
+    `keep_ids` (curated foreign filers) stay members whatever the screen says.
+    """
     with session_scope() as session:
         universe = upsert_universe(session, "valuation", load_universes().valuation.description)
         session.flush()
@@ -305,6 +337,7 @@ def _write_members(
             for instrument_id in ids:
                 ensure_membership(session, universe.id, instrument_id)
             return
+        ids = sorted({*ids, *(keep_ids or [])})
         # Raise inside the transaction so a bad parse rolls back TTM rows and membership.
         if not (BAND[0] <= len(ids) <= BAND[1]):
             raise RuntimeError(f"valuation membership {len(ids)} is outside {BAND[0]}–{BAND[1]}")
