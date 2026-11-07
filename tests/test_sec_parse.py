@@ -573,6 +573,83 @@ def test_revenue_gross_of_excise_tax_never_wins_by_size() -> None:
     assert metric.revenue == Decimal("220")
 
 
+def test_total_bridged_by_ytd_beats_a_full_chain_of_the_part() -> None:
+    payload = _ytd_payload()
+    gaap = payload["facts"]["us-gaap"]
+    part = [{**item, "val": item["val"] // 10} for item in gaap["Revenues"]["units"]["USD"]]
+    gaap["RevenueFromContractWithCustomerExcludingAssessedTax"] = {"units": {"USD": part}}
+    # Only the total lost its Q1'26 10-Q; the part still has four quarters.
+    _drop_revenue(payload, ("2026-01-01", "2026-03-31"))
+    metric = ttm_from_facts(payload, require_quarters=True)
+    assert metric is not None
+    assert metric.as_of == date(2026, 6, 30)
+    assert metric.revenue == Decimal("220")
+
+
+def test_ytd_never_mixes_synonyms() -> None:
+    revenue = [
+        _q("2025-01-01", "2025-06-30", 50, "10-Q"),
+        _q("2026-01-01", "2026-06-30", 60, "10-Q"),
+        _q("2026-04-01", "2026-06-30", 30, "10-Q"),
+    ]
+    # The 10-K switched to the contract tag: FY 14 is a different line than the YTDs.
+    contract = [_q("2025-01-01", "2025-12-31", 14, "10-K")]
+    payload = {
+        "cik": 1,
+        "facts": {
+            "us-gaap": {
+                "Revenues": {"units": {"USD": revenue}},
+                "RevenueFromContractWithCustomerExcludingAssessedTax": {"units": {"USD": contract}},
+            }
+        },
+    }
+    # Not 14 + 60 − 50 = 24, and not the FY 14 alone: that tag has no quarter.
+    assert ttm_from_facts(payload, require_quarters=True) is None
+
+
+def test_subtracted_prior_ytd_is_not_a_vote_for_size() -> None:
+    def _tag(fy: int, prior: int) -> dict:
+        return {
+            "units": {
+                "USD": [
+                    _q("2025-01-01", "2025-12-31", fy, "10-K"),
+                    _q("2025-01-01", "2025-06-30", prior, "10-Q"),
+                    _q("2026-01-01", "2026-06-30", 130, "10-Q"),
+                    _q("2026-04-01", "2026-06-30", 70, "10-Q"),
+                ]
+            }
+        }
+
+    payload = {
+        "cik": 1,
+        "facts": {
+            "us-gaap": {
+                "RevenueFromContractWithCustomerExcludingAssessedTax": _tag(140, 50),
+                # Larger FY and prior YTD, smaller TTM (150 + 130 − 70 = 210).
+                "Revenues": _tag(150, 70),
+            }
+        },
+    }
+    metric = ttm_from_facts(payload, require_quarters=True)
+    assert metric is not None
+    assert metric.revenue == Decimal("220")
+
+
+def test_newer_annual_is_not_replaced_by_a_stale_quarter_chain() -> None:
+    revenue = [
+        _q("2017-01-01", "2017-03-31", 10, "10-Q"),
+        _q("2017-04-01", "2017-06-30", 10, "10-Q"),
+        _q("2017-07-01", "2017-09-30", 10, "10-Q"),
+        _q("2017-10-01", "2017-12-31", 10, "10-K"),
+        _q("2025-01-01", "2025-12-31", 90, "10-K"),
+    ]
+    payload = {"cik": 1, "facts": {"us-gaap": {"Revenues": {"units": {"USD": revenue}}}}}
+    assert ttm_from_facts(payload, require_quarters=True) is None
+    annual = ttm_from_facts(payload)
+    assert annual is not None
+    assert annual.as_of == date(2025, 12, 31)
+
+
 def test_restated_period_uses_latest_filing() -> None:
     payload = _ytd_payload()
     payload["facts"]["us-gaap"]["Revenues"]["units"]["USD"].append(
