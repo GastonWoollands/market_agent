@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -23,7 +24,14 @@ REVENUE_CONCEPTS = (
     ("us-gaap", "SalesRevenueNet"),
     ("us-gaap", "RevenueFromContractWithCustomerIncludingAssessedTax"),
     ("ifrs-full", "Revenue"),
+    # Utilities (SR, DUK, IDA) tag total revenue only here.
+    ("us-gaap", "RegulatedAndUnregulatedOperatingRevenue"),
 )
+# Tags that may win a same-date tie by being larger (a part vs the total). Gross of
+# excise tax (BF-A, SAM) is a fallback only, never the larger-revenue pick.
+SIZED_REVENUE = frozenset(REVENUE_CONCEPTS) - {
+    ("us-gaap", "RevenueFromContractWithCustomerIncludingAssessedTax")
+}
 EBIT_CONCEPTS = (("us-gaap", "OperatingIncomeLoss"), ("ifrs-full", "OperatingIncomeLoss"))
 DA_CONCEPTS = (
     ("us-gaap", "DepreciationDepletionAndAmortization"),
@@ -140,6 +148,8 @@ EQUITY_CONCEPTS = (
 )
 ANNUAL_DAYS = (320, 400)
 QUARTER_DAYS = (60, 120)
+# 52/53-week filers: a fiscal year or its YTD start drifts a few days year over year.
+PERIOD_SLACK_DAYS = 7
 FY_YEARS = 6
 INSTANT_SLACK_DAYS = 45
 DEBT_FREE_LOOKBACK_DAYS = 400
@@ -207,10 +217,12 @@ def ttm_from_facts(
     if raw_cik is None:
         return None
     cik = pad_cik(raw_cik)
-    revenue, as_of, method = _flow_ttm(facts, REVENUE_CONCEPTS, through=through)
+    revenue, as_of, method = _flow_ttm(
+        facts, REVENUE_CONCEPTS, through=through, sized=SIZED_REVENUE
+    )
     if revenue is None or as_of is None:
         return None
-    if require_quarters and method != "quarters":
+    if require_quarters and method not in ("quarters", "ytd"):
         return None
     # Every component must cover the same window as revenue, or it is dropped.
     ebit = _aligned(_flow_ttm(facts, EBIT_CONCEPTS, through=as_of), as_of)
@@ -486,14 +498,44 @@ def _flow_ttm(
     concepts: tuple[tuple[str, str], ...],
     *,
     through: date | None = None,
+    sized: frozenset[tuple[str, str]] = frozenset(),
 ) -> tuple[Decimal | None, date | None, str | None]:
-    best_q: tuple[date, Decimal] | None = None
+    """TTM by four discrete quarters, else fiscal year + YTD, else the latest annual.
+
+    The YTD method covers a quarter SEC never published: one missing 10-Q would
+    otherwise freeze the TTM until four new contiguous quarters exist. The freshest
+    of quarters and YTD wins; quarters on a tie, so complete chains are unchanged.
+    An annual newer than both is returned as such, never an older quarter chain.
+
+    `sized` tags may win a same-date tie by size: a revenue tag can be a part
+    (contract revenue) of the total (`Revenues`). Within a method the total must be
+    no smaller in any summed period and larger in most, so one quarter inflated by a
+    restatement (FY from the old 10-K minus a restated 9M) does not win, while a
+    merged chain that borrowed one quarter from the total still loses to it. Across
+    methods a larger YTD wins only for a tag with no quarter chain of its own there:
+    the same tag disagreeing with itself is a restatement, not a part and a total.
+    The tie is not symmetric: the higher-priority tag holds and a later one must
+    dominate it.
+    """
+    best_q: _Ttm | None = None
+    best_y: _Ttm | None = None
     best_a: tuple[date, Decimal] | None = None
+    chain_ends: dict[tuple[str, str], date] = {}
     # Merged synonyms first; each concept alone as a fallback when the merge leaves a gap.
     for group in (concepts, *((item,) for item in concepts)):
-        picked = _last_quarters(_discrete_quarters(facts, group, through=through), 4)
-        if len(picked) == 4 and (best_q is None or picked[0][0] > best_q[0]):
-            best_q = (picked[0][0], sum((value for _end, value in picked), Decimal("0")))
+        tag = group[0] if len(group) == 1 else None
+        quarters = _discrete_quarters(facts, group, through=through)
+        picked = _last_quarters(quarters, 4)
+        if len(picked) == 4:
+            parts = tuple(value for _end, value in picked)
+            chain = _Ttm(picked[0][0], sum(parts, Decimal("0")), parts, tag)
+            best_q = _newer(chain, best_q, sized=sized)
+            if tag is not None:
+                chain_ends[tag] = chain.end
+        if tag is not None:
+            # One tag per YTD: FY of one synonym minus a YTD of another is nonsense.
+            ytd = _ytd_ttm(facts, tag, quarters, through=through)
+            best_y = _newer(ytd, best_y, sized=sized)
     for taxonomy, concept in concepts:
         points = _duration_points(facts, taxonomy, concept)
         if through is not None:
@@ -503,11 +545,108 @@ def _flow_ttm(
             _span, end, value = annual[0]
             if best_a is None or end > best_a[0]:
                 best_a = (end, value)
-    if best_q is not None:
-        return best_q[1], best_q[0], "quarters"
-    if best_a is not None:
+    newest = max((item.end for item in (best_q, best_y) if item is not None), default=None)
+    if best_a is not None and (newest is None or best_a[0] > newest):
         return best_a[1], best_a[0], "annual"
+    if best_y is not None and (
+        best_q is None
+        or best_y.end > best_q.end
+        or _outgrows(best_y, best_q, chain_ends, sized=sized)
+    ):
+        return best_y.value, best_y.end, "ytd"
+    if best_q is not None:
+        return best_q.value, best_q.end, "quarters"
     return None, None, None
+
+
+@dataclass(frozen=True)
+class _Ttm:
+    """A TTM candidate; `parts` are the summed periods, `tag` is None when merged."""
+
+    end: date
+    value: Decimal
+    parts: tuple[Decimal, ...]
+    tag: tuple[str, str] | None = None
+
+
+def _can_size(item: _Ttm, sized: frozenset[tuple[str, str]]) -> bool:
+    return bool(sized) and (item.tag is None or item.tag in sized)
+
+
+def _newer(
+    candidate: _Ttm | None, best: _Ttm | None, *, sized: frozenset[tuple[str, str]]
+) -> _Ttm | None:
+    if candidate is None:
+        return best
+    if best is None or candidate.end > best.end:
+        return candidate
+    if candidate.end < best.end or not _can_size(candidate, sized):
+        return best
+    if len(candidate.parts) != len(best.parts) or candidate.value <= best.value:
+        return best
+    # Same date: no summed period smaller and most larger (a subtracted prior YTD
+    # counts as a period, so the TTM itself must also be larger).
+    pairs = list(zip(candidate.parts, best.parts, strict=True))
+    larger = sum(new > old for new, old in pairs)
+    if all(new >= old for new, old in pairs) and larger * 2 > len(pairs):
+        return candidate
+    return best
+
+
+def _outgrows(
+    ytd: _Ttm,
+    chain: _Ttm,
+    chain_ends: dict[tuple[str, str], date],
+    *,
+    sized: frozenset[tuple[str, str]],
+) -> bool:
+    """A same-date YTD beats the quarter chain only from a tag without its own chain there."""
+    if ytd.end != chain.end or ytd.tag is None or not _can_size(ytd, sized):
+        return False
+    return chain_ends.get(ytd.tag) != ytd.end and ytd.value > chain.value
+
+
+def _ytd_ttm(
+    facts: dict[str, Any],
+    tag: tuple[str, str],
+    quarters: dict[date, Decimal],
+    *,
+    through: date | None = None,
+) -> _Ttm | None:
+    """Newest TTM as FY + YTD − prior-year YTD, or a fiscal year ending there.
+
+    Only where the tag itself has a quarter in the trailing year: a 10-K-only filer
+    (or a tag used only in 10-Ks) has none.
+    """
+    spans = _merged_spans(facts, (tag,), through=through)
+    lo, hi = ANNUAL_DAYS
+    slack = timedelta(days=PERIOD_SLACK_DAYS)
+    annual = {key: value for key, value in spans.items() if lo <= (key[1] - key[0]).days <= hi}
+    for end in sorted({key[1] for key in spans}, reverse=True):
+        if not any(end - timedelta(days=hi) < item <= end for item in quarters):
+            continue
+        for (_start, fy_end), value in annual.items():
+            if fy_end == end:
+                return _Ttm(end, value, (value,), tag)
+        for (start, ytd_end), ytd in spans.items():
+            if ytd_end != end or not QUARTER_DAYS[0] <= (end - start).days < lo:
+                continue
+            for (fy_start, fy_end), fy in annual.items():
+                if abs(start - timedelta(days=1) - fy_end) > slack:
+                    continue
+                prior = _span_near(spans, fy_start, end - timedelta(days=365), slack)
+                if prior is not None:
+                    return _Ttm(end, fy + ytd - prior, (fy, ytd, prior), tag)
+    return None
+
+
+def _span_near(
+    spans: dict[tuple[date, date], Decimal], start: date, end: date, slack: timedelta
+) -> Decimal | None:
+    for (span_start, span_end), value in spans.items():
+        if abs(span_start - start) <= slack and abs(span_end - end) <= slack:
+            return value
+    return None
 
 
 def _da_ttm(facts: dict[str, Any], as_of: date) -> Decimal | None:
@@ -581,12 +720,7 @@ def _discrete_quarters(
     a start (6M − 3M, 9M − 6M, FY − 9M). Concepts are synonyms in priority order:
     filers switch tags between a 10-Q and the 10-K, so spans are merged first.
     """
-    spans: dict[tuple[date, date], Decimal] = {}
-    for taxonomy, concept in concepts:
-        for key, value in _duration_spans(facts, taxonomy, concept).items():
-            spans.setdefault(key, value)
-    if through is not None:
-        spans = {key: value for key, value in spans.items() if key[1] <= through}
+    spans = _merged_spans(facts, concepts, through=through)
     lo, hi = QUARTER_DAYS
     out: dict[date, Decimal] = {}
     by_start: dict[date, list[tuple[date, Decimal]]] = {}
@@ -600,6 +734,22 @@ def _discrete_quarters(
             if end not in out and lo <= (end - prev_end).days <= hi:
                 out[end] = value - prev_value
     return out
+
+
+def _merged_spans(
+    facts: dict[str, Any],
+    concepts: tuple[tuple[str, str], ...],
+    *,
+    through: date | None = None,
+) -> dict[tuple[date, date], Decimal]:
+    """(start, end) → value across synonyms; the first concept in priority order wins."""
+    spans: dict[tuple[date, date], Decimal] = {}
+    for taxonomy, concept in concepts:
+        for key, value in _duration_spans(facts, taxonomy, concept).items():
+            spans.setdefault(key, value)
+    if through is not None:
+        spans = {key: value for key, value in spans.items() if key[1] <= through}
+    return spans
 
 
 def _last_quarters(quarters: dict[date, Decimal], count: int) -> list[tuple[date, Decimal]]:
