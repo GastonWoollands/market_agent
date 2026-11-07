@@ -43,7 +43,7 @@ Every number on screen comes from Postgres. Vendors are never called from the UI
 - Trading, orders, paper fills
 - Real-time / WebSocket quotes
 - X / Twitter
-- Non-US listings as first-class (no `.L`, `.T`, CEDEARs)
+- Non-US listings as first-class (no `.L`, `.T`, CEDEARs). US-listed ADRs of foreign private issuers (20-F / 6-K filers on NYSE / Nasdaq) are US listings and are in scope from Phase 1.15, through a curated list only (§7)
 - Scraping Finviz, Investing.com, TradingView unofficial APIs, Google Finance RPC
 - Letting the writer search the web or call Yahoo/SEC at generation time
 - Microcap “venture” names without usable XBRL. A **Gems** universe ($300M–$2B market cap, revenue floor in `config/universes.yaml`) is contracted; membership is not built yet
@@ -54,7 +54,7 @@ Every number on screen comes from Postgres. Vendors are never called from the UI
 - Single-name CDS quotes and per-bond TRACE prices / yields: licensed data (S&P/Markit, LSEG, FINRA TRACE data program), not on any free API. The substitute is the equity-implied credit bucket (§9) placed on the FRED ICE BofA rating curve
 - Piotroski F-Score or Altman Z as a screen, badge, rank input, or pack field. `metric_fy` stays; F/Z are not product
 - LLM “moat” scores or fit-percentage gauges
-- P/E or P/B until those facts are stored (this universe is EV/EBITDA + FCF yield). Interest coverage is **in scope** once `InterestExpense` is stored (2026-10-31, see decision_layer_plan Phase 1.6)
+- P/E or P/B as a rank input. TTM net income and equity are stored from Phase 1.15 (2026-11-07); P/E, P/B and ROE are shown for **banks** only, where EV/EBITDA does not apply. The universe ranks on EV/EBITDA + FCF yield. Interest coverage is **in scope** once `InterestExpense` is stored (2026-10-31, see decision_layer_plan Phase 1.6)
 - In-process job scheduler (APScheduler). Unattended runs are `cron` / `launchd` calling CLIs when you want them; until then, operators run `make` / `python -m jobs…`
 
 Do not implement a non-goal because it appeared in an older plan. Change this section first.
@@ -139,7 +139,8 @@ Frozen for v1. A new vendor is a contract change: update this section first. Cat
 | FOMC statements, minutes, Chair speeches, testimony | Fed Board RSS (`press_monetary`, `speeches`, `testimony`) via `ingest/fed_rss`, plus the official `www.federalreserve.gov` article each recent item links to when the RSS text is only a title or venue line (capped body text, ≤2500 chars, 14-day lookback; no crawling, no other hosts) | 30–60 min in session |
 | Earnings calendar + EPS/rev est. | Finnhub free | 07:00 ET |
 | FOMC, CPI, PCE, NFP, GDP, JOLTS, Chair/Jackson Hole speeches, FOMC minutes, Beige Book, ISM, Treasury refunding, ECB/BoE/BoJ, elections | curated `config/catalysts.yaml` | hand, yearly |
-| TTM metrics + valuation membership | SEC EDGAR companyfacts (bulk zip, then incremental) | nightly / monthly |
+| TTM metrics + valuation membership | SEC EDGAR companyfacts (bulk zip, then incremental). US GAAP 10-K / 10-Q, and IFRS 20-F / 6-K for the curated foreign filers (§7) | nightly / monthly |
+| Quarterly statements for curated foreign filers whose SEC XBRL has no recent quarters (20-F-only filers; 6-K quarters are often untagged) | Yahoo quarterly income / balance / cash-flow statements via `YahooClient`, same 2 req/s budget. Labeled vendor data (`metric_ttm.source = yahoo`). SEC wins on the same period; Yahoo only writes TTM points newer than the latest SEC point. Statements must be in USD (`financialCurrency`), or the name is skipped | nightly, with `ingest_sec` |
 | Fiscal-year snapshots (growth, accrual, gems inputs) | Same companyfacts (zip or per-CIK JSON); curated columns only | with `ingest_sec` |
 | Charts | TradingView widget | client-side, no ingest |
 | Credit curve: ICE BofA OAS + effective yield by rating (AAA…CCC), DGS1, Moody's Baa–Aaa, NFCI, STLFSI4 | FRED (catalog expansion, not a new vendor) | 06:00 ET |
@@ -170,11 +171,11 @@ Do not add scraping, unofficial APIs, or non-US listings beyond the Cboe excepti
 | Tier | Contents | Stored history |
 |------|----------|----------------|
 | **A Tape** | US indices/ETFs + Treasury yield indices + international indices (Nikkei, DAX, FTSE, HSI, CSI 300) + EEM in `config/universes.yaml` | daily + quotes + 5m extended |
-| **B Valuation / Opportunity** | US NYSE/Nasdaq, TTM revenue ≥ $1B, usable XBRL, Yahoo history | daily bars + SEC TTM + fiscal-year facts + valuation + ratio snapshot / gem flag |
+| **B Valuation / Opportunity** | US NYSE/Nasdaq, TTM revenue ≥ $1B, usable XBRL, Yahoo history; plus the curated foreign filers in `valuation.foreign_filers` | daily bars + SEC TTM (Yahoo TTM for foreign filers when fresher) + fiscal-year facts + valuation + ratio snapshot / gem flag |
 | **C Watchlist** | user-defined | daily + 5m + TV chart |
 | **D Gems** | US listings, market cap $300M–$2B, TTM revenue floor in yaml, usable XBRL | **not built**; flags may appear on B via `quant_score.is_gem_candidate` |
 
-Build B from SEC tickers + `companyfacts` (prefer bulk zip once, then incremental). Rebuild membership monthly. Floor: `config/universes.yaml` `valuation.min_revenue_usd`. Gems thresholds live in the same file under `gems`; do not Yahoo-ingest D until a later phase screens SEC-first.
+Build B from SEC tickers + `companyfacts` (prefer bulk zip once, then incremental). Rebuild membership monthly. **Foreign filers** enter B only through `config/universes.yaml` `valuation.foreign_filers` (ticker, ADR ratio, bank flag), never by the automatic screen: an ADR ratio other than 1 changes market cap and EV, and 20-F data is annual. They must report in USD; ARS reporters (YPF, PAM) stay out until a currency path is contracted. Floor: `config/universes.yaml` `valuation.min_revenue_usd`. Gems thresholds live in the same file under `gems`; do not Yahoo-ingest D until a later phase screens SEC-first.
 
 ---
 
@@ -189,7 +190,7 @@ Keep vendor payloads out of hot tables. Polymarket `raw` JSONB is the exception.
 | Identity | `instrument`, `universe`, `universe_member` | Tickers; `tape` / `valuation` / `watchlist` (later `gems`). `sector` = approximate GICS from the SEC SIC code (`config/sic_sectors.yaml`), `industry` = SEC `sicDescription` |
 | Market | `bar_daily`, `quote_latest`, `bar_intraday` | Daily history, delayed last, 5m for tape ∪ watchlist only |
 | Macro | `macro_series`, `macro_observation`, `odds_snapshot`, `regime_snapshot` | FRED prints; Polymarket implied yes keyed by catalog slot; daily growth / inflation / policy / volatility classification from stored FRED |
-| Fundamentals | `metric_ttm`, `metric_fy` | Point-in-time TTM and fiscal-year facts from SEC companyfacts (no `financial_fact` warehouse). FY is for growth, accrual, gems — not an on-screen F/Z |
+| Fundamentals | `metric_ttm`, `metric_fy` | Point-in-time TTM and fiscal-year facts from SEC companyfacts (no `financial_fact` warehouse). `metric_ttm.source` is `sec` or `yahoo` (curated foreign filers only, labeled vendor data). TTM net income and equity feed P/E, P/B, ROE for banks. FY is for growth, accrual, gems — not an on-screen F/Z |
 | Derived | `valuation_daily`, `rrg_point`, `return_stats`, `risk_stats`, `opportunity_score`, `quant_score` | Python → Postgres; the writer never computes these. `risk_stats` is per-name vol / downside vol / beta / drawdown from adjusted closes. `quant_score` holds a gem flag and ratio snapshot; legacy `f_score` / `z_score` columns stay NULL |
 | News / calendar | `news_item`, `event_item`, `policy_item` | RSS headlines plus Finnhub `wire` / `company` rows (`summary` nullable, `query` = ticker for company); YAML catalysts (FOMC/CPI/PCE/NFP/GDP/JOLTS/speeches/minutes/Beige Book/ISM/Treasury/central banks) + Finnhub earnings; official Fed Board RSS (speech/statement/minutes/testimony excerpts) |
 | Agent | `evidence_pack`, `outlook_report`, `opportunity_memo`, `job_run` | Pack JSONB, briefs, memos, run log |
@@ -223,7 +224,9 @@ Sleeves in `analytics/scores.py` are a **sort key**, not the grid: Cheap 0.30 (1
 - Net debt / EBITDA
 - Trap badge
 
-Do not show sleeve unit-ranks (0–1) as the primary columns once those fields are on the API. Do not add P/E or P/B until those facts exist. Interest coverage ships with stored `InterestExpense`.
+Do not show sleeve unit-ranks (0–1) as the primary columns once those fields are on the API. Interest coverage ships with stored `InterestExpense`.
+
+**Bank read (Phase 1.15).** Banks are flagged in `valuation.foreign_filers` (and later by SIC). EV/EBITDA, the 5y percentile, the Opportunities rank and the Merton bucket do not apply to them. Instead they show P/E (market cap ÷ TTM net income), P/B (market cap ÷ latest equity) and ROE (TTM net income ÷ average equity), each with its as-of date and source. `analytics/bank.py`. Not a sleeve and not a rank input.
 
 **Not product:** Piotroski F-Score and Altman Z. Do not show them, pack them, or feed F into quality. Do not hard-cut F ≥ 7. Nothing computes them: the Piotroski / Altman modules were removed (2026-10-29) and the legacy `quant_score` columns are written NULL. Gem candidate flag uses yaml thresholds (cap band, revenue growth, FCF yield, D/E); fail negative book equity. Insider ownership is not required until Form 4.
 

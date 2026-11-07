@@ -9,6 +9,7 @@ from decimal import Decimal
 
 from analytics.valuation import LOOKBACK_DAYS, Fundamental, snapshot
 from jobs.runtime import record_job
+from store.catalog import load_universes
 from store.engine import session_scope
 from store.repos import (
     closes_for_instrument_ids,
@@ -36,9 +37,13 @@ def _dec(value: float | None, places: int = 6) -> Decimal | None:
 
 def compute() -> dict[str, object]:
     start = date.today() - timedelta(days=LOOKBACK_DAYS)
+    # Banks (curated, Phase 1.15) get P/E, P/B, ROE; EV/EBITDA does not apply to them.
+    banks = load_universes().valuation.bank_tickers
     with session_scope() as session:
         instruments = [
-            Member(item.id, item.ticker) for item in instruments_in_universe(session, UNIVERSE)
+            Member(item.id, item.ticker)
+            for item in instruments_in_universe(session, UNIVERSE)
+            if item.ticker.upper() not in banks
         ]
         ids = [item.id for item in instruments]
         closes = closes_for_instrument_ids(session, ids, start=start)

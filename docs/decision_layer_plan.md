@@ -41,6 +41,7 @@ This file is **not** the product contract. If intent, sources, universes, pages,
 | 1.12 | Options read | **Done** (PR #19) | Yahoo chains (scoped names), ^VIX9D / ^VIX3M / ^VVIX / ^SKEW, Cboe market put/call |
 | 1.13 | Kalshi + CFTC | **Done** (PR #20) | S&P / Nasdaq range distribution, Fed + recession beside Polymarket; TFF positioning |
 | 1.14 | Short interest + estimate revisions | **Done** (PR #21) | FINRA short interest + days to cover (all stored names); Yahoo EPS revisions (watchlist ∪ top 25). No targets |
+| 1.15 | Foreign filers (US-listed ADRs) + bank read | **Done** (branch `feat/foreign-filers`) | Curated 20-F / 6-K filers in USD join B; Yahoo quarters as labeled vendor TTM; TTM net income + equity; P/E, P/B, ROE for banks |
 | 2 | Gems universe D | Not started | Flag only on B; membership + Yahoo gems later. No F-score gate |
 | 3 | Book (portfolio CRUD + current risk) | Not started | Watchlist stays unsized. After 1.5 for user value |
 | 3b | Constrained rebalance plan | Not started | After the Book is used; holdings-only min-vol first |
@@ -49,7 +50,7 @@ This file is **not** the product contract. If intent, sources, universes, pages,
 | 6 | Recommendation writer | Not started | Pack desk metrics + citation gate; Python fills snapshot |
 | 7 | Three-zone cards + Gems tab | Not started | Schema/`api.ts` before components. No F/Z drawer |
 
-Last tracker update: 2026-11-03.
+Last tracker update: 2026-11-07.
 
 ---
 
@@ -385,6 +386,81 @@ Scope changed on 2026-11-03 (operator decision): price targets and buy / hold / 
 
 **Limits:** short share is of shares outstanding, not float (understates for closely held names). Revisions only for the watchlist ∪ top 25; other Ticker pages say so. Not in the writer pack yet.
 
+## Phase 1.15 — Foreign filers + bank read (done)
+
+**Why.** The operator analyzes LatAm ADRs (NU, DLO, VIST, MELI, IREN) next to US names. Today they have bars and risk only: NU and IREN have no CIK, so `ingest_sec` skips them as `no_cik`, and 20-F filers never reach the valuation screen.
+
+**What the SEC data looks like (probe 2026-11-07, companyfacts JSON):**
+
+| Name | Forms in XBRL | Basis / currency | Latest SEC period | Current parser |
+|---|---|---|---|---|
+| IREN | 10-K, 10-Q (domestic filer since 2025) | US GAAP / USD | 2026-09-30 | Full TTM; only the CIK is missing |
+| MELI | 10-K, 10-Q | US GAAP / USD | 2026-09-30 | Works; refresh only |
+| DLO | 20-F + tagged 6-K | IFRS / USD | FY 2025 (6-K tags stop at 2025-09-30) | Revenue / CFO / capex only; EBIT, D&A, net debt missing (IFRS concept names) |
+| NU, VIST | 20-F only | IFRS / USD | FY 2024 | Annual only, about 22 months old |
+| YPF | 20-F | IFRS / USD + ARS | FY 2025 | Yahoo statements are labeled ARS with about 10× the share count: out |
+| PAM | 20-F | IFRS / ARS (Yahoo USD) | — | ADR = 25 shares: out until the ratio path is tested |
+
+SEC alone gives these names annual data that is 10 to 22 months old. Yahoo quarterly statements are current (Q2 or Q3 2026) and in USD for NU, DLO, VIST, PAM.
+
+**Operator decisions (2026-11-07):**
+
+1. Quarters come from Yahoo quarterly statements, labeled vendor data (`metric_ttm.source = yahoo`), like the EPS revisions. SEC 20-F / 6-K stays the official source and wins on the same period.
+2. ARS reporters (YPF, PAM) stay out. USD reporters first.
+3. Banks (NU) get a bank read (P/E, P/B, ROE) and stay out of EV/EBITDA, the rank and Merton.
+4. Foreign filers join universe B and the watchlist, so they appear on Valuation / Opportunities like any member. The 5y percentile is `comparable = false` until the history is long enough.
+5. Membership is a curated list in `config/universes.yaml` `valuation.foreign_filers`: ticker, ADR ratio, bank flag. Never auto-detected.
+6. `metric_ttm` gets `net_income` and `equity` for every name (migration). This phase shows P/E / P/B only for banks.
+
+**Build order:**
+
+1. **Identity.** Fill `instrument.cik` from SEC `company_tickers` for stored instruments with a NULL CIK (watchlist, foreign filers). Keep `upsert_instrument` coalescing the CIK.
+2. **Catalog.** `valuation.foreign_filers` in `config/universes.yaml` with a typed model in `store/catalog.py`. Seed: NU (bank), DLO, VIST.
+3. **SEC parser.** Add IFRS concepts: EBIT (`ProfitLossFromOperatingActivities`), D&A (`DepreciationAndAmortisationExpense`, or depreciation + amortisation lines), debt (`Borrowings`, `LongtermBorrowings`, `ShorttermBorrowings`, lease liabilities on the same rule as US GAAP), cash (`CashAndCashEquivalents`), shares (`dei:EntityCommonStockSharesOutstanding`), net income (`ProfitLoss`), equity (`Equity`). Accept tagged 6-K rows as quarters. Fixture tests from DLO / NU / VIST companyfacts.
+4. **Migration.** `metric_ttm.net_income`, `metric_ttm.equity`. SEC parser fills both for every name.
+5. **Yahoo statements.** `YahooClient.fetch_quarterly_statements` → frozen `QuarterlyStatement` in `store/canonical.py` → TTM from the last four quarters. The adapter rejects non-USD `financialCurrency` and fewer than four quarters. Shares come from Yahoo × ADR ratio, checked against SEC `dei` shares when present.
+6. **Job.** `ingest_sec` runs the Yahoo pass for the curated foreign filers after the SEC pass. It writes only TTM points newer than the latest SEC point. Run meta lists skipped names and why (`non_usd`, `few_quarters`, `shares_mismatch`).
+7. **Membership.** Curated foreign filers are members of `valuation`; `compute_valuation` / `compute_scores` / `compute_risk` pick them up unchanged. Banks are skipped by `compute_valuation` and `compute_credit`.
+8. **Bank read.** `analytics/bank.py` `BankRead` (P/E, P/B, ROE with as-of and source) → `bank` block on `GET /ticker/{ticker}` → one Ticker panel. No new page.
+9. **UI labels.** A `source: yahoo` TTM shows "vendor quarters" next to its as-of date on Ticker and Valuation.
+
+**Shipped (branch `feat/foreign-filers`):**
+- Migration 0025: `metric_ttm.net_income` / `equity`.
+- IFRS concepts and 6-K periods in `ingest/sec/parse.py`.
+- `upsert_metric_ttm(..., source=)`; prune by source.
+- `YahooClient.fetch_quarterly_statements` → `QuarterlyStatement`, and `ingest/yahoo/statements.py` `StatementTtm`.
+- `jobs/foreign_filers.py` `ForeignFilerSync`: identity, CIK fill, membership, Yahoo TTM, run meta.
+- Banks skipped in `compute_valuation` / `compute_credit`.
+- `analytics/bank.py` `BankRead` → `bank` on `GET /ticker`.
+- `ttm_source` on the desk, TTM rows and `GET /valuation`.
+- Bank valuation panel and `*` vendor-quarter labels in the web.
+
+**First run (2026-11-07):**
+
+| Name | TTM | Reads |
+|---|---|---|
+| DLO | SEC 6-K to 2025-12, Yahoo to 2026-06 | EV/EBITDA 12.3x, FCF yield 11.7% |
+| VIST | Yahoo to 2026-09 | EV/EBITDA 3.8x |
+| NU (bank) | Yahoo to 2026-06 | P/E 16.1x, P/B 4.4x, ROE 27% on ending equity |
+
+IREN and MELI got their CIK / Q3 2026 SEC TTM. YPF is skipped as `non_usd`.
+
+**Limits.**
+- Opportunities ranks only `comparable` rows (≥ 750 sessions of own multiple history). DLO / VIST show on Valuation, but are unranked until that history exists. The Valuation grid shows "—" for a non-comparable EV/EBITDA; the Ticker page shows the number.
+- "Revenue 1y" / "Shares 1y" need a TTM row 300–430 days back. For DLO the SEC history jumps from 2024-12 to 2025-09, so those read "—" for now.
+- SEC SIC codes can mislabel. IREN is SIC 6199 (Finance Services) from its bitcoin-mining origin. By operator decision (2026-11-07) a `tickers` override in `config/sic_sectors.yaml` maps it to Information Technology, which keeps its Merton bucket; the Financials exclusion stays sector-wide. DLO maps to Industrials (SIC 7389, business services).
+- Yahoo statements are vendor data, not filings: no restatement history, about 5 quarters deep, so the 5y percentile stays non-comparable for these names for years.
+- The ADR ratio is curated by hand.
+- Bank metrics have no loan-growth or NIM line in this phase.
+- `ingest_finnhub_news` / `ingest_calendar` reach these names once PR #26 (watchlist from DB) merges.
+
+**Operator check.**
+- `make sec` with the foreign filers in the yaml.
+- Then `ingest_yahoo --universe valuation`, `ingest_sec_profile --tickers NU,DLO,VIST`, and the compute jobs.
+- `GET /ticker/DLO` shows TTM as of Q2 2026, `source: yahoo`, with EV/EBITDA.
+- `GET /ticker/NU` shows the bank block and no EV/EBITDA.
+- DLO / VIST appear on Valuation.
+
 ## Explicitly deferred
 
 | Item | Why |
@@ -497,6 +573,8 @@ Do not start Phase 7 until packs exist. Do not start a PR to “fix F-score for 
 | 2026-10-31 | Phases 1.6–1.9 added after a single-name deep-dive exposed TTM / debt defects. Northstar: Ticker + Compare pages; interest coverage in scope. |
 | 2026-10-31 | Phase 1.6 merged (PR #13). Phase 1.7: SIC sectors, `risk_stats`, EBIT / interest TTM, additive partial `ingest_sec`. |
 | 2026-10-31 | Phase 1.7 merged (PR #14). Phase 1.8: Ticker + Compare pages and APIs; facts refreshed for non-members. |
+| 2026-11-07 | Phase 1.15 shipped on `feat/foreign-filers`. NU / DLO / VIST live; IREN and MELI CIK / TTM refreshed. Limits recorded (unranked until comparable; operator accepted). IREN sector override → Information Technology. |
+| 2026-11-07 | Phase 1.15 contracted: curated foreign filers (US-listed 20-F / 6-K ADRs in USD) join B; Yahoo quarterly statements as labeled vendor TTM; `metric_ttm.net_income` / `equity`; bank read (P/E, P/B, ROE). YPF / PAM out (ARS, ADR ratio). |
 | 2026-11-03 | PRs #20 and #21 merged. Review after 1.14: Outlook pack integration, four pack defects, unattended runs, coverage gaps and Ticker density recorded; proposed order integration → operations → Book → Ticker consolidation → 1.9 (pending operator decision). |
 | 2026-11-03 | Phase 1.14: FINRA short interest (all stored names, 1y) + Yahoo EPS revisions on the Ticker page; targets and recommendation counts dropped by operator decision. |
 | 2026-11-03 | Phase 1.12 merged (PR #19). Phase 1.13: Kalshi index ranges + Fed / recession pairs on Live, CFTC TFF positioning on Dynamics; `odds_snapshot` keyed by source + slot. |

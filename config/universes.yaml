@@ -80,6 +80,14 @@ valuation:
   min_revenue_usd: 1000000000
   exchanges: [NYSE, Nasdaq, NYSE American]
   rebuild: monthly
+  # Phase 1.15: US-listed ADRs of 20-F / 6-K filers. Members of `valuation` by this list only
+  # (the SEC screen never adds them). Must report in USD. adr_ratio = ordinary shares per ADR.
+  # bank: true -> P/E, P/B, ROE instead of EV/EBITDA; out of the rank and the Merton bucket.
+  # Out until a currency / ratio path is tested: YPF (ARS statements), PAM (ARS, 25 per ADR).
+  foreign_filers:
+    - { ticker: NU, name: Nu Holdings, adr_ratio: 1, bank: true }
+    - { ticker: DLO, name: DLocal, adr_ratio: 1 }
+    - { ticker: VIST, name: Vista Energy, adr_ratio: 1 }
 
 watchlist:
   description: User-managed. Seed a few names so Watchlist is not empty on first run.

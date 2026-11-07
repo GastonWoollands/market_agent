@@ -14,6 +14,7 @@ from ingest.yahoo.parse import (
     bars_from_intraday,
     eps_revisions_from_frames,
     option_quotes_from_frame,
+    quarterly_statements_from_frames,
     snapshot_from_chart_meta,
     underlying_from_quote,
 )
@@ -24,6 +25,7 @@ from store.canonical import (
     IntradayBar,
     OptionQuote,
     OptionUnderlying,
+    QuarterlyStatement,
     QuoteSnapshot,
 )
 
@@ -136,6 +138,16 @@ class YahooClient:
         trend = self._call(lambda: ticker.eps_trend)
         revisions = self._call(lambda: ticker.eps_revisions)
         return eps_revisions_from_frames(symbol, trend, revisions)
+
+    def fetch_quarterly_statements(self, symbol: str) -> list[QuarterlyStatement]:
+        """Quarterly income, balance and cash-flow lines (about 5 quarters). Four requests."""
+        ticker = self._ticker(symbol)
+        info = self._call(lambda: ticker.get_info())
+        currency = info.get("financialCurrency") if isinstance(info, dict) else None
+        income = self._call(lambda: ticker.quarterly_income_stmt)
+        balance = self._call(lambda: ticker.quarterly_balance_sheet)
+        cashflow = self._call(lambda: ticker.quarterly_cashflow)
+        return quarterly_statements_from_frames(symbol, currency, income, balance, cashflow)
 
     def fetch_option_expiries(self, symbol: str) -> list[date]:
         """Listed expiries (one request). Empty when the name has no listed options."""

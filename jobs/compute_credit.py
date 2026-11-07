@@ -25,7 +25,7 @@ from analytics.credit import (
     place,
 )
 from jobs.runtime import record_job
-from store.catalog import CreditCalibrationFile, load_credit_calibration
+from store.catalog import CreditCalibrationFile, load_credit_calibration, load_universes
 from store.engine import session_scope
 from store.repos import (
     adj_closes_for_instrument_ids,
@@ -63,7 +63,8 @@ def compute(*, today: date | None = None) -> dict[str, object]:
     today = today or date.today()
     calibration = load_credit_calibration()
     excluded_sectors = set(calibration.exclude_sectors)
-    excluded_tickers = set(calibration.exclude_tickers)
+    # Curated banks (Phase 1.15) may have no SIC sector yet; the yaml flag excludes them.
+    excluded_tickers = set(calibration.exclude_tickers) | load_universes().valuation.bank_tickers
     start = today - timedelta(days=LOOKBACK_DAYS)
     with session_scope() as session:
         found = {item.id: item for item in instruments_in_universes(session, UNIVERSES)}

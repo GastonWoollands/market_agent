@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any
 
+from analytics.bank import BankRead
 from analytics.corr import paired_returns, pearson
 from analytics.desk import (
     accrual_from_fy,
@@ -31,6 +32,7 @@ from api.schemas import (
     DynamicsCorr,
     DynamicsOverlay,
     DynamicsPoint,
+    TickerBank,
     TickerDesk,
     TickerEvent,
     TickerFyRow,
@@ -73,6 +75,8 @@ Series = list[tuple[date, float]]
 class NameInputs:
     instrument: Any
     universes: list[str] = field(default_factory=list)
+    # Curated bank (Phase 1.15): bank read instead of the EV/EBITDA desk.
+    bank: bool = False
     closes: Series = field(default_factory=list)
     adj_closes: Series = field(default_factory=list)
     ttm: list[Any] = field(default_factory=list)
@@ -99,7 +103,8 @@ def build_ticker(item: NameInputs, bench: Benchmarks, *, today: date) -> TickerR
         stale=price is None or (today - price.as_of).days > STALE_AFTER_DAYS,
         identity=_identity(item, bench),
         price=price,
-        desk=_desk(item, price),
+        desk=None if item.bank else _desk(item, price),
+        bank=_bank(item, price) if item.bank else None,
         ttm=[_ttm_row(row) for row in item.ttm],
         fy=[_fy_row(row) for row in item.fy],
         technicals=_technicals(item, bench),
@@ -141,7 +146,8 @@ def build_compare(
             CompareRow(
                 identity=_identity(item, bench),
                 price=price,
-                desk=_desk(item, price),
+                # EV-based desk metrics mean nothing for a bank; Compare shows them blank.
+                desk=None if item.bank else _desk(item, price),
                 technicals=_technicals(item, bench),
                 risk=_risk(item, bench),
             )
@@ -223,6 +229,7 @@ def _desk(item: NameInputs, price: TickerPrice | None) -> TickerDesk | None:
     score = item.score
     return TickerDesk(
         ttm_as_of=getattr(latest, "as_of", None),
+        ttm_source=getattr(latest, "source", None),
         valuation_as_of=getattr(value, "as_of", None),
         ev_basis=basis,
         market_cap=market_cap,
@@ -250,6 +257,23 @@ def _desk(item: NameInputs, price: TickerPrice | None) -> TickerDesk | None:
         rank=getattr(score, "rank", None),
         ranked=(item.ranked or None) if score is not None else None,
         trap=getattr(score, "trap", None),
+    )
+
+
+def _bank(item: NameInputs, price: TickerPrice | None) -> TickerBank | None:
+    read = BankRead.from_ttm(item.ttm, price.close if price else None)
+    if read is None:
+        return None
+    return TickerBank(
+        ttm_as_of=read.ttm_as_of,
+        source=read.source,
+        market_cap=read.market_cap,
+        net_income=read.net_income,
+        equity=read.equity,
+        pe=read.pe,
+        pb=read.pb,
+        roe=read.roe,
+        roe_basis=read.roe_basis,
     )
 
 
@@ -376,6 +400,9 @@ def _ttm_row(row: Any) -> TickerTtmRow:
         net_debt=_num(row.net_debt),
         interest_expense=_num(getattr(row, "interest_expense", None)),
         shares=_num(row.shares),
+        net_income=_num(getattr(row, "net_income", None)),
+        equity=_num(getattr(row, "equity", None)),
+        source=str(getattr(row, "source", "sec")),
     )
 
 
@@ -421,10 +448,12 @@ def load_names(
     values = latest_valuation_map(db, ids)
     scores, ranked = opportunity_score_map(db, ids)
     risk = latest_risk_stats(db, ids)
+    banks = load_universes().valuation.bank_tickers
     items = [
         NameInputs(
             instrument=inst,
             universes=universes_for_instrument(db, inst.id),
+            bank=inst.ticker.upper() in banks,
             closes=_floats(closes.get(inst.id, [])),
             adj_closes=_floats(adj.get(inst.id, [])),
             ttm=ttm.get(inst.id, []),

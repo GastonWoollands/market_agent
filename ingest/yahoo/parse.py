@@ -12,6 +12,7 @@ from store.canonical import (
     IntradayBar,
     OptionQuote,
     OptionUnderlying,
+    QuarterlyStatement,
     QuoteSnapshot,
 )
 
@@ -272,3 +273,102 @@ def eps_revisions_from_frames(symbol: str, trend: Any, revisions: Any) -> list[E
         for period, fields in periods.items()
         if any(value is not None for value in fields.values())
     ]
+
+
+# Yahoo statement row labels (yfinance 1.x), in priority order per field. Missing rows read
+# as None: banks have no operating income line, and labels vary by filer.
+_INCOME_ROWS: dict[str, tuple[str, ...]] = {
+    "revenue": ("Total Revenue", "Operating Revenue"),
+    "operating_income": ("Operating Income", "Total Operating Income As Reported"),
+    "depreciation": (
+        "Reconciled Depreciation",
+        "Depreciation And Amortization In Income Statement",
+    ),
+    "net_income": ("Net Income Common Stockholders", "Net Income"),
+    "interest_expense": ("Interest Expense", "Interest Expense Non Operating"),
+}
+_BALANCE_ROWS: dict[str, tuple[str, ...]] = {
+    "cash": ("Cash And Cash Equivalents",),
+    "equity": ("Stockholders Equity", "Common Stock Equity"),
+    "total_liabilities": ("Total Liabilities Net Minority Interest",),
+    "current_liabilities": ("Current Liabilities",),
+    "deferred_revenue_current": ("Current Deferred Revenue",),
+    "ordinary_shares": ("Ordinary Shares Number", "Share Issued"),
+}
+_CASHFLOW_ROWS: dict[str, tuple[str, ...]] = {
+    "cfo": ("Operating Cash Flow", "Cash Flow From Continuing Operating Activities"),
+    "capex": ("Capital Expenditure",),
+}
+
+
+def quarterly_statements_from_frames(
+    symbol: str, currency: str | None, income: Any, balance: Any, cashflow: Any
+) -> list[QuarterlyStatement]:
+    """Yahoo quarterly frames (rows = line items, columns = period ends) -> one row per quarter.
+
+    Only quarters with revenue are kept. Newest last.
+    """
+    if not currency:
+        raise YahooParseError(f"{symbol}: no financialCurrency on Yahoo")
+    by_end: dict[date, dict[str, Any]] = {}
+    frames = ((income, _INCOME_ROWS), (balance, _BALANCE_ROWS), (cashflow, _CASHFLOW_ROWS))
+    for frame, rows in frames:
+        if frame is None or getattr(frame, "empty", True):
+            continue
+        for column in frame.columns:
+            end = _period_end(column)
+            fields = by_end.setdefault(end, {})
+            for field, labels in rows.items():
+                fields[field] = _first_row(frame, labels, column)
+    if balance is not None and not getattr(balance, "empty", True):
+        for column in balance.columns:
+            fields = by_end.setdefault(_period_end(column), {})
+            fields["debt"] = _debt_ex_leases(balance, column)
+    out: list[QuarterlyStatement] = []
+    for end, fields in sorted(by_end.items()):
+        if fields.get("revenue") is None:
+            continue
+        capex = fields.get("capex")
+        out.append(
+            QuarterlyStatement(
+                symbol=symbol,
+                period_end=end,
+                currency=currency.upper(),
+                **{**fields, "capex": None if capex is None else abs(capex)},
+            )
+        )
+    return out
+
+
+def _period_end(column: Any) -> date:
+    if isinstance(column, datetime):
+        return column.date()
+    if isinstance(column, date):
+        return column
+    to_pydatetime = getattr(column, "to_pydatetime", None)
+    if callable(to_pydatetime):
+        return to_pydatetime().date()
+    return date.fromisoformat(str(column)[:10])
+
+
+def _first_row(frame: Any, labels: tuple[str, ...], column: Any) -> Decimal | None:
+    for label in labels:
+        if label in frame.index:
+            value = _dec(frame.at[label, column])
+            if value is not None:
+                return value
+    return None
+
+
+def _debt_ex_leases(balance: Any, column: Any) -> Decimal | None:
+    """Total debt minus lease liabilities; borrowings parts when no total is reported."""
+    total = _first_row(balance, ("Total Debt",), column)
+    leases = _first_row(balance, ("Capital Lease Obligations",), column)
+    if total is not None:
+        return total - (leases or Decimal(0))
+    parts = [
+        _first_row(balance, ("Long Term Debt",), column),
+        _first_row(balance, ("Current Debt",), column),
+    ]
+    found = [item for item in parts if item is not None]
+    return sum(found, Decimal(0)) if found else None
