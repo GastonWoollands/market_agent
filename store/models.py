@@ -527,6 +527,10 @@ class MetricTtm(Base):
     current_liabilities: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
     total_liabilities: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
     deferred_revenue_current: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
+    # TTM profit attributable to the parent and latest parent equity (P/E, P/B, ROE).
+    net_income: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
+    equity: Mapped[Decimal | None] = mapped_column(Numeric(20, 2))
+    # `sec` (companyfacts) or `yahoo` (vendor quarters, curated foreign filers only).
     source: Mapped[str] = mapped_column(String(16), nullable=False)
 
     instrument: Mapped[Instrument] = relationship()

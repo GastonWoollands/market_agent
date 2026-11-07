@@ -1005,7 +1005,14 @@ def replace_membership(session: Session, universe_id: int, instrument_ids: Seque
     return len(wanted)
 
 
-def upsert_metric_ttm(session: Session, instrument_id: int, item: TtmSnapshot) -> None:
+TTM_SOURCES = ("sec", "yahoo")
+
+
+def upsert_metric_ttm(
+    session: Session, instrument_id: int, item: TtmSnapshot, *, source: str = "sec"
+) -> None:
+    if source not in TTM_SOURCES:
+        raise ValueError(f"unknown metric_ttm source {source!r}")
     stmt = insert(MetricTtm).values(
         instrument_id=instrument_id,
         as_of=item.as_of,
@@ -1021,7 +1028,9 @@ def upsert_metric_ttm(session: Session, instrument_id: int, item: TtmSnapshot) -
         current_liabilities=item.current_liabilities,
         total_liabilities=item.total_liabilities,
         deferred_revenue_current=item.deferred_revenue_current,
-        source="sec",
+        net_income=item.net_income,
+        equity=item.equity,
+        source=source,
     )
     stmt = stmt.on_conflict_do_update(
         index_elements=["instrument_id", "as_of"],
@@ -1038,15 +1047,21 @@ def upsert_metric_ttm(session: Session, instrument_id: int, item: TtmSnapshot) -
             "current_liabilities": stmt.excluded.current_liabilities,
             "total_liabilities": stmt.excluded.total_liabilities,
             "deferred_revenue_current": stmt.excluded.deferred_revenue_current,
+            "net_income": stmt.excluded.net_income,
+            "equity": stmt.excluded.equity,
             "source": stmt.excluded.source,
         },
     )
     session.execute(stmt)
 
 
-def prune_metric_ttm(session: Session, instrument_id: int, keep: set[date]) -> int:
-    """Drop TTM rows the parser no longer produces (e.g. a window that is not contiguous)."""
-    stmt = delete(MetricTtm).where(MetricTtm.instrument_id == instrument_id)
+def prune_metric_ttm(
+    session: Session, instrument_id: int, keep: set[date], *, source: str = "sec"
+) -> int:
+    """Drop one source's TTM rows its parser no longer produces. Other sources stay."""
+    stmt = delete(MetricTtm).where(
+        MetricTtm.instrument_id == instrument_id, MetricTtm.source == source
+    )
     if keep:
         stmt = stmt.where(MetricTtm.as_of.not_in(keep))
     return session.execute(stmt).rowcount or 0

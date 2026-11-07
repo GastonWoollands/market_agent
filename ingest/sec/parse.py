@@ -32,13 +32,21 @@ REVENUE_CONCEPTS = (
 SIZED_REVENUE = frozenset(REVENUE_CONCEPTS) - {
     ("us-gaap", "RevenueFromContractWithCustomerIncludingAssessedTax")
 }
-EBIT_CONCEPTS = (("us-gaap", "OperatingIncomeLoss"), ("ifrs-full", "OperatingIncomeLoss"))
+EBIT_CONCEPTS = (
+    ("us-gaap", "OperatingIncomeLoss"),
+    ("ifrs-full", "ProfitLossFromOperatingActivities"),
+    ("ifrs-full", "OperatingIncomeLoss"),
+)
 DA_CONCEPTS = (
     ("us-gaap", "DepreciationDepletionAndAmortization"),
     ("us-gaap", "DepreciationAndAmortization"),
     ("us-gaap", "DepreciationAmortizationAndAccretionNet"),
+    ("ifrs-full", "DepreciationAndAmortisationExpense"),
 )
-DEP_CONCEPTS = (("us-gaap", "Depreciation"),)
+DEP_CONCEPTS = (
+    ("us-gaap", "Depreciation"),
+    ("ifrs-full", "DepreciationPropertyPlantAndEquipment"),
+)
 INTEREST_CONCEPTS = (
     ("us-gaap", "InterestExpense"),
     ("us-gaap", "InterestExpenseNonoperating"),
@@ -49,6 +57,8 @@ INTEREST_CONCEPTS = (
 AMORT_CONCEPTS = (
     ("us-gaap", "AmortizationOfIntangibleAssets"),
     ("us-gaap", "FiniteLivedIntangibleAssetsAmortizationExpense"),
+    ("ifrs-full", "AmortisationIntangibleAssetsOtherThanGoodwill"),
+    ("ifrs-full", "AmortisationExpense"),
 )
 CFO_CONCEPTS = (
     ("us-gaap", "NetCashProvidedByUsedInOperatingActivities"),
@@ -68,7 +78,12 @@ LONG_DEBT_TOTAL_CONCEPTS = (
     ("us-gaap", "LongTermDebt"),
     ("us-gaap", "LongTermDebtAndCapitalLeaseObligationsIncludingCurrentMaturities"),
 )
-ALL_DEBT_TOTAL_CONCEPTS = (("us-gaap", "DebtAndCapitalLeaseObligations"),)
+# IFRS `Borrowings` is current + non-current borrowings; IFRS 16 lease liabilities are
+# separate lines and stay out, like operating leases under US GAAP.
+ALL_DEBT_TOTAL_CONCEPTS = (
+    ("us-gaap", "DebtAndCapitalLeaseObligations"),
+    ("ifrs-full", "Borrowings"),
+)
 DEBT_NONCURRENT_CONCEPTS = (
     ("us-gaap", "LongTermDebtNoncurrent"),
     ("us-gaap", "LongTermDebtAndCapitalLeaseObligations"),
@@ -76,21 +91,32 @@ DEBT_NONCURRENT_CONCEPTS = (
     ("us-gaap", "ConvertibleNotesPayable"),
     ("us-gaap", "SeniorLongTermNotes"),
     ("us-gaap", "LongTermNotesPayable"),
+    ("ifrs-full", "NoncurrentPortionOfNoncurrentBorrowings"),
+    ("ifrs-full", "LongtermBorrowings"),
 )
 DEBT_CURRENT_CONCEPTS = (
     ("us-gaap", "LongTermDebtCurrent"),
     ("us-gaap", "LongTermDebtAndCapitalLeaseObligationsCurrent"),
     ("us-gaap", "SeniorNotesCurrent"),
     ("us-gaap", "ConvertibleNotesPayableCurrent"),
+    ("ifrs-full", "CurrentPortionOfNoncurrentBorrowings"),
+    ("ifrs-full", "CurrentPortionOfLongtermBorrowings"),
 )
 BALANCE_SHEET_CONCEPTS = (
     ("us-gaap", "Liabilities"),
     ("us-gaap", "LiabilitiesAndStockholdersEquity"),
+    ("ifrs-full", "Liabilities"),
+    ("ifrs-full", "EquityAndLiabilities"),
 )
-SHORT_DEBT_CONCEPTS = (("us-gaap", "ShortTermBorrowings"),)
+SHORT_DEBT_CONCEPTS = (
+    ("us-gaap", "ShortTermBorrowings"),
+    ("ifrs-full", "ShorttermBorrowings"),
+    ("ifrs-full", "CurrentBorrowings"),
+)
 CASH_CONCEPTS = (
     ("us-gaap", "CashAndCashEquivalentsAtCarryingValue"),
     ("us-gaap", "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents"),
+    ("ifrs-full", "CashAndCashEquivalents"),
 )
 SHARE_CONCEPTS = (
     ("dei", "EntityCommonStockSharesOutstanding"),
@@ -102,6 +128,13 @@ WEIGHTED_SHARE_CONCEPTS = (
 )
 NI_CONCEPTS = (
     ("us-gaap", "NetIncomeLoss"),
+    ("us-gaap", "ProfitLoss"),
+    ("ifrs-full", "ProfitLoss"),
+)
+# TTM P/E and ROE use profit attributable to the parent when it is tagged.
+TTM_NI_CONCEPTS = (
+    ("us-gaap", "NetIncomeLoss"),
+    ("ifrs-full", "ProfitLossAttributableToOwnersOfParent"),
     ("us-gaap", "ProfitLoss"),
     ("ifrs-full", "ProfitLoss"),
 )
@@ -146,6 +179,15 @@ EQUITY_CONCEPTS = (
     ("us-gaap", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"),
     ("ifrs-full", "Equity"),
 )
+# P/B uses equity attributable to the parent.
+PARENT_EQUITY_CONCEPTS = (
+    ("us-gaap", "StockholdersEquity"),
+    ("ifrs-full", "EquityAttributableToOwnersOfParent"),
+    ("us-gaap", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"),
+    ("ifrs-full", "Equity"),
+)
+# Forms whose XBRL periods count. Foreign filers tag quarters in some 6-K reports.
+PERIOD_FORMS = ("10-Q", "10-K", "20-F", "40-F", "6-K")
 ANNUAL_DAYS = (320, 400)
 QUARTER_DAYS = (60, 120)
 # 52/53-week filers: a fiscal year or its YTD start drifts a few days year over year.
@@ -240,6 +282,7 @@ def ttm_from_facts(
     interest = _aligned(_flow_ttm(facts, INTEREST_CONCEPTS, through=as_of), as_of)
     if interest is not None:
         interest = abs(interest)
+    net_income = _aligned(_flow_ttm(facts, TTM_NI_CONCEPTS, through=as_of), as_of)
     debt = _debt_on(facts, as_of)
     cash = _instant_on(facts, CASH_CONCEPTS, as_of)
     net_debt = None
@@ -263,6 +306,8 @@ def ttm_from_facts(
         current_liabilities=current_liabilities,
         total_liabilities=total_liabilities,
         deferred_revenue_current=_instant_on(facts, DEFERRED_REVENUE_CURRENT_CONCEPTS, as_of),
+        net_income=net_income,
+        equity=_instant_on(facts, PARENT_EQUITY_CONCEPTS, as_of),
     )
 
 
@@ -673,7 +718,7 @@ def _duration_spans(
         form = str(row.get("form") or "")
         if start is None or end is None or value is None or end <= start:
             continue
-        if not form.startswith(("10-Q", "10-K", "20-F", "40-F")):
+        if not form.startswith(PERIOD_FORMS):
             continue
         filed = str(row.get("filed") or "")
         key = (start, end)
@@ -693,7 +738,7 @@ def _duration_points(
         form = str(row.get("form") or "")
         if start is None or end is None or value is None:
             continue
-        if not form.startswith(("10-Q", "10-K", "20-F", "40-F")):
+        if not form.startswith(PERIOD_FORMS):
             continue
         days = (end - start).days
         if days <= 0:

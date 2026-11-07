@@ -261,6 +261,8 @@ class MetricTtm(BaseModel):
     current_liabilities: Decimal | None = None
     total_liabilities: Decimal | None = None
     deferred_revenue_current: Decimal | None = None
+    net_income: Decimal | None = None
+    equity: Decimal | None = None
 
 
 class MetricFy(BaseModel):
