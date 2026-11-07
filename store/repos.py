@@ -219,6 +219,17 @@ def instruments_in_universe(session: Session, name: str) -> list[Instrument]:
     return list(session.execute(stmt).scalars())
 
 
+def universe_equity_tickers(session: Session, name: str) -> list[str]:
+    """Stored members of a universe (not the yaml seed), indices excluded."""
+    return sorted(
+        {
+            item.ticker.upper()
+            for item in instruments_in_universe(session, name)
+            if not item.ticker.startswith("^")
+        }
+    )
+
+
 def upsert_daily_bars(
     session: Session,
     instrument_id: int,

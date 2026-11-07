@@ -10,9 +10,9 @@ from ingest.finnhub import FinnhubClient
 from ingest.finnhub.errors import FinnhubError, FinnhubHttpError
 from jobs.runtime import record_job
 from store.canonical import CalendarEvent
-from store.catalog import CatalystItem, CatalystsFile, load_catalysts, load_universes
+from store.catalog import CatalystItem, CatalystsFile, load_catalysts
 from store.engine import session_scope
-from store.repos import event_count_for_source, upsert_events
+from store.repos import event_count_for_source, universe_equity_tickers, upsert_events
 from store.settings import settings
 
 log = logging.getLogger("jobs.ingest_calendar")
@@ -82,6 +82,7 @@ def _event(
 
 def events_from_yaml(catalog: CatalystsFile) -> list[CalendarEvent]:
     out: list[CalendarEvent] = []
+
     def timed(kind: str, item: CatalystItem, extra: dict | None = None) -> dict | None:
         at = item.time or catalog.default_times.get(kind)
         if not at:
@@ -106,9 +107,7 @@ def events_from_yaml(catalog: CatalystsFile) -> list[CalendarEvent]:
         ("treasury", catalog.treasury),
     ):
         for item in items:
-            out.append(
-                _event(day=item.date, title=item.title, kind=kind, extra=timed(kind, item))
-            )
+            out.append(_event(day=item.date, title=item.title, kind=kind, extra=timed(kind, item)))
     for item in catalog.other:
         kind = item.type if item.type in YAML_KINDS else "other"
         out.append(_event(day=item.date, title=item.title, kind=kind, extra=timed(kind, item)))
@@ -138,7 +137,8 @@ def ingest(*, skip_finnhub: bool = False) -> dict[str, int | list[str]]:
         log.warning("FINNHUB_API_KEY missing — yaml catalysts only")
         failures.append("finnhub: missing API key")
     else:
-        watch = {item.ticker.upper() for item in load_universes().watchlist.instruments}
+        with session_scope() as session:
+            watch = set(universe_equity_tickers(session, "watchlist"))
         start = datetime.now(ET).date()
         end = start + timedelta(days=EARNINGS_DAYS)
         try:

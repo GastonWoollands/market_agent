@@ -9,9 +9,8 @@ from zoneinfo import ZoneInfo
 from ingest.finnhub import FinnhubClient
 from ingest.finnhub.errors import FinnhubError, FinnhubHttpError
 from jobs.runtime import record_job
-from store.catalog import load_universes
 from store.engine import session_scope
-from store.repos import upsert_news
+from store.repos import universe_equity_tickers, upsert_news
 from store.settings import settings
 
 log = logging.getLogger("jobs.ingest_finnhub_news")
@@ -25,13 +24,8 @@ def ingest(*, skip_company: bool = False) -> dict[str, int | list[str]]:
     api_key = settings.finnhub_api_key.strip()
     if not api_key:
         raise RuntimeError("FINNHUB_API_KEY missing")
-    symbols = sorted(
-        {
-            item.ticker.upper()
-            for item in load_universes().watchlist.instruments
-            if not item.ticker.startswith("^")
-        }
-    )
+    with session_scope() as session:
+        symbols = universe_equity_tickers(session, "watchlist")
     end = datetime.now(ET).date()
     start = end - timedelta(days=COMPANY_DAYS - 1)
 
