@@ -15,7 +15,7 @@ This file is **not** the product contract. If intent, sources, universes, pages,
 **Product rules that stay true**
 
 - Delayed data. No orders, no broker, no WebSocket quotes.
-- Jobs write market data. API is read-only except watchlist (later: Book CRUD).
+- Jobs write market data. API is read-only except operator input: watchlist, Book holdings / cash, theses.
 - Vendors never called from the UI or the writer LLM.
 - Postgres is the cache. No Redis, GraphQL, FMP/Polygon, or pgvector unless Northstar says so.
 - Python owns scores, weights, and snapshot numbers. The model only narrates a pack.
@@ -42,15 +42,20 @@ This file is **not** the product contract. If intent, sources, universes, pages,
 | 1.13 | Kalshi + CFTC | **Done** (PR #20) | S&P / Nasdaq range distribution, Fed + recession beside Polymarket; TFF positioning |
 | 1.14 | Short interest + estimate revisions | **Done** (PR #21) | FINRA short interest + days to cover (all stored names); Yahoo EPS revisions (watchlist ∪ top 25). No targets |
 | 1.15 | Foreign filers (US-listed ADRs) + bank read | **Done** (branch `feat/foreign-filers`) | Curated 20-F / 6-K filers in USD join B; Yahoo quarters as labeled vendor TTM; TTM net income + equity; P/E, P/B, ROE for banks |
+| 1.17 | Ticker pre-trade read + risk flags + consolidation | Contracted 2026-11-08 | Seven rows, warnings-only color, four collapsible sections. No new data |
+| 1.18 | SBC, debt maturities, earnings for every stored name | Contracted 2026-11-08 | SEC tags + Finnhub per-day calendar; FCF − SBC shown, rank unchanged until measured |
+| 1.19 | Reverse DCF (implied growth) | Contracted 2026-11-08 | After 1.18 (needs SBC). Growth rate only, r grid 8/9/10% |
+| R1 | Score validation (research) | Contracted 2026-11-08 | Quintile forward returns + IC of the Ideas rank; decides whether the rank shows in the pre-trade read |
 | 2 | Gems universe D | Not started | Flag only on B; membership + Yahoo gems later. No F-score gate |
-| 3 | Book (portfolio CRUD + current risk) | Not started | Watchlist stays unsized. After 1.5 for user value |
+| 3 | Book + pre-trade risk + what-if | Contracted 2026-11-08 | Holdings, risk contribution, VaR / ES, stress, sizing limit, "add X for $N". Needs `launchd` |
+| 3.6 | Thesis + invalidation triggers | Contracted 2026-11-08 | After 3. Fixed trigger menu, entry snapshot, nightly check |
 | 3b | Constrained rebalance plan | Not started | After the Book is used; holdings-only min-vol first |
 | 4 | Form 4 + insider sleeve | Not started | Until then, omit the insider column (do not show 0.5) |
 | 5 | 10-K / 10-Q excerpts | Not started | Item 1A / Item 7 only; memo 10-Q stays `unavailable` |
 | 6 | Recommendation writer | Not started | Pack desk metrics + citation gate; Python fills snapshot |
 | 7 | Three-zone cards + Gems tab | Not started | Schema/`api.ts` before components. No F/Z drawer |
 
-Last tracker update: 2026-11-08.
+Last tracker update: 2026-11-08 (pre-trade contract).
 
 ---
 
@@ -208,27 +213,44 @@ Cross-asset RRG on existing tape (TLT, GLD, UUP, HYG, EEM vs SPY). Sector breadt
 
 ---
 
-## Phase 3 — Book
+## Phase 3 — Book + pre-trade risk (contracted 2026-11-08)
 
-**Goal:** One operator-sized book (shares, average cost, cash). Watchlist remains the unsized tracker. This is the step that turns the terminal into a decision layer.
+**Goal:** One operator-sized book (shares, average cost, cash) and the answer to "how much can I lose, and what does this add do to my risk?". Watchlist remains the unsized tracker. This is the step that turns the terminal into a decision layer. Operator chose the full scope for v1 (2026-11-08): risk + stress + what-if + sizing limit in one PR.
 
 **Do**
 
-1. Northstar §3 / §8 / §11 / §12: Book tables and CRUD.
-2. `portfolio` (singleton cash) + `portfolio_holding` (`instrument_id`, shares, average_cost). No `user_id` UUID.
-3. API: `GET/PUT /portfolio`, holdings CRUD. Adding a name hydrates like `POST /watchlist` (job helper, no vendor in the route).
-4. `jobs.compute_portfolio`: delayed MV, weight, unrealized P&L, sector stack, current vol, Sharpe (FRED T-bill RF or **null** — do not fake RF). Persist `portfolio_snapshot` JSONB.
-5. Book tab: holdings, weights, sectors, cash, ND/EBITDA of the book if computable, snapshot Sharpe/vol. Dense terminal, `StaleBadge`. No blotter.
+1. Northstar §3 / §8 / §9 / §11 / §12: done in the pre-trade contract PR.
+2. Alembic: `portfolio` (singleton cash, loss budget % of NAV) + `portfolio_holding` (`instrument_id`, shares, average_cost, opened_on). No `user_id` UUID. `book` universe kept equal to holdings by the repo, so bars / risk / options / estimates / earnings scopes include holdings (CRWV gets covered by holding it, without the watchlist).
+3. `analytics/portfolio_risk.py` (classes, fixture tests, no network): `ReturnPanel` (1y adjusted log returns, sector-ETF proxy for short histories, labeled), `ShrunkCovariance` (Ledoit-Wolf toward constant correlation), `PortfolioRisk` (vol, VaR 95% 1m parametric + historical, ES 97.5%, Euler contributions, top correlated pairs, sector weights), `StressTest` (historical windows + factor shocks from `config/stress_scenarios.yaml`), `SizingLimit`.
+4. `jobs.compute_portfolio` after `compute_risk`: delayed MV, weight, unrealized P&L, the risk read above → `portfolio_snapshot` JSONB with as-of. `job_run`, Makefile, pipelines.md.
+5. API: `GET/PUT /portfolio`, holdings CRUD (add hydrates like `POST /watchlist`: job helper, no vendor in the route), `GET /portfolio/what-if?ticker=&amount=` (read-time, before / after, cash check, sizing limit).
+6. Book tab: holdings, weights, P&L, sector stack, risk contribution bar, VaR / ES, stress table, correlated pairs. What-if box also on the Ticker page next to the pre-trade read. `StaleBadge`. No blotter, no Sharpe on the primary view.
+7. **Prerequisite:** `launchd` recipes (2026-11-03 review item 3). A risk read on stale bars is worse than none; the snapshot carries the bars' as-of and goes stale with the freshness strip.
 
-**Depends on:** Phase 0. Ship **after 1.5**. Can run in parallel with Phase 2.
+**Operator check:** with 3+ holdings, risk contributions sum to portfolio vol; the parametric VaR matches a hand calc on a 2-name fixture; a CRWV holding shows the proxy label until it has 252 sessions; what-if with amount > cash says so.
 
-### Phase 3.5 — Book-aware Opportunities (no optimizer)
+**Depends on:** Phase 1.5, `launchd`. Can run in parallel with Phase 2.
 
-**Goal:** “What happens if I add this name?” without a solver.
+### Phase 3.5 — Book-aware Ideas (no optimizer)
 
-For each Opportunities row when the book is non-empty: ρ vs current holdings, sector overlap, cash used at a stated add (e.g. 2% of NAV). Hide these fields when cash is the only holding (Path B). Rank continuously; no magic ΔSharpe cut.
+**Goal:** the what-if, per row. For each Ideas row when the book is non-empty: ρ vs current holdings, sector overlap, marginal vol at a stated add (e.g. 2% of NAV). Reuses `PortfolioRisk`. Hide when cash is the only holding (Path B). Rank continuously; no magic ΔSharpe cut.
 
-**Depends on:** Phase 3 + 1.5.
+**Depends on:** Phase 3.
+
+### Phase 3.6 — Thesis + invalidation triggers (contracted 2026-11-08)
+
+**Goal:** no position without a written reason and a machine-checked way to know it broke. The documented value of a decision journal is against hindsight bias and thesis drift; it only works when the triggers are checked, so free text alone carries no trigger state.
+
+**Do**
+
+1. Alembic: `thesis` (one open per instrument: text ≤ 3 lines, horizon date, pre-mortem, entry snapshot JSONB of the desk metrics, close note + exit snapshot) and `thesis_trigger` (kind from the fixed menu in Northstar §9, threshold `NUMERIC` or bucket, state, last_checked, fired_at).
+2. `analytics/thesis.py` `TriggerCheck` per kind (fixture tests). `jobs.check_theses` nightly after risk / credit / estimates.
+3. API: `GET/PUT /thesis/{ticker}`, `POST /thesis/{ticker}/close`. Works for Book holdings and for watchlist names before entry.
+4. UI: thesis block under the pre-trade read on Ticker; trigger chips on Book and Watchlist; a "theses tripped" chip on Live. On close, entry vs exit snapshot side by side.
+
+**Operator check:** a fixture thesis with "close below 200d SMA" fires on the first stored close below it and records `fired_at`; closing keeps both snapshots.
+
+**Depends on:** Phase 3 (entry snapshot uses the same desk read), 1.17.
 
 ---
 
@@ -485,6 +507,52 @@ IREN and MELI got their CIK / Q3 2026 SEC TTM. YPF is skipped as `non_usd`.
 
 **Known.** Health insurers (UNH, ELV, HUM, MOH; SIC 6324) and DLB sit in Financials by SIC; moving them changes the Merton credit scope, so it waits for an operator decision.
 
+## Pre-trade plan (contracted 2026-11-08)
+
+**Why.** The goal is not to take risk without knowing it. A review against industry practice (Morningstar / Koyfin / TIKR snapshots, buy-side pre-trade checklists, Bloomberg PORT / Barra-style risk, Mauboussin's expectations investing, decision journals) found the stored data mostly sufficient but spread over twelve Ticker panels, with four real gaps: no sizing or portfolio risk, no thesis discipline, FCF overstated where SBC is heavy, and earnings dates only for watchlist names.
+
+**Operator decisions (2026-11-08).**
+- Pre-trade read colors **warnings only** (amber / red); nothing is colored good.
+- SBC: show FCF and FCF − SBC, measure the top-25 impact, decide the ranking afterwards (same method as 1.6).
+- Book v1 is the full scope (risk, stress, what-if, sizing limit).
+- Score validation (R1) runs in parallel and decides whether the Ideas rank appears in the pre-trade read.
+
+**Order.** After the sector PR (insurers → Health Care, DLB → IT) and Ideas PR 3:
+
+```text
+1.17 pre-trade read ─ 1.18 SBC / maturities / earnings ─ 3 Book (+ launchd) ─ 3.6 thesis ─ 1.19 reverse DCF
+R1 score validation in parallel (no UI)
+```
+
+Outlook pack integration of 1.10–1.14 (2026-11-03 review item 1) is still unscheduled; ask before slotting it.
+
+### Phase 1.17 — Ticker pre-trade read + consolidation
+
+1. `analytics/risk_flags.py` `RiskFlags` with thresholds in `config/risk_flags.yaml` (fixture tests per rule).
+2. `api/ticker.py`: `TickerSummary` builds the seven rows from blocks the route already reads (valuation, desk, credit, technicals, revisions, short interest, options, next event) plus sector medians; `summary` on `GET /ticker/{ticker}`. Then `web/lib/api.ts`.
+3. `TickerView`: pre-trade read + flags above the fold; the existing panels move into four collapsible sections (business numbers, valuation & peers, credit, market), news and events last. No panel is deleted in this PR.
+4. Rank row: hidden until R1 says otherwise.
+
+**Operator check:** `/t/MSFT` reads in one screen; `/t/CRWV` shows the stale / outside-universe flags; a bank shows P/E, P/B, ROE in the valuation row; no green anywhere in the read.
+
+### Phase 1.18 — SBC, debt maturities, earnings for every stored name
+
+1. `ingest/sec/parse.py`: `ShareBasedCompensation` (synonym `AllocatedShareBasedCompensationExpense`), YTD-differenced like CFO → `metric_ttm.sbc`; `LongTermDebtMaturitiesRepaymentsOfPrincipalInNextTwelveMonths` / `…InYearTwo` from the latest 10-K. Migration for the columns.
+2. Desk read + Ticker: FCF − SBC, its yield, debt due vs cash + FCF. `compute_scores --dry-run` variant prints the top 25 with FCF − SBC in Quality; the result goes into this file for the ranking decision.
+3. `FinnhubClient.fetch_earnings_by_day` (unfiltered calendar, one day per request, filter to stored tickers, per-symbol fallback when a day hits the cap). `ingest_calendar` covers every stored instrument; the options expected move then works for the whole options scope.
+
+**Operator check:** software names show FCF − SBC well below FCF; an Ideas name outside the watchlist has a next-earnings date; `ingest_calendar` logs request count (~90 for 90 days).
+
+### Phase 1.19 — Reverse DCF (implied growth)
+
+`analytics/expectations.py` `ImpliedGrowth` (bisection on g, fixture tests against a hand-built DCF). Row on the valuation section of Ticker: implied g at 8 / 9 / 10% beside revenue CAGR 5y, FCF CAGR and revisions. Read-time, no table; store only if Ideas needs it later. Unavailable cases per Northstar §9.
+
+**Operator check:** a name priced at exactly its constructed DCF returns the constructed g; CRWV reads unavailable (FCF − SBC ≤ 0).
+
+### R1 — Score validation (research, no UI)
+
+Rebuild monthly Ideas scores from stored history with a **reporting lag** (TTM usable 60 days after period end for 10-Q, 90 for 10-K, unless the filing date is stored) to avoid look-ahead. Spearman IC of the rank vs next 3m / 6m returns, within-sector; quintile spreads; IC stability by year. Survivorship bias: the universe is today's membership, so results are an upper bound. Output recorded here; decision rule: mean IC below ~0.02 or unstable sign → the rank stays out of the pre-trade read. `analytics/score_validation.py` + `jobs.validate_scores` (prints, writes no table).
+
 ## Explicitly deferred
 
 | Item | Why |
@@ -563,7 +631,9 @@ Market-signal phases 1.10–1.14 are on `main` (PRs #17–#21; migrations throug
 5. **Ticker page density.** 1.10–1.14 added five panels (peers, credit curve, implied credit, options, short interest + revisions). The operator wants a simple, clear UI: one consolidation pass (order, what sits above the fold, what collapses) before adding more.
 6. **Older adapters on the shared base.** New JSON vendors use `ingest/http.py` `JsonApiClient` (Kalshi, CFTC, FINRA). Polymarket and Cboe still carry their own HTTP code; migrate them in a separate PR (the operator asked for OOP on new code first).
 
-**Proposed order (pending operator decision)**
+**Superseded 2026-11-08** by "Pre-trade plan" above for items 3–4 (Book, Ticker consolidation). Item 1 (Outlook integration) is unscheduled; item 2 (`launchd`) is now a Phase 3 prerequisite.
+
+**Proposed order (2026-11-03, kept for history)**
 
 1. **Outlook integration:** fix the four pack defects and pack 1.10–1.14 with citations (`change-outlook-writer` skill).
 2. **Operations:** `launchd` plists for morning / in-session / close / evening / Friday / FINRA recipes (CLIs only, no in-process scheduler).
@@ -597,6 +667,7 @@ Do not start Phase 7 until packs exist. Do not start a PR to “fix F-score for 
 | 2026-10-31 | Phases 1.6–1.9 added after a single-name deep-dive exposed TTM / debt defects. Northstar: Ticker + Compare pages; interest coverage in scope. |
 | 2026-10-31 | Phase 1.6 merged (PR #13). Phase 1.7: SIC sectors, `risk_stats`, EBIT / interest TTM, additive partial `ingest_sec`. |
 | 2026-10-31 | Phase 1.7 merged (PR #14). Phase 1.8: Ticker + Compare pages and APIs; facts refreshed for non-members. |
+| 2026-11-08 | Pre-trade contract: Northstar §1/§2/§3/§6/§8/§9/§11/§12/§13 + AGENTS.md. Phases 1.17 (pre-trade read), 1.18 (SBC, maturities, earnings for all), 1.19 (reverse DCF), R1 (score validation), 3 expanded (risk, stress, what-if, sizing), 3.6 (thesis triggers). |
 | 2026-11-08 | Phase 1.16 PR 2: `GET /ideas` + Ideas page (Shortlist / All / Excluded) replace Valuation and Opportunities; Ticker rank-of-N counts the current run. |
 | 2026-11-08 | Phase 1.16 PR 1: `ScoreGate` (four data-quality rules → `score_exclusion`), sector-neutral sleeves, 12-1 momentum as setup, SSRM → Materials. |
 | 2026-11-07 | Phase 1.15 shipped on `feat/foreign-filers`. NU / DLO / VIST live; IREN and MELI CIK / TTM refreshed. Limits recorded (unranked until comparable; operator accepted). IREN sector override → Information Technology. |

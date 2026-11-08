@@ -25,7 +25,7 @@ Claude Code: `CLAUDE.md` imports this file. Skills are the same tree via `.claud
 ## Invariants
 
 - Postgres is the system of record. Vendors are never called from the UI or from the writer LLM.
-- Jobs are the only writers of market data. API is read-only except watchlist CRUD and refresh triggers.
+- Jobs are the only writers of market data. API is read-only except operator input (watchlist, Book holdings / cash, theses) and refresh triggers.
 - `api/` must not import `ingest`.
 - Adapters return frozen Pydantic in `store/canonical.py`. Repos upsert (`ON CONFLICT`). Jobs orchestrate.
 - `NUMERIC` / `Decimal` for money, yields, multiples. `float` only inside numpy, then cast back.
