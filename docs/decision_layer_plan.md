@@ -461,7 +461,7 @@ IREN and MELI got their CIK / Q3 2026 SEC TTM. YPF is skipped as `non_usd`.
 - `GET /ticker/NU` shows the bank block and no EV/EBITDA.
 - DLO / VIST appear on Valuation.
 
-## Phase 1.16 — Ideas: score rules + sector-neutral 12-1 ranking (PR 1 of 3)
+## Phase 1.16 — Ideas: score rules, sector-neutral 12-1 ranking, Ideas page (PRs 1–2 of 3)
 
 **Why.** The UI audit (2026-11-03) found the Opportunities top 25 led by data artifacts (KODK FCF yield 79% from a one-off, AMN EBITDA +864% off a near-zero base) and 12 of 25 names in software that fell against its own history. Operator decisions (2026-11-07, prototype canvas): merge Valuation + Opportunities into one Ideas page, keep artifacts out of the rank but visible with the reason, rank within sectors, use 12-1 momentum.
 
@@ -474,7 +474,14 @@ IREN and MELI got their CIK / Q3 2026 SEC TTM. YPF is skipped as `non_usd`.
 
 **First run (2026-11-08, scores as of 2026-11-06).** 774 ranked, 81 excluded (`fcf_one_off` 25, `stale_ttm` 22, `base_effect` 19, `extreme_multiple` 18). 8 of the old top 25 stay; KODK, AMN, WLKP and SONO are excluded; software leaves the top 25 (12 → 0), mostly on 12-1 momentum (DOCU #1 → out). The top 25 drives the `ingest_estimates` and `ingest_options` scope and memo generation, so those move too.
 
-**Next.** PR 2: `GET /ideas` + the Ideas page (Shortlist / All / Excluded) replacing Valuation and Opportunities. PR 3: "What changed" (top-25 entries and exits, EBITDA-margin turns, EPS revisions once the universe-wide Yahoo test passes).
+**Shipped in PR 2 (`GET /ideas` + Ideas page).**
+- `GET /ideas` (`api/ideas.py` `IdeasBoard`) returns every valuation member once with a status: `ranked`, `excluded` (rules + values from `score_exclusion`) or `no_score` (no comparable multiple). It also carries the rule texts and sleeve weights from `analytics.scores`, so thresholds live in Python only, and top-25 stats (median EV/EBITDA and own-5y %ile, net cash, traps, sector concentration).
+- `/ideas`: Shortlist (top 25) / All / Excluded, sector filter, search, column sort, detail panel (sleeve bars, stored memo or desk summary, exclusion rules). 12-1 replaces 3m on screen. Decisions (2026-11-08): English like the rest of the app; All = the whole valuation universe; old pages redirect and their code is removed.
+- `GET /valuation` and `GET /opportunities` are removed; `/valuation` and `/opportunities` redirect to `/ideas`.
+- Ticker "rank X of N" counted every stored score row (1556); it now counts names in the current run (776).
+- First read (scores as of 2026-11-06): 973 in the universe, 857 with comparable data, 776 ranked, 81 excluded, 116 no score.
+
+**Next.** PR 3: "What changed" (top-25 entries and exits, EBITDA-margin turns, EPS revisions once the universe-wide Yahoo test passes).
 
 **Known.** Health insurers (UNH, ELV, HUM, MOH; SIC 6324) and DLB sit in Financials by SIC; moving them changes the Merton credit scope, so it waits for an operator decision.
 
@@ -590,6 +597,7 @@ Do not start Phase 7 until packs exist. Do not start a PR to “fix F-score for 
 | 2026-10-31 | Phases 1.6–1.9 added after a single-name deep-dive exposed TTM / debt defects. Northstar: Ticker + Compare pages; interest coverage in scope. |
 | 2026-10-31 | Phase 1.6 merged (PR #13). Phase 1.7: SIC sectors, `risk_stats`, EBIT / interest TTM, additive partial `ingest_sec`. |
 | 2026-10-31 | Phase 1.7 merged (PR #14). Phase 1.8: Ticker + Compare pages and APIs; facts refreshed for non-members. |
+| 2026-11-08 | Phase 1.16 PR 2: `GET /ideas` + Ideas page (Shortlist / All / Excluded) replace Valuation and Opportunities; Ticker rank-of-N counts the current run. |
 | 2026-11-08 | Phase 1.16 PR 1: `ScoreGate` (four data-quality rules → `score_exclusion`), sector-neutral sleeves, 12-1 momentum as setup, SSRM → Materials. |
 | 2026-11-07 | Phase 1.15 shipped on `feat/foreign-filers`. NU / DLO / VIST live; IREN and MELI CIK / TTM refreshed. Limits recorded (unranked until comparable; operator accepted). IREN sector override → Information Technology. |
 | 2026-11-07 | Phase 1.15 contracted: curated foreign filers (US-listed 20-F / 6-K ADRs in USD) join B; Yahoo quarterly statements as labeled vendor TTM; `metric_ttm.net_income` / `equity`; bank read (P/E, P/B, ROE). YPF / PAM out (ARS, ADR ratio). |

@@ -2,7 +2,7 @@
 
 Personal US research terminal. Delayed data, no trading. UI name: Sector Panel.
 
-v1 is shipped. Decision-layer Phase 1.5 is in the contract: named desk metrics on Valuation and Opportunities. `metric_fy` is the annual fact table. Piotroski F-Score and Altman Z are **not product** — do not show, pack, or rank on them.
+v1 is shipped. Decision-layer Phase 1.5 is in the contract: named desk metrics on Ideas (Valuation + Opportunities merged in Phase 1.16). `metric_fy` is the annual fact table. Piotroski F-Score and Altman Z are **not product** — do not show, pack, or rank on them.
 Do not implement remaining Northstar gaps (Form 4, Book, gems membership, filing excerpts, recommendation UI, Alpaca, scheduler, Pi host, `financial_fact` warehouse) unless `docs/northstar.md` §12 is updated to pull that item into the current phase.
 
 Read `docs/northstar.md` before changing product intent, schema meaning, or source stack.

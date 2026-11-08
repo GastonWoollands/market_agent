@@ -25,8 +25,7 @@ Column lists, job flags, and formulas live in code (`store/models.py`, `jobs/`, 
 Give a single operator a dense, honest view of US markets, then a **decision layer** on stored evidence:
 
 - What macro and sectors are doing (**Live**, **Dynamics**)
-- What is cheap vs history (**Valuation**): EV/EBITDA vs own 5y, FCF yield, net debt / EBITDA
-- What is worth reading today (**Opportunities**): the same named desk metrics, ranked; trap flagged
+- What is cheap vs history and worth reading today (**Ideas**): EV/EBITDA vs own 5y, FCF yield, net debt / EBITDA, ranked within sector; trap flagged; data artifacts shown with the rule that keeps them out of the rank
 - Names you track (**Watchlist**)
 - A weekday morning **Outlook**: a pack-grounded structured brief (TL;DR → what happened → positioning → drivers → watch today → deep dives on macro / market / policy → invalidation → calendar; see §10.1) covering the US macro spine, what the tape and market-implied odds are pricing, and what is on the calendar in the next sessions
 - Fiscal-year **facts** on the valuation universe (`metric_fy`: revenue, earnings, CFO, assets, debt, equity) for growth, accrual, and gems screens. Not computed by the writer
@@ -68,8 +67,7 @@ Do not implement a non-goal because it appeared in an older plan. Change this se
 | **Live** | The read (stored Outlook `headline` / `live_md` / `expect`), regime & conditions band (growth/inflation/policy/volatility from `regime_snapshot`, Risk-On score, net liquidity), regime header (index, breadth, vol, duration, dollar, credit), global markets (`intl_section`), same-day Treasury yields (`yields_section`, bp moves), breakpoints (anomalies), outlier/co-move chips, Risk-On factors, today and the last two sessions’ catalysts, watchlist outliers, sector tape, Polymarket odds, existing FRED drill-down chart |
 | **Outlook** | Structured brief (§10.1 sections; legacy macro / market / near-term as fallback), numeric snapshot from the pack, news tape, near calendar, **sources freshness table** |
 | **Dynamics** | RRG, indexed relative performance, sector table, correlation, lead-lag |
-| **Valuation** | EV/EBITDA vs own 5y, FCF yield, net debt / EBITDA, growth × re-rating |
-| **Opportunities** | Named desk metrics + rank + trap; memos on top names (gems **inside** the $1B+ universe until universe D ships). Insider column omitted until Form 4 |
+| **Ideas** | One grid for the valuation universe (Valuation + Opportunities merged, Phase 1.16). Shortlist (top 25) / All / Excluded. Named desk metrics (EV/EBITDA, own-5y %ile, FCF yield, ND/EBITDA, EBITDA 1y, 12-1) + sector-neutral rank + trap; names failing a data rule show the rule, never a rank; names without a comparable multiple show "no score". Memos on top names (gems **inside** the $1B+ universe until universe D ships). Insider column omitted until Form 4. `/valuation` and `/opportunities` redirect here |
 | **Watchlist** | User tickers, quote cards, TradingView widget |
 | **Ticker** (`/t/[ticker]`) | One name in depth: FY + quarterly TTM history, valuation vs own history, dilution (share count YoY), technicals (SMAs, drawdown, RSI, vol), relative strength vs SPY and sector, risk (vol, beta, max drawdown), next earnings, news |
 | **Compare** | 2–6 tickers side by side: desk metrics, solvency, risk, 1y rebased performance, pairwise correlation, rank. Side by side only — swapping a holding is Book Phase 3.5 |
@@ -145,8 +143,8 @@ Frozen for v1. A new vendor is a contract change: update this section first. Cat
 | Charts | TradingView widget | client-side, no ingest |
 | Credit curve: ICE BofA OAS + effective yield by rating (AAA…CCC), DGS1, Moody's Baa–Aaa, NFCI, STLFSI4 | FRED (catalog expansion, not a new vendor) | 06:00 ET |
 | Vol indices ^VIX9D, ^VIX3M, ^VVIX, ^SKEW | Yahoo, tape catalog in `config/universes.yaml` | 16:30 ET |
-| Option chains (per expiry: strikes, bid/ask, last, volume, OI, Yahoo IV) | Yahoo `option_chain` via `YahooClient`, same 2 req/s budget. **Scope:** watchlist + Opportunities top 25 + SPY / QQQ / IWM / sector ETFs, nearest 4 monthly expiries (+ the first expiry after earnings when within 45 days), strikes within ±30% of spot stored; never the full valuation universe | ~15:45 ET (after-hours quotes widen) |
-| Street EPS revisions: consensus EPS now vs 7 / 30 / 60 / 90 days ago, analysts revising up / down (7d / 30d). No price targets or recommendation counts (decided 2026-11-03: they lag the price and read as a target) | Yahoo `quoteSummary` `earningsTrend` for the watchlist ∪ Opportunities top 25 | daily |
+| Option chains (per expiry: strikes, bid/ask, last, volume, OI, Yahoo IV) | Yahoo `option_chain` via `YahooClient`, same 2 req/s budget. **Scope:** watchlist + Ideas shortlist (score top 25) + SPY / QQQ / IWM / sector ETFs, nearest 4 monthly expiries (+ the first expiry after earnings when within 45 days), strikes within ±30% of spot stored; never the full valuation universe | ~15:45 ET (after-hours quotes widen) |
+| Street EPS revisions: consensus EPS now vs 7 / 30 / 60 / 90 days ago, analysts revising up / down (7d / 30d). No price targets or recommendation counts (decided 2026-11-03: they lag the price and read as a target) | Yahoo `quoteSummary` `earningsTrend` for the watchlist ∪ Ideas shortlist (score top 25) | daily |
 | Short interest (shares short, days to cover, change), twice monthly | FINRA API Platform `otcMarket/consolidatedShortInterest`, public, no key (covers exchange-listed names) | settlement + ~8 days |
 | Positioning: Traders in Financial Futures (S&P 500, Nasdaq-100, Russell, Treasuries, VIX futures) | CFTC Public Reporting (Socrata) API, no key (`config/cftc_contracts.yaml`) | weekly (Fri for Tue) |
 | Index range markets (S&P 500 / Nasdaq-100 close ranges → implied distribution), Fed decision / recession (no CPI: Kalshi lists core CPI month-over-month, Polymarket year-over-year) | Kalshi public trade API v2 read endpoints, no key (`config/kalshi_series.yaml`) | 15–60 min in session |
@@ -314,8 +312,7 @@ Screen-shaped. Every payload includes `as_of` and stale flags. Shapes in `api/sc
 GET /live
 GET /outlook?date=
 GET /dynamics
-GET /valuation?q=&industry=&sort=&min_rev=
-GET /opportunities?sort=&as_of=
+GET /ideas
 GET /ticker/{ticker}
 GET /compare?tickers=A,B,...
 GET /watchlist
@@ -325,7 +322,7 @@ GET /freshness
 GET /health
 ```
 
-`GET /valuation` and `GET /opportunities` include named desk-metric fields (`fcf_yield`, `nd_ebitda`, `accrual`). Book CRUD, `GET /recommendations`, `GET /gems`, and `GET /portfolio/plan` are contracted; do not add them until that phase. No GraphQL.
+`GET /ideas` returns every valuation member with a `status` (`ranked` / `excluded` / `no_score`), its score sleeves, its exclusion rules and the named desk-metric fields (`fcf_yield`, `nd_ebitda`, `accrual`); filtering and sorting happen in the browser. Book CRUD, `GET /recommendations`, `GET /gems`, and `GET /portfolio/plan` are contracted; do not add them until that phase. No GraphQL.
 
 ---
 
