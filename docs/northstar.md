@@ -29,7 +29,9 @@ Give a single operator a dense, honest view of US markets, then a **decision lay
 - Names you track (**Watchlist**)
 - A weekday morning **Outlook**: a pack-grounded structured brief (TL;DR → what happened → positioning → drivers → watch today → deep dives on macro / market / policy → invalidation → calendar; see §10.1) covering the US macro spine, what the tape and market-implied odds are pricing, and what is on the calendar in the next sessions
 - Fiscal-year **facts** on the valuation universe (`metric_fy`: revenue, earnings, CFO, assets, debt, equity) for growth, accrual, and gems screens. Not computed by the writer
-- Later (not this phase): a sized **Book**, a **Gems** universe, three-zone recommendation cards, and a constrained rebalance **plan**. Delayed data; **no orders**. Snapshot numbers are packed Python, not LLM. Postgres holds derived screens; Redis is not in the stack.
+- A **pre-trade read** on every Ticker page (contracted 2026-11-08): seven named rows (valuation, cash, balance sheet / credit, trend, expectations, positioning, event) plus rule-based **risk flags**, so the operator sees what can go wrong before reading the detail. Warnings are colored; nothing is colored "good"; there is no composite verdict
+- A sized **Book** with pre-trade risk (contracted 2026-11-08): holdings + cash, per-position and portfolio risk, stress, an "add X for $N" what-if and a sizing limit, plus a **thesis** per name whose invalidation triggers are checked by a job against stored metrics
+- Later (not this phase): a **Gems** universe, three-zone recommendation cards, and a constrained rebalance **plan**. Delayed data; **no orders**. Snapshot numbers are packed Python, not LLM. Postgres holds derived screens; Redis is not in the stack.
 
 EA / UK / JP / globe appear as **FRED context series** (policy rate, FX, lag-stamped foreign 10Ys), not as non-US listings or a second terminal.
 
@@ -49,7 +51,8 @@ Every number on screen comes from Postgres. Vendors are never called from the UI
 - Redis, Kafka, TimescaleDB, pgvector — not until a measured need. Derived Postgres tables (`quant_score`, later `portfolio_snapshot` / `portfolio_plan`) are the cache
 - GraphQL; FMP / Polygon as extra market vendors (Yahoo + SEC cover prices and fundamentals)
 - A full XBRL `financial_fact` warehouse or raw EDGAR HTML in hot tables
-- LLM-owned weights, entries, targets, or stops. Python fills numeric snapshots; the writer narrates the pack. Third-party **street EPS revisions** are allowed as labeled vendor data (2026-10-31; price targets and recommendation counts dropped 2026-11-03); the writer may cite them from the pack but never produces a target
+- LLM-owned weights, entries, targets, or stops. Python fills numeric snapshots; the writer narrates the pack. The Book **sizing limit** is risk arithmetic (largest position whose 1-month 95% loss fits the operator's loss budget), not a recommended weight. The **reverse DCF** outputs the growth the price implies, never a fair value, upside or price
+- A composite buy / sell verdict, letter grade or "good" (green) coloring on the pre-trade read. Rows show named numbers; only warnings carry color. The Ideas rank appears there only if the score validation (decision_layer_plan R1) supports it Third-party **street EPS revisions** are allowed as labeled vendor data (2026-10-31; price targets and recommendation counts dropped 2026-11-03); the writer may cite them from the pack but never produces a target
 - Single-name CDS quotes and per-bond TRACE prices / yields: licensed data (S&P/Markit, LSEG, FINRA TRACE data program), not on any free API. The substitute is the equity-implied credit bucket (§9) placed on the FRED ICE BofA rating curve
 - Piotroski F-Score or Altman Z as a screen, badge, rank input, or pack field. `metric_fy` stays; F/Z are not product
 - LLM “moat” scores or fit-percentage gauges
@@ -69,9 +72,9 @@ Do not implement a non-goal because it appeared in an older plan. Change this se
 | **Dynamics** | RRG, indexed relative performance, sector table, correlation, lead-lag |
 | **Ideas** | One grid for the valuation universe (Valuation + Opportunities merged, Phase 1.16). Shortlist (top 25) / All / Excluded. Named desk metrics (EV/EBITDA, own-5y %ile, FCF yield, ND/EBITDA, EBITDA 1y, 12-1) + sector-neutral rank + trap; names failing a data rule show the rule, never a rank; names without a comparable multiple show "no score". Memos on top names (gems **inside** the $1B+ universe until universe D ships). Insider column omitted until Form 4. `/valuation` and `/opportunities` redirect here |
 | **Watchlist** | User tickers, quote cards, TradingView widget |
-| **Ticker** (`/t/[ticker]`) | One name in depth: FY + quarterly TTM history, valuation vs own history, dilution (share count YoY), technicals (SMAs, drawdown, RSI, vol), relative strength vs SPY and sector, risk (vol, beta, max drawdown), next earnings, news |
+| **Ticker** (`/t/[ticker]`) | One name in depth. Above the fold: the **pre-trade read** (seven rows, each a named number with as-of and source: valuation, cash generation, balance sheet / credit, trend, expectations, positioning, event) and **risk flags** (rules with yaml thresholds), then the thesis and Book position when they exist. Below, four collapsible sections: business numbers (FY + quarterly TTM, dilution), valuation & peers (own history, implied growth, peer table), credit (implied bucket, curve, maturities), market (technicals, relative strength, risk, options, short interest, revisions). News and events last |
 | **Compare** | 2–6 tickers side by side: desk metrics, solvency, risk, 1y rebased performance, pairwise correlation, rank. Side by side only — swapping a holding is Book Phase 3.5 |
-| **Book** | Sized holdings + cash + risk snapshot + rebalance plan — **not shipped** |
+| **Book** | Sized holdings + cash entered by the operator; weights, P&L, sector stack; portfolio vol, 1-month VaR / expected shortfall, risk contribution per position, top correlated pairs; historical and factor stress; "add X for $N" what-if with a sizing limit; theses with trigger state. Rebalance plan later (Phase 3b). **Contracted 2026-11-08, not shipped** |
 | **Gems** | Small/mid screen ($300M–$2B cap) — **not shipped** |
 
 **Honest constraint:** $1B+ TTM revenue is mid/large cap. “Early gems” here means *mispriced or improving quality names with full SEC history*, not seed-stage. The on-screen language is **multiple, yield, growth, leverage, cash conversion** — not F-score, Z-score, or sleeve unit-ranks as the primary read. Recommendation cards (later) are three zones: header, desk snapshot, book impact if holdings exist. Explain is the ratios and their as-of dates. Not shipped.
@@ -110,7 +113,7 @@ Adapters return frozen Pydantic in `store/canonical.py`. Repos upsert (`ON CONFL
 One service, one volume, one database. See `docker-compose.yml`. Setup and backup: pipelines.md.
 
 - App reads `DATABASE_URL` (default `postgresql://market:market@localhost:5433/market_agent`; container still listens on 5432)
-- Jobs are the only writers of market data. API is read-only except watchlist CRUD and refresh triggers
+- Jobs are the only writers of market data. API is read-only except operator input (watchlist, Book holdings / cash, theses) and refresh triggers
 - `ON CONFLICT` upserts everywhere (idempotent jobs)
 - `timestamptz` always; store UTC, display ET in the UI
 - Money, yields, multiples: `NUMERIC` — never `float` for values you compare or rank
@@ -135,9 +138,9 @@ Frozen for v1. A new vendor is a contract change: update this section first. Cat
 | Headlines | Google News RSS (`config/news_queries.yaml`; short newsroom-style queries, every request carries `when:{freshness_days}d`), title + link only | 30 min |
 | Market wire + watchlist company news, with vendor summaries | Finnhub free REST (`/news?category=general`, `/company-news` per watchlist symbol, ≤5 per name, 2-day window); summary stored only when it is not a copy of the headline; no article fetching | 30–60 min in session, ~07:30 ET |
 | FOMC statements, minutes, Chair speeches, testimony | Fed Board RSS (`press_monetary`, `speeches`, `testimony`) via `ingest/fed_rss`, plus the official `www.federalreserve.gov` article each recent item links to when the RSS text is only a title or venue line (capped body text, ≤2500 chars, 14-day lookback; no crawling, no other hosts) | 30–60 min in session |
-| Earnings calendar + EPS/rev est. | Finnhub free | 07:00 ET |
+| Earnings calendar + EPS/rev est. | Finnhub free. Scope: every stored instrument (contracted 2026-11-08), read from the unfiltered calendar one **day** per request and filtered to stored tickers; a day that returns the row cap falls back to per-symbol requests for the stored names | 07:00 ET |
 | FOMC, CPI, PCE, NFP, GDP, JOLTS, Chair/Jackson Hole speeches, FOMC minutes, Beige Book, ISM, Treasury refunding, ECB/BoE/BoJ, elections | curated `config/catalysts.yaml` | hand, yearly |
-| TTM metrics + valuation membership | SEC EDGAR companyfacts (bulk zip, then incremental). US GAAP 10-K / 10-Q, and IFRS 20-F / 6-K for the curated foreign filers (§7) | nightly / monthly |
+| TTM metrics + valuation membership | SEC EDGAR companyfacts (bulk zip, then incremental). US GAAP 10-K / 10-Q, and IFRS 20-F / 6-K for the curated foreign filers (§7). Includes share-based compensation (cash-flow add-back, YTD-differenced like CFO) and the 10-K debt maturity schedule (principal due in the next 12 months and in year two) | nightly / monthly |
 | Quarterly statements for curated foreign filers whose SEC XBRL has no recent quarters (20-F-only filers; 6-K quarters are often untagged) | Yahoo quarterly income / balance / cash-flow statements via `YahooClient`, same 2 req/s budget. Labeled vendor data (`metric_ttm.source = yahoo`). SEC wins on the same period; Yahoo only writes TTM points newer than the latest SEC point. Statements must be in USD (`financialCurrency`), or the name is skipped | nightly, with `ingest_sec` |
 | Fiscal-year snapshots (growth, accrual, gems inputs) | Same companyfacts (zip or per-CIK JSON); curated columns only | with `ingest_sec` |
 | Charts | TradingView widget | client-side, no ingest |
@@ -192,6 +195,8 @@ Keep vendor payloads out of hot tables. Polymarket `raw` JSONB is the exception.
 | Derived | `valuation_daily`, `rrg_point`, `return_stats`, `risk_stats`, `opportunity_score`, `score_exclusion`, `quant_score` | Python → Postgres; the writer never computes these. `score_exclusion` lists valuation members kept out of the ranking by a data-quality rule, with the numbers behind it. `risk_stats` is per-name vol / downside vol / beta / drawdown from adjusted closes. `quant_score` holds a gem flag and ratio snapshot; legacy `f_score` / `z_score` columns stay NULL |
 | News / calendar | `news_item`, `event_item`, `policy_item` | RSS headlines plus Finnhub `wire` / `company` rows (`summary` nullable, `query` = ticker for company); YAML catalysts (FOMC/CPI/PCE/NFP/GDP/JOLTS/speeches/minutes/Beige Book/ISM/Treasury/central banks) + Finnhub earnings; official Fed Board RSS (speech/statement/minutes/testimony excerpts) |
 | Agent | `evidence_pack`, `outlook_report`, `opportunity_memo`, `job_run` | Pack JSONB, briefs, memos, run log |
+| Book (contracted 2026-11-08) | `portfolio`, `portfolio_holding`, `portfolio_snapshot`; `book` universe | Operator-entered cash and holdings (shares, average cost, opened date). The `book` universe mirrors holdings so every scoped job (bars, risk, options, estimates, earnings) covers them. `portfolio_snapshot` is the job-computed risk read (JSONB) with its as-of |
+| Thesis (contracted 2026-11-08) | `thesis`, `thesis_trigger` | Operator-written thesis per name (≤ 3 lines, horizon, pre-mortem), a frozen snapshot of the desk metrics at entry and at close, and invalidation triggers chosen from a fixed menu bound to stored metrics; a job writes each trigger's state and when it fired |
 | Market signals (contracted 2026-10-31, built per phase) | `credit_implied`, `credit_anchor`, `option_chain_snapshot`, `option_stats`, `eps_revision`, `short_interest`, `cot_position`, `options_market_stats`; Kalshi rows on `odds_snapshot` (source + slot) | Implied credit bucket with its inputs; per-expiry chain rows for the scoped names and the derived daily IV / skew / put-call row; street EPS revisions; FINRA short interest; CFTC TFF positioning; Cboe market put/call |
 
 ---
@@ -231,6 +236,18 @@ Do not show sleeve unit-ranks (0–1) as the primary columns once those fields a
 **Equity-implied credit bucket (Phase 1.11).** Merton / KMV distance to default (DD) from stored inputs: market cap (close × TTM shares), 1y equity vol from adjusted closes, default point F = (current liabilities − current deferred revenue) + ½ (total liabilities − current liabilities) from the latest 10-Q/10-K instant, r = DGS1, T = 1y. DD is placed on the median DD of each rating bucket in a reviewed calibration set (`config/credit_calibration.yaml`: ticker, bucket, as-of, source), and the output is the **implied bucket** plus that bucket's ICE BofA OAS from FRED. The bp figure is the bucket's market quote, not a per-name spread, and a DD below the CCC anchor reads "below CCC". The page always shows E, F, σ and DD beside the bucket. Raw N(−DD) is not shown: it prices investment grade at ~0bp (the credit-spread puzzle). Excluded: the Financials and Real Estate sectors plus `exclude_tickers` (captive finance, custody) in the yaml; this also drops payment networks, and narrowing the cut to banks / insurers / REITs by industry is a follow-up. This is not an F/Z return: every input is visible, and the output is a bucket on a market curve, not an unlabeled score. It is never a rank input or a sleeve.
 
 **Options read (Phase 1.12).** From stored chains: 30d ATM IV (interpolated across expiries), IV ÷ 1y realized vol, put/call by volume and by OI, 25-delta skew proxy (IV at 90% vs 110% moneyness), term structure (front vs ~3m IV), expected move to the next earnings date (front straddle mid ÷ spot). IV is recomputed from bid/ask mid with Black-Scholes on the out-of-the-money side only; zero-bid and wide quotes (spread > ½ mid, 10c floor) fall back to a same-session trade or are dropped, as are prices that rise moving away from spot and strike-neighbour IV outliers. Interpolation across expiries is linear in total variance. The expected move is read only when earnings are within 45 days. IV rank / percentile shows only after 252 stored sessions. Market panel: VIX ÷ VIX3M (above 1 = inverted), VIX / VVIX / SKEW with 1y percentile, Cboe put/call by product with 1y percentile and the equity 10-day mean.
+
+**Pre-trade read and risk flags (contracted 2026-11-08).** Read-time from stored rows; no new table. Each row is named numbers with as-of and source; the comparison is the name's sector median (and own 5y history where stored). Banks show P/E, P/B, ROE in the valuation row. Risk flags are rules with thresholds in `config/risk_flags.yaml` (e.g. net debt / EBITDA, interest cover, debt due in 12 months vs cash + FCF, dilution 1y, accrual "no", implied bucket at or below B, earnings within 10 sessions, stale TTM, an active `score_exclusion` rule, a tripped thesis trigger). A flag states the rule and the number. Flags are not summed, weighted or ranked. `analytics/risk_flags.py`.
+
+**SBC-adjusted cash (contracted 2026-11-08).** FCF − SBC and its yield on EV are shown next to FCF and FCF yield. The Ideas Quality sleeve keeps FCF until the operator decides from a measured top-25 impact. Net dilution (share count 1y) stays the buyback-aware read; the pair is not double counted.
+
+**Debt maturities (contracted 2026-11-08).** Principal due within 12 months and in year two from the latest 10-K, against cash + TTM FCF. Annual only; the row carries the 10-K date.
+
+**Reverse DCF / implied growth (contracted 2026-11-08).** Solve for the constant annual growth g of TTM FCF − SBC over 10 years such that the present value plus a terminal value (2.5% growth) equals today's EV. Shown for discount rates 8% / 9% / 10% (no CAPM point WACC), next to revenue CAGR 5y, FCF CAGR and EPS revisions. Unavailable when FCF − SBC ≤ 0, for banks and for names without a comparable EV; when the TTM FCF margin is more than 5 points above its 5y average the row says so (cyclical peak). Output is a growth rate only. `analytics/expectations.py`.
+
+**Book risk (contracted 2026-11-08).** From 1y of adjusted daily log returns: covariance shrunk with Ledoit-Wolf toward constant correlation; current vol per name as EWMA (λ = 0.94) beside 1y vol. Portfolio vol, 1-month 95% VaR (parametric and historical on overlapping 21-day returns of today's weights) and 97.5% expected shortfall; Euler risk contribution per position (wᵢ(Σw)ᵢ / σₚ); sector weights; top correlated pairs. Stress: historical replay of today's weights over windows in `config/stress_scenarios.yaml`, and factor shocks (SPY, rates via TLT, dollar via UUP) from 1y regression betas with shock sizes in the same file. A name with less than a year of history uses its sector ETF as proxy and says so. Sizing limit = largest position whose 1-month 95% loss fits the operator's loss budget (% of NAV, yaml). The what-if recomputes the same read with a hypothetical cash-funded add. No Sharpe on the primary view (a trailing 1y Sharpe on one book is noise). `analytics/portfolio_risk.py`.
+
+**Thesis triggers (contracted 2026-11-08).** Fixed menu: price below a level, close below 200d SMA, drawdown from entry, net debt / EBITDA above, EBITDA 1y below zero, consensus EPS down over 30d by more than a level, implied credit bucket at or below a bucket, horizon date reached. A nightly job evaluates them after risk / credit / estimates and records state and `fired_at`. Free-text-only theses are allowed but carry no trigger state.
 
 **Correlation / lead-lag:** 63-session corr on sector ETFs; lags −5…+5. `analytics/corr.py`. Default finding is usually same-day — still show it so the brief cannot invent leadership.
 
@@ -317,12 +334,16 @@ GET /ticker/{ticker}
 GET /compare?tickers=A,B,...
 GET /watchlist
 POST /watchlist  DELETE /watchlist/{ticker}
+GET /portfolio  PUT /portfolio                      (contracted 2026-11-08)
+POST /portfolio/holdings  PATCH|DELETE /portfolio/holdings/{ticker}
+GET /portfolio/what-if?ticker=&amount=
+GET /thesis/{ticker}  PUT /thesis/{ticker}  POST /thesis/{ticker}/close
 GET /search?q=
 GET /freshness
 GET /health
 ```
 
-`GET /ideas` returns every valuation member with a `status` (`ranked` / `excluded` / `no_score`), its score sleeves, its exclusion rules and the named desk-metric fields (`fcf_yield`, `nd_ebitda`, `accrual`); filtering and sorting happen in the browser. Book CRUD, `GET /recommendations`, `GET /gems`, and `GET /portfolio/plan` are contracted; do not add them until that phase. No GraphQL.
+`GET /ideas` returns every valuation member with a `status` (`ranked` / `excluded` / `no_score`), its score sleeves, its exclusion rules and the named desk-metric fields (`fcf_yield`, `nd_ebitda`, `accrual`); filtering and sorting happen in the browser. `GET /ticker/{ticker}` gains a `summary` block (the seven pre-trade rows and the risk flags). Book and thesis writes are operator input, like the watchlist; market data is still written only by jobs. The what-if is a read-time computation on stored rows and writes nothing. `GET /recommendations`, `GET /gems`, and `GET /portfolio/plan` are contracted; do not add them until that phase. No GraphQL.
 
 ---
 
@@ -336,7 +357,8 @@ These are contracted or sketched and are **not** implemented. Do not add them un
 
 - No Form 4 ingest; omit the insider column (code may still stub 0.5 — do not display it)
 - No `filing_index` / `filing_excerpt` (Item 1A / Item 7). Still no `financial_fact` / `raw_payload` warehouse. Memo 10-Q field stays `unavailable`
-- No Book (`portfolio` / holdings), no portfolio risk snapshot, no constrained optimizer / rebalance plan
+- **Pulled in 2026-11-08 (not shipped):** Ticker pre-trade read + risk flags, SBC-adjusted cash, debt maturities, earnings calendar for every stored name, Book with pre-trade risk and what-if, theses with triggers, reverse DCF. Order: `decision_layer_plan.md` "Pre-trade plan"
+- No constrained optimizer / rebalance plan (Phase 3b)
 - No Gems universe membership or Yahoo gems ingest (`is_gem_candidate` on `quant_score` is a flag only)
 - No recommendation rows or three-zone cards
 - No 13F institutional accumulation
@@ -355,7 +377,7 @@ These are contracted or sketched and are **not** implemented. Do not add them un
 
 - One adapter per vendor; canonical Pydantic in, SQL out
 - Idempotent upserts; jobs safe to re-run
-- No vendor I/O in request handlers except watchlist “add ticker”
+- No vendor I/O in request handlers except watchlist / Book “add ticker”
 - Log `job_run` always
 - Types: `NUMERIC` for ranks; `float` only inside numpy then cast back
 - Tests: adapter fixtures, upsert uniqueness, Risk-On bounds, pack citation checker
