@@ -1380,30 +1380,6 @@ def latest_valuation_rows(
     return list(session.execute(stmt).all())
 
 
-def comparable_valuation_counts(session: Session, universe: str = "valuation") -> tuple[int, int]:
-    latest = (
-        select(
-            ValuationDaily.instrument_id,
-            func.max(ValuationDaily.as_of).label("as_of"),
-        )
-        .group_by(ValuationDaily.instrument_id)
-        .subquery()
-    )
-    comparable = (
-        select(func.count())
-        .select_from(ValuationDaily)
-        .join(
-            latest,
-            (ValuationDaily.instrument_id == latest.c.instrument_id)
-            & (ValuationDaily.as_of == latest.c.as_of),
-        )
-        .join(UniverseMember, UniverseMember.instrument_id == ValuationDaily.instrument_id)
-        .join(Universe, Universe.id == UniverseMember.universe_id)
-        .where(Universe.name == universe, ValuationDaily.comparable.is_(True))
-    )
-    return int(session.execute(comparable).scalar_one() or 0), universe_size(session, universe)
-
-
 def prune_opportunity_scores(session: Session, keep: set[int]) -> int:
     """Drop scores for names outside the current run so stale ranks never surface."""
     stmt = delete(OpportunityScore)
@@ -1443,6 +1419,11 @@ def replace_score_exclusions(session: Session, rows: Sequence[dict[str, object]]
     if rows:
         session.execute(insert(ScoreExclusion).values(list(rows)))
     return len(rows)
+
+
+def score_exclusion_map(session: Session) -> dict[int, ScoreExclusion]:
+    """The current run's data-quality exclusions, keyed by instrument id."""
+    return {row.instrument_id: row for row in session.scalars(select(ScoreExclusion))}
 
 
 def upsert_quant_scores(session: Session, rows: Sequence[dict[str, object]]) -> int:
@@ -1577,7 +1558,8 @@ def opportunity_score_map(
     session: Session, instrument_ids: Sequence[int]
 ) -> tuple[dict[int, OpportunityScore], int]:
     """Current score per name and how many names the current run ranked."""
-    ranked = session.scalar(select(func.count()).select_from(OpportunityScore)) or 0
+    # Scores keep history per (name, as_of); the current run is one row per name.
+    ranked = session.scalar(select(func.count(func.distinct(OpportunityScore.instrument_id)))) or 0
     if not instrument_ids:
         return {}, int(ranked)
     stmt = select(OpportunityScore).where(OpportunityScore.instrument_id.in_(list(instrument_ids)))

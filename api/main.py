@@ -25,6 +25,8 @@ from api.credit import build_credit_curve, load_credit_series, load_ticker_credi
 from api.dynamics import HISTORY_DAYS as DYNAMICS_LOOKBACK
 from api.dynamics import build_dynamics, stored_from_rows
 from api.freshness import FreshnessView
+from api.ideas import STALE_AFTER_DAYS as IDEAS_STALE
+from api.ideas import IdeasBoard
 from api.live import (
     HISTORY_DAYS,
     LIQUIDITY_SERIES,
@@ -41,9 +43,6 @@ from api.live import (
     risk_on_from_store,
 )
 from api.odds import KalshiLiveView
-from api.opportunities import DEFAULT_SORT as OPP_SORT
-from api.opportunities import STALE_AFTER_DAYS as OPP_STALE
-from api.opportunities import build_opportunities
 from api.options import load_market_options, load_ticker_options
 from api.outlook import outlook_from_store
 from api.peers import build_peers, load_peer_universe, self_input
@@ -54,22 +53,20 @@ from api.schemas import (
     DynamicsResponse,
     FreshnessResponse,
     HealthResponse,
+    IdeasResponse,
     JobStatus,
     LiveResponse,
     MarketOptionsResponse,
-    OpportunityResponse,
     OutlookResponse,
     PositioningResponse,
     SearchHit,
     SearchResponse,
     TickerResponse,
-    ValuationResponse,
     WatchlistAdd,
     WatchlistResponse,
 )
 from api.street import load_ticker_street
 from api.ticker import build_compare, build_ticker, load_benchmarks, load_names, parse_tickers
-from api.valuation import DEFAULT_SORT, STALE_AFTER_DAYS, build_valuation
 from api.watchlist import build_watchlist
 from store.catalog import (
     load_cftc,
@@ -101,14 +98,12 @@ from store.models import (
 )
 from store.repos import (
     closes_for_tickers,
-    comparable_valuation_counts,
     drop_membership,
     freshness_dates,
     instrument_by_ticker,
     intraday_closes_for_tickers,
     latest_jobs,
     latest_metric_fy_map,
-    latest_metric_ttm_map,
     latest_odds,
     latest_opportunity_rows,
     latest_outlook_report,
@@ -120,6 +115,7 @@ from store.repos import (
     live_tape_rows,
     macro_observations,
     rrg_trails,
+    score_exclusion_map,
     search_instruments,
     table_count,
     universe_by_name,
@@ -315,77 +311,31 @@ def outlook(
         return JSONResponse(status_code=503, content=payload.model_dump(mode="json"))
 
 
-@app.get("/valuation", response_model=ValuationResponse)
-def valuation(
-    q: str = "",
-    industry: str = "",
-    sort: str = DEFAULT_SORT,
-    min_rev: float | None = None,
-    db: Session = Depends(get_db),
-) -> ValuationResponse | JSONResponse:
+@app.get("/ideas", response_model=IdeasResponse)
+def ideas(db: Session = Depends(get_db)) -> IdeasResponse | JSONResponse:
     try:
-        catalog = load_universes()
         rows = latest_valuation_rows(db)
+        scores = {
+            instrument.id: (score, memo)
+            for instrument, score, _, memo in latest_opportunity_rows(db)
+        }
         fy_by_id = latest_metric_fy_map(db, [instrument.id for instrument, _, _ in rows])
-        comparable_n, comparable_m = comparable_valuation_counts(db)
-        as_of = max((value.as_of for _, _, value in rows), default=None)
-        stale = not rows
-        job = next((item for item in latest_jobs(db) if item.job_name == "compute_valuation"), None)
-        if job is None or job.status != "ok":
-            stale = True
-        elif job.finished_at is not None:
-            clock = datetime.now(job.finished_at.tzinfo)
-            if (clock - job.finished_at).days > STALE_AFTER_DAYS:
-                stale = True
-        return build_valuation(
-            rows,
-            comparable_n=comparable_n,
-            comparable_m=comparable_m,
-            min_revenue=float(catalog.valuation.min_revenue_usd),
-            as_of=as_of,
-            stale=stale,
-            q=q,
-            industry=industry,
-            sort=sort,
-            min_rev=min_rev,
-            fy_by_id=fy_by_id,
+        board = IdeasBoard(
+            rows, scores=scores, exclusions=score_exclusion_map(db), fy_by_id=fy_by_id
         )
+        return board.build(stale=_job_stale(db, "compute_scores", IDEAS_STALE))
     except Exception:
-        payload = ValuationResponse(stale=True)
+        payload = IdeasResponse(stale=True)
         return JSONResponse(status_code=503, content=payload.model_dump(mode="json"))
 
 
-@app.get("/opportunities", response_model=OpportunityResponse)
-def opportunities(
-    sort: str = OPP_SORT,
-    as_of: date | None = None,
-    db: Session = Depends(get_db),
-) -> OpportunityResponse | JSONResponse:
-    try:
-        rows = latest_opportunity_rows(db, as_of=as_of)
-        ids = [instrument.id for instrument, _, _, _ in rows]
-        as_of_value = max((score.as_of for _, score, _, _ in rows), default=None)
-        ttm_by_id = latest_metric_ttm_map(db, ids, as_of=as_of_value)
-        fy_by_id = latest_metric_fy_map(db, ids, as_of=as_of_value)
-        stale = not rows
-        job = next((item for item in latest_jobs(db) if item.job_name == "compute_scores"), None)
-        if job is None or job.status != "ok":
-            stale = True
-        elif job.finished_at is not None:
-            clock = datetime.now(job.finished_at.tzinfo)
-            if (clock - job.finished_at).days > OPP_STALE:
-                stale = True
-        return build_opportunities(
-            rows,
-            as_of=as_of_value,
-            stale=stale,
-            sort=sort,
-            ttm_by_id=ttm_by_id,
-            fy_by_id=fy_by_id,
-        )
-    except Exception:
-        payload = OpportunityResponse(stale=True)
-        return JSONResponse(status_code=503, content=payload.model_dump(mode="json"))
+def _job_stale(db: Session, name: str, max_days: int) -> bool:
+    job = next((item for item in latest_jobs(db) if item.job_name == name), None)
+    if job is None or job.status != "ok":
+        return True
+    if job.finished_at is None:
+        return False
+    return (datetime.now(job.finished_at.tzinfo) - job.finished_at).days > max_days
 
 
 SPARK_DAYS = 120

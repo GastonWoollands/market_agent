@@ -21,8 +21,7 @@ const TABS = [
   { href: "/", label: "Live", live: true },
   { href: "/outlook", label: "Outlook" },
   { href: "/dynamics", label: "Dynamics" },
-  { href: "/valuation", label: "Valuation" },
-  { href: "/opportunities", label: "Opportunities" },
+  { href: "/ideas", label: "Ideas" },
   { href: "/watchlist", label: "Watchlist" },
   { href: "/compare", label: "Compare" },
 ] as const;

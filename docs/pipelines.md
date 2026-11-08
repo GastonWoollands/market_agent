@@ -176,7 +176,7 @@ Adding a ticker in the UI hydrates that name on demand. This job is the batch pa
 | # | Command | Why |
 |---|---------|-----|
 | 19 | `python -m jobs.ingest_cboe --backfill` | Cboe daily put/call JSON for every stored SPY session since 2025-03-03 → `options_market_stats` (~420 files, ~7 min). Without `--backfill`: the last 10 sessions not stored |
-| 20 | `python -m jobs.ingest_options` | Yahoo chains for watchlist ∪ Opportunities top 25 ∪ SPY / QQQ / IWM ∪ sector and group ETFs (~45 names, 4 monthlies each, strikes ±30% of spot) → `option_chain_snapshot` + `option_stats`. Needs `ingest_yahoo` (1y realized vol), `ingest_fred` (DGS3MO), `compute_scores` (top 25) |
+| 20 | `python -m jobs.ingest_options` | Yahoo chains for watchlist ∪ Ideas shortlist (score top 25) ∪ SPY / QQQ / IWM ∪ sector and group ETFs (~45 names, 4 monthlies each, strikes ±30% of spot) → `option_chain_snapshot` + `option_stats`. Needs `ingest_yahoo` (1y realized vol), `ingest_fred` (DGS3MO), `compute_scores` (top 25) |
 
 The vol indices ^VIX9D / ^VIX3M / ^VVIX / ^SKEW are tape names: `seed_tape` + `ingest_yahoo` load them.
 
@@ -200,7 +200,7 @@ thin. CFTC publishes Friday 15:30 ET for Tuesday's positions.
 | # | Command | Why |
 |---|---------|-----|
 | 23 | `python -m jobs.ingest_finra --backfill` | FINRA consolidated short interest, one year of twice-monthly settlement dates, every stored instrument → `short_interest` (~22k rows, ~2 min). Without `--backfill`: dates of the last 60 days not stored, plus the latest (FINRA revises) |
-| 24 | `python -m jobs.ingest_estimates` | Yahoo `earningsTrend` (consensus EPS now / 7 / 30 / 60 / 90 days ago, analysts revising up / down) for the watchlist ∪ Opportunities top 25 → `eps_revision` (~30 s). Needs `compute_scores` (top 25) |
+| 24 | `python -m jobs.ingest_estimates` | Yahoo `earningsTrend` (consensus EPS now / 7 / 30 / 60 / 90 days ago, analysts revising up / down) for the watchlist ∪ Ideas shortlist (score top 25) → `eps_revision` (~30 s). Needs `compute_scores` (top 25) |
 
 FINRA publishes about eight business days after each settlement (mid-month and month-end).
 No price targets or buy/hold/sell counts are stored: they lag the price and read as a target.
@@ -478,8 +478,8 @@ Dumps are gitignored under `data/`. Restore needs `docker compose up -d db`.
 | Live | SPY/XLK quotes, 10Y from FRED, odds present |
 | Outlook sources table | Same vendors / as_of as `/health` |
 | Dynamics | Quadrants after `compute_dynamics` |
-| Valuation | “N of M with a comparable multiple” is a real count |
-| Opportunities | Rank #1 explainable from EV/EBITDA, 5y %ile, FCF yield, ND/EBITDA, EBITDA 1y, trap — without the memo and without F/Z. Accrual badge is yes/no/— |
+| Ideas | “N of M names with comparable data” is a real count; ranked + excluded = comparable |
+| Ideas shortlist | Rank #1 explainable from EV/EBITDA, 5y %ile, FCF yield, ND/EBITDA, EBITDA 1y, trap — without the memo and without F/Z. Accrual badge is yes/no/— |
 | Quant | `GET /health` `metric_fy` / `quant_score` > 0 after `ingest_sec --fy-only` and `compute_quant`. Do not check F-score in the UI |
 | Stale badges | Show when the backing job is old or missing |
 

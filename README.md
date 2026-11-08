@@ -2,7 +2,7 @@
 
 Personal US market research terminal. Delayed data, no trading. UI name: **Sector Panel**.
 
-v1 is shipped: Live, Outlook, Dynamics, Valuation, Opportunities, Watchlist, plus Ticker and Compare pages — all from Postgres. Market signals on top (2026-11): peer comps, FRED credit curve and equity-implied credit bucket, options read (Yahoo chains, VIX term, Cboe put/call), Kalshi index ranges and Fed / recession odds, CFTC positioning, FINRA short interest and street EPS revisions. Vendors and the writer LLM are never called from the UI.
+v1 is shipped: Live, Outlook, Dynamics, Ideas (Valuation + Opportunities merged), Watchlist, plus Ticker and Compare pages — all from Postgres. Market signals on top (2026-11): peer comps, FRED credit curve and equity-implied credit bucket, options read (Yahoo chains, VIX term, Cboe put/call), Kalshi index ranges and Fed / recession odds, CFTC positioning, FINRA short interest and street EPS revisions. Vendors and the writer LLM are never called from the UI.
 
 | Doc | Use |
 |-----|-----|

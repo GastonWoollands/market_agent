@@ -540,76 +540,7 @@ export async function fetchOutlook(asOf?: string): Promise<OutlookTape | null> {
   }
 }
 
-export type ValuationMember = {
-  ticker: string;
-  name: string;
-  exchange: string | null;
-  industry: string | null;
-  cik: string | null;
-  as_of: string | null;
-  revenue: number | null;
-  ebitda: number | null;
-  fcf: number | null;
-  net_debt: number | null;
-  ev: number | null;
-  ev_ebitda: number | null;
-  pctile_5y: number | null;
-  ebitda_growth_1y: number | null;
-  multiple_change_1y: number | null;
-  fcf_yield: number | null;
-  nd_ebitda: number | null;
-  accrual: boolean | null;
-  comparable: boolean;
-  ttm_source: "sec" | "yahoo";
-};
-
-export type ValuationTape = {
-  as_of: string | null;
-  stale: boolean;
-  min_revenue: number;
-  comparable_n: number;
-  comparable_m: number;
-  count: number;
-  q: string;
-  industry: string;
-  sort: string;
-  min_rev: number | null;
-  industries: string[];
-  members: ValuationMember[];
-};
-
-export async function fetchValuation(query?: {
-  q?: string;
-  industry?: string;
-  sort?: string;
-  minRev?: string;
-}): Promise<ValuationTape | null> {
-  try {
-    const params = new URLSearchParams();
-    if (query?.q) {
-      params.set("q", query.q);
-    }
-    if (query?.industry) {
-      params.set("industry", query.industry);
-    }
-    if (query?.sort) {
-      params.set("sort", query.sort);
-    }
-    if (query?.minRev) {
-      params.set("min_rev", query.minRev);
-    }
-    const suffix = params.toString() ? `?${params.toString()}` : "";
-    const response = await fetch(`${API_URL}/valuation${suffix}`, { cache: "no-store" });
-    if (!response.ok) {
-      return null;
-    }
-    return (await response.json()) as ValuationTape;
-  } catch {
-    return null;
-  }
-}
-
-export type OpportunityMemo = {
+export type IdeaMemo = {
   why_scored: string;
   what_10q_changed: string;
   invalidation: string;
@@ -618,55 +549,85 @@ export type OpportunityMemo = {
   status: string;
 };
 
-export type OpportunityMember = {
-  ticker: string;
-  name: string;
+export type IdeaExclusion = {
+  rule: "fcf_one_off" | "base_effect" | "extreme_multiple" | "stale_ttm" | string;
+  values: Record<string, number | string | null>;
+};
+
+export type IdeaScore = {
   rank: number;
   total: number;
   cheap: number;
   quality: number;
   change: number;
   setup: number;
-  insider: number;
   risk: number;
   trap: boolean;
-  pctile_5y: number | null;
-  ev_ebitda: number | null;
-  ebitda_growth_1y: number | null;
   fcf_margin: number | null;
+  /** 12-1 momentum in percent. */
+  ret_12_1: number | null;
+};
+
+export type IdeaStatus = "ranked" | "excluded" | "no_score";
+
+export type IdeaMember = {
+  ticker: string;
+  name: string;
+  sector: string | null;
+  industry: string | null;
+  status: IdeaStatus;
+  as_of: string | null;
+  ttm_as_of: string | null;
+  ttm_source: "sec" | "yahoo";
+  revenue: number | null;
+  ebitda: number | null;
+  ev: number | null;
+  ev_ebitda: number | null;
+  pctile_5y: number | null;
+  ebitda_growth_1y: number | null;
+  multiple_change_1y: number | null;
   fcf_yield: number | null;
   nd_ebitda: number | null;
   accrual: boolean | null;
-  ret_3m: number | null;
-  memo: OpportunityMemo | null;
+  score: IdeaScore | null;
+  exclusions: IdeaExclusion[];
+  memo: IdeaMemo | null;
 };
 
-export type OpportunityTape = {
+export type IdeaShortlistStats = {
+  size: number;
+  median_ev_ebitda: number | null;
+  median_pctile_5y: number | null;
+  net_cash: number;
+  traps: number;
+  oldest_ttm: string | null;
+  sectors: { sector: string; count: number }[];
+};
+
+export type IdeasTape = {
   as_of: string | null;
   stale: boolean;
-  count: number;
-  sort: string;
-  members: OpportunityMember[];
+  universe_n: number;
+  with_data_n: number;
+  ranked_n: number;
+  excluded_n: number;
+  no_score_n: number;
+  shortlist_n: number;
+  excluded_by_rule: Record<string, number>;
+  rules: { rule: string; label: string; detail: string }[];
+  /** Sleeve weights of the total; risk is subtracted. */
+  weights: Record<string, number>;
+  shortlist: IdeaShortlistStats;
+  members: IdeaMember[];
 };
 
-export async function fetchOpportunities(query?: {
-  sort?: string;
-  asOf?: string;
-}): Promise<OpportunityTape | null> {
+export async function fetchIdeas(): Promise<IdeasTape | null> {
   try {
-    const params = new URLSearchParams();
-    if (query?.sort) {
-      params.set("sort", query.sort);
-    }
-    if (query?.asOf) {
-      params.set("as_of", query.asOf);
-    }
-    const suffix = params.toString() ? `?${params.toString()}` : "";
-    const response = await fetch(`${API_URL}/opportunities${suffix}`, { cache: "no-store" });
+    const response = await fetch(`${API_URL}/ideas`, { cache: "no-store" });
     if (!response.ok) {
       return null;
     }
-    const tape = (await response.json()) as OpportunityTape;
+    const tape = (await response.json()) as IdeasTape;
     return { ...tape, members: tape.members ?? [] };
   } catch {
     return null;

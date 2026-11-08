@@ -502,46 +502,7 @@ class OutlookResponse(BaseModel):
     sources: list[OutlookSource] = Field(default_factory=list)
 
 
-class ValuationMember(BaseModel):
-    ticker: str
-    name: str
-    exchange: str | None = None
-    industry: str | None = None
-    cik: str | None = None
-    as_of: date | None = None
-    revenue: float | None = None
-    ebitda: float | None = None
-    fcf: float | None = None
-    net_debt: float | None = None
-    ev: float | None = None
-    ev_ebitda: float | None = None
-    pctile_5y: float | None = None
-    ebitda_growth_1y: float | None = None
-    multiple_change_1y: float | None = None
-    fcf_yield: float | None = None
-    nd_ebitda: float | None = None
-    accrual: bool | None = None
-    comparable: bool = False
-    # `yahoo` = vendor quarters (curated foreign filers, Phase 1.15); else SEC.
-    ttm_source: str = "sec"
-
-
-class ValuationResponse(BaseModel):
-    as_of: date | None = None
-    stale: bool = True
-    min_revenue: float = 1_000_000_000
-    comparable_n: int = 0
-    comparable_m: int = 0
-    count: int = 0
-    q: str = ""
-    industry: str = ""
-    sort: str = "pctile"
-    min_rev: float | None = None
-    industries: list[str] = Field(default_factory=list)
-    members: list[ValuationMember] = Field(default_factory=list)
-
-
-class OpportunityMemo(BaseModel):
+class IdeaMemo(BaseModel):
     why_scored: str
     what_10q_changed: str
     invalidation: str
@@ -550,35 +511,89 @@ class OpportunityMemo(BaseModel):
     status: str
 
 
-class OpportunityMember(BaseModel):
-    ticker: str
-    name: str
+class IdeaExclusion(BaseModel):
+    # One data-quality rule from `analytics.scores.ScoreGate` and the values that tripped it.
+    rule: str
+    values: dict[str, float | int | str | None] = Field(default_factory=dict)
+
+
+class IdeaRule(BaseModel):
+    rule: str
+    label: str
+    detail: str
+
+
+class IdeaScore(BaseModel):
     rank: int
     total: float
     cheap: float
     quality: float
     change: float
     setup: float
-    insider: float
     risk: float
     trap: bool
-    pctile_5y: float | None = None
-    ev_ebitda: float | None = None
-    ebitda_growth_1y: float | None = None
     fcf_margin: float | None = None
+    # 12-1 momentum in percent (the year to a month ago).
+    ret_12_1: float | None = None
+
+
+class IdeaMember(BaseModel):
+    ticker: str
+    name: str
+    sector: str | None = None
+    industry: str | None = None
+    # ranked = in the score; excluded = failed a data-quality rule; no_score = not comparable
+    # (EV/EBITDA history too short for a 5y percentile).
+    status: Literal["ranked", "excluded", "no_score"]
+    as_of: date | None = None
+    ttm_as_of: date | None = None
+    # `yahoo` = vendor quarters (curated foreign filers, Phase 1.15); else SEC.
+    ttm_source: str = "sec"
+    revenue: float | None = None
+    ebitda: float | None = None
+    ev: float | None = None
+    ev_ebitda: float | None = None
+    pctile_5y: float | None = None
+    ebitda_growth_1y: float | None = None
+    multiple_change_1y: float | None = None
     fcf_yield: float | None = None
     nd_ebitda: float | None = None
     accrual: bool | None = None
-    ret_3m: float | None = None
-    memo: OpportunityMemo | None = None
+    score: IdeaScore | None = None
+    exclusions: list[IdeaExclusion] = Field(default_factory=list)
+    memo: IdeaMemo | None = None
 
 
-class OpportunityResponse(BaseModel):
+class IdeaSectorCount(BaseModel):
+    sector: str
+    count: int
+
+
+class IdeaShortlistStats(BaseModel):
+    size: int = 0
+    median_ev_ebitda: float | None = None
+    median_pctile_5y: float | None = None
+    net_cash: int = 0
+    traps: int = 0
+    oldest_ttm: date | None = None
+    sectors: list[IdeaSectorCount] = Field(default_factory=list)
+
+
+class IdeasResponse(BaseModel):
     as_of: date | None = None
     stale: bool = True
-    count: int = 0
-    sort: str = "rank"
-    members: list[OpportunityMember] = Field(default_factory=list)
+    universe_n: int = 0
+    with_data_n: int = 0
+    ranked_n: int = 0
+    excluded_n: int = 0
+    no_score_n: int = 0
+    shortlist_n: int = 25
+    excluded_by_rule: dict[str, int] = Field(default_factory=dict)
+    rules: list[IdeaRule] = Field(default_factory=list)
+    # Sleeve weights of the total; `risk` is subtracted.
+    weights: dict[str, float] = Field(default_factory=dict)
+    shortlist: IdeaShortlistStats = Field(default_factory=IdeaShortlistStats)
+    members: list[IdeaMember] = Field(default_factory=list)
 
 
 class WatchlistSparkPoint(BaseModel):
