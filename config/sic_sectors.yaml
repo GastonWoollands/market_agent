@@ -32,6 +32,15 @@ tickers:
   IREN: Information Technology
   # SIC 6795 "mineral royalty traders": SSR Mining runs gold and silver mines (2026-11-08).
   SSRM: Materials
+  # SIC 6324 "hospital & medical service plans" is managed care: GICS Health Care. Pet
+  # insurance (TRUP) stays in Financials. Merton still skips them (credit_calibration.yaml).
+  UNH: Health Care
+  ELV: Health Care
+  HUM: Health Care
+  MOH: Health Care
+  ALHC: Health Care
+  # SIC 6794 "patent owners & lessors": Dolby licenses audio / imaging technology.
+  DLB: Information Technology
   DASH: Consumer Discretionary
   CART: Consumer Staples
   Z: Real Estate

@@ -483,7 +483,7 @@ IREN and MELI got their CIK / Q3 2026 SEC TTM. YPF is skipped as `non_usd`.
 
 **Next.** PR 3: "What changed" (top-25 entries and exits, EBITDA-margin turns, EPS revisions once the universe-wide Yahoo test passes).
 
-**Known.** Health insurers (UNH, ELV, HUM, MOH; SIC 6324) and DLB sit in Financials by SIC; moving them changes the Merton credit scope, so it waits for an operator decision.
+**Sector overrides (2026-11-08).** Managed care (UNH, ELV, HUM, MOH, ALHC; SIC 6324) → Health Care and DLB (SIC 6794) → Information Technology via `config/sic_sectors.yaml` tickers. Managed care stays out of Merton through `exclude_tickers` (claim reserves, not debt); DLB now gets a bucket (AA on 2026-11-06). TRUP (pet insurance) stays in Financials. Top 25 unchanged; UNH rank 414 → 354.
 
 ## Explicitly deferred
 

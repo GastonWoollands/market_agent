@@ -17,7 +17,8 @@ version: "2026-10-31"
 # not claims that force default (Northstar §9).
 exclude_sectors: [Financials, Real Estate]
 # Captive finance arms put a lender's balance sheet on an industrial issuer.
-exclude_tickers: [F, GM, COIN]
+# Managed care sits in Health Care, but its liabilities are medical-claim reserves (2026-11-08).
+exclude_tickers: [F, GM, COIN, UNH, ELV, HUM, MOH, ALHC]
 
 names:
   - ticker: MSFT
