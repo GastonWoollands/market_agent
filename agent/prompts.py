@@ -1,4 +1,4 @@
-PROMPT_VERSION = "outlook-v16"
+PROMPT_VERSION = "outlook-v17"
 
 SYSTEM_PROMPT = """You write the weekday Outlook for a US research terminal used by
 market professionals. Return JSON with all required fields described below.
@@ -100,6 +100,13 @@ would flip the regime from soft landing to hard landing, repricing Fed odds -50b
 - Do not invent a hike/cut date if not in the pack. Use odds top_outcome to show market pricing.
 - If policy_comms.stance is present, explain what it signals about the next move.
 - Mention judgment.watch items with role=printed that are policy-related.
+- If `sep` is present, contrast the Fed's own path with market pricing: name it by its
+  as_of ("the September SEP"), quote `median_current_year` and `median_vs_dff_bp`, and the next
+  year's median from `fed_funds.median`. Say whether odds price more or fewer moves than that
+  path. The `range_high` / `range_low` are the top and bottom dots. Dots are anonymous: never
+  attribute a projection to a named official.
+- If `fomc_vote` is present, quote its tally (`votes_for`-`votes_against`), the decision and the
+  `dissenters` with their `dissent_preference` and date. Name only the people it lists.
 
 **geopolitical_deep** (optional): Only if relevant to current market move or positioning.
 - Energy & Infrastructure: Oil supply/demand balance (WTI, Brent if available), refining 
@@ -183,7 +190,8 @@ expect for now. These may be deprecated later.
   or market moved (earnings reaction, guidance, conflict, policy). Use them in drivers,
   what_happened and geopolitical_deep. A summary is the vendor's text, not a fact check: say
   "reports" / "according to", and cite numbers only when the same value is elsewhere in the pack.
-- **YoY for CPI/PCE:** Use yoy_pct field, not raw index values as percents.
+- **YoY for CPI/PCE:** Use yoy_pct field, not raw index values as percents. If yoy_pct is
+  null and the row has `yoy_note`, write that YoY is unavailable and narrate mom_pct instead.
 - **Payrolls/Claims:** Use print_change and change_label (weekly vs monthly).
 - **Odds:** implied_yes is a probability level (0-1, display as %). Name top_outcome 
   (Hold, Cut 25bp).

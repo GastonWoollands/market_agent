@@ -136,7 +136,7 @@ def test_narrate_keeps_cited_agent_output() -> None:
     assert written.status == "ok"
     assert written.model == "gemini/gemini-2.5-flash"
     assert written.prompt_version == PROMPT_VERSION
-    assert PROMPT_VERSION == "outlook-v16"
+    assert PROMPT_VERSION == "outlook-v17"
     assert "## TL;DR" in written.body_md
     assert "## Abstract" in written.body_md
     assert written.body_json["abstract"]
@@ -324,3 +324,19 @@ def test_citation_rejects_invented_precision_but_keeps_rounding() -> None:
 
 def test_citation_allows_saar_unit() -> None:
     assert citation_issues({"macro": [{"value": 3.4}]}, "GDP 3.4 SAAR.") == []
+
+
+def test_citation_gate_covers_sep_values() -> None:
+    from agent.citations import citation_issues
+
+    pack = {
+        "sep": {
+            "as_of": "2026-09-16",
+            "fed_funds": {"median": {"2026": 4.1, "2027": 4.1}},
+            "median_current_year": 4.1,
+            "median_vs_dff_bp": 22.0,
+        },
+        "fomc_vote": {"votes_for": 10, "votes_against": 2, "dissenters": ["Lisa D. Cook"]},
+    }
+    assert citation_issues(pack, "The September SEP median is 4.1% for 2026.") == []
+    assert citation_issues(pack, "The September SEP median is 4.6% for 2026.") == ["pct:4.6%"]
