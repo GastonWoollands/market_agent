@@ -6,7 +6,7 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -267,10 +267,17 @@ def pack_from_store(
             item.id: macro_observations(session, item.id)
             for item in fred_catalog
             if item.pack_view == "sep"
-        }
+        },
+        as_of=as_of,
     )
     fomc_vote = FomcVote.latest(
-        latest_policy_items(session, kind="statement", limit=FOMC_STATEMENT_SCAN)
+        latest_policy_items(
+            session,
+            kind="statement",
+            limit=FOMC_STATEMENT_SCAN,
+            # Statements through the end of as_of (ET); a backfilled pack never sees later ones.
+            until=datetime.combine(as_of + timedelta(days=1), time.min, ET),
+        )
     )
     
     # Compute net liquidity from FRED series
@@ -398,7 +405,8 @@ def pack_from_store(
     if extended_hours:
         pack["extended_hours"] = extended_hours
     if sep is not None:
-        dff = next((row.get("value") for row in macro if row.get("series_id") == "DFF"), None)
+        dff_points = macro_observations(session, "DFF", start=macro_start)
+        dff = dff_points[-1][1] if dff_points else None
         pack["sep"] = sep.to_pack(as_of=as_of, dff=dff)
     if fomc_vote is not None:
         pack["fomc_vote"] = fomc_vote.to_pack()
