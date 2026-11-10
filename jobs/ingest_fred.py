@@ -10,7 +10,12 @@ from ingest.fred.errors import FredError, FredHttpError
 from jobs.runtime import record_job
 from store.catalog import load_fred_series
 from store.engine import session_scope
-from store.repos import observation_count_for_series, upsert_macro_observations, upsert_macro_series
+from store.repos import (
+    observation_count_for_series,
+    replace_macro_observations,
+    upsert_macro_observations,
+    upsert_macro_series,
+)
 from store.settings import settings
 
 log = logging.getLogger("jobs.ingest_fred")
@@ -63,7 +68,11 @@ def ingest(*, series_ids: set[str] | None = None) -> dict[str, int | list[str]]:
                 failures.append(f"{item.id}: {exc}")
                 continue
             with session_scope() as session:
-                observation_rows += upsert_macro_observations(session, points)
+                if item.pack_view == "sep":
+                    # SEP points are rewritten per release; keep only the current one.
+                    observation_rows += replace_macro_observations(session, item.id, points)
+                else:
+                    observation_rows += upsert_macro_observations(session, points)
 
     if rate_limited:
         raise RuntimeError("FRED rate limited")
