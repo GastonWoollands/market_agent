@@ -603,3 +603,116 @@ series:
     pack_view: level
     show_on_live: false
     insight: Weekly financial stress from 18 market series. 0 = normal; positive = above-average stress.
+
+  # FOMC Summary of Economic Projections (SEP). Observations are dated by projection
+  # year and rewritten on every SEP release; *LR series are dated by the release itself.
+  # Packed as one `sep` object (analytics/fomc.py), never as macro rows or Live tiles.
+  - id: FEDTARMD
+    name: SEP fed funds median
+    unit: percent
+    category: policy
+    frequency: sep
+    region: us
+    pack_view: sep
+    show_on_live: false
+    in_pack: false
+    insight: Median of FOMC participants' year-end fed funds projections (the dot plot median).
+
+  - id: FEDTARMDLR
+    name: SEP fed funds median, longer run
+    unit: percent
+    category: policy
+    frequency: sep
+    region: us
+    pack_view: sep
+    show_on_live: false
+    in_pack: false
+    insight: Longer-run neutral rate median; dated by the SEP release.
+
+  - id: FEDTARRH
+    name: SEP fed funds range high
+    unit: percent
+    category: policy
+    frequency: sep
+    region: us
+    pack_view: sep
+    show_on_live: false
+    in_pack: false
+    insight: Highest participant projection (top dot) per year.
+
+  - id: FEDTARRL
+    name: SEP fed funds range low
+    unit: percent
+    category: policy
+    frequency: sep
+    region: us
+    pack_view: sep
+    show_on_live: false
+    in_pack: false
+    insight: Lowest participant projection (bottom dot) per year.
+
+  - id: FEDTARCTH
+    name: SEP fed funds central tendency high
+    unit: percent
+    category: policy
+    frequency: sep
+    region: us
+    pack_view: sep
+    show_on_live: false
+    in_pack: false
+    insight: Central tendency high (drops the three highest and three lowest dots).
+
+  - id: FEDTARCTL
+    name: SEP fed funds central tendency low
+    unit: percent
+    category: policy
+    frequency: sep
+    region: us
+    pack_view: sep
+    show_on_live: false
+    in_pack: false
+    insight: Central tendency low (drops the three highest and three lowest dots).
+
+  - id: GDPC1MD
+    name: SEP real GDP growth median
+    unit: percent
+    category: policy
+    frequency: sep
+    region: us
+    pack_view: sep
+    show_on_live: false
+    in_pack: false
+    insight: Median Q4/Q4 real GDP growth projection.
+
+  - id: UNRATEMD
+    name: SEP unemployment median
+    unit: percent
+    category: policy
+    frequency: sep
+    region: us
+    pack_view: sep
+    show_on_live: false
+    in_pack: false
+    insight: Median Q4 unemployment rate projection.
+
+  - id: PCECTPIMD
+    name: SEP PCE inflation median
+    unit: percent
+    category: policy
+    frequency: sep
+    region: us
+    pack_view: sep
+    show_on_live: false
+    in_pack: false
+    insight: Median Q4/Q4 headline PCE inflation projection.
+
+  - id: JCXFEMD
+    name: SEP core PCE inflation median
+    unit: percent
+    category: policy
+    frequency: sep
+    region: us
+    pack_view: sep
+    show_on_live: false
+    in_pack: false
+    insight: Median Q4/Q4 core PCE inflation projection.

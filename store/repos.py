@@ -859,10 +859,13 @@ def latest_policy_items(
     *,
     since: datetime | None = None,
     limit: int = 8,
+    kind: str | None = None,
 ) -> list[PolicyItem]:
     stmt = select(PolicyItem)
     if since is not None:
         stmt = stmt.where(PolicyItem.published_at >= since)
+    if kind is not None:
+        stmt = stmt.where(PolicyItem.kind == kind)
     stmt = stmt.order_by(PolicyItem.published_at.desc()).limit(limit)
     return list(session.execute(stmt).scalars())
 

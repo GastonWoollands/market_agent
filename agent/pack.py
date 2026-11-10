@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from analytics.drivers import MACRO_IDS as DRIVER_MACRO_IDS
 from analytics.drivers import TAPE_IDS as DRIVER_TAPE_IDS
 from analytics.drivers import as_dicts, rank_drivers
+from analytics.fomc import FomcVote, SepSnapshot
 from analytics.macro_pack import named_facts, series_row
 from analytics.news_rank import NewsRules, select_news
 from analytics.outlook_judgment import build_judgment
@@ -251,15 +252,26 @@ def pack_from_store(
             }
         )
     macro_start = as_of - timedelta(days=MACRO_HISTORY_DAYS)
+    fred_catalog = load_fred_series().series
     macro = [
         series_row(
             item,
             macro_observations(session, item.id, start=macro_start),
             as_of=as_of,
         )
-        for item in load_fred_series().series
+        for item in fred_catalog
         if item.in_pack
     ]
+    sep = SepSnapshot.from_points(
+        {
+            item.id: macro_observations(session, item.id)
+            for item in fred_catalog
+            if item.pack_view == "sep"
+        }
+    )
+    fomc_vote = FomcVote.latest(
+        latest_policy_items(session, kind="statement", limit=FOMC_STATEMENT_SCAN)
+    )
     
     # Compute net liquidity from FRED series
     from analytics.macro_pack import compute_net_liquidity
@@ -385,6 +397,11 @@ def pack_from_store(
         pack["yields_live"] = yields_live
     if extended_hours:
         pack["extended_hours"] = extended_hours
+    if sep is not None:
+        dff = next((row.get("value") for row in macro if row.get("series_id") == "DFF"), None)
+        pack["sep"] = sep.to_pack(as_of=as_of, dff=dff)
+    if fomc_vote is not None:
+        pack["fomc_vote"] = fomc_vote.to_pack()
     pack["session"] = clock
     
     return pack
@@ -594,6 +611,8 @@ WRITER_SERIES = frozenset(
 )
 STALE_FOREIGN_LAG = 60
 WRITER_ANOMALY_CAP = 3
+# Newest statements scanned for a parsable vote (title-only rows are skipped).
+FOMC_STATEMENT_SCAN = 6
 # Enough for every bucket's best row (~27 today) plus a second round.
 WRITER_NEWS_CAP = 32
 # The Finnhub wire is the broadest world feed; it gets three slots per round.
@@ -629,6 +648,8 @@ def writer_pack(pack: dict[str, Any]) -> dict[str, Any]:
         "yields_live": pack.get("yields_live") or [],
         "extended_hours": (pack.get("extended_hours") or [])[:WRITER_EXTENDED_CAP],
         "session": pack.get("session"),
+        "sep": pack.get("sep"),
+        "fomc_vote": pack.get("fomc_vote"),
     }
 
 
