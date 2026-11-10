@@ -6,6 +6,10 @@ from typing import Any
 
 TICKER_RE = re.compile(r"(?<![A-Z])\^?[A-Z]{2,5}\b")
 PERCENT_RE = re.compile(r"(?<![A-Za-z0-9])([+-]?\d+(?:\.\d+)?)%")
+BP_RE = re.compile(r"(?<![A-Za-z0-9.])([+-]?\d+(?:\.\d+)?)\s?bp\b")
+# "10-2 vote", "a 10 – 2 vote": a tally near the word vote; not dates or "3-3/4".
+TALLY_RE = re.compile(r"(?<![\d\-/.])(\d{1,2})\s?[–—-]\s?(\d{1,2})(?![\d/])")
+TALLY_WINDOW = 25
 STOP = frozenset(
     {
         "AI",
@@ -86,6 +90,37 @@ def citation_issues(pack: dict[str, Any], text: str) -> list[str]:
         decimals = len(raw.split(".", 1)[1]) if "." in raw else 0
         if not _cited_number(value, numbers, decimals):
             issues.append(f"pct:{match.group(0)}")
+    for match in BP_RE.finditer(text):
+        if not _cited_bp(match.group(1), numbers, haystack):
+            issues.append(f"bp:{match.group(0)}")
+    issues.extend(_tally_issues(pack, text))
+    return issues
+
+
+def _cited_bp(raw: str, numbers: list[float], haystack: str) -> bool:
+    """A bp figure is a pack number at that precision; the sign may be carried by a verb.
+
+    Outcome labels such as "Hike 25bp" are pack strings, so "25bp" is cited too.
+    """
+    digits = raw.lstrip("+-")
+    if f"{digits}bp" in haystack:
+        return True
+    value = float(digits)
+    decimals = len(digits.split(".", 1)[1]) if "." in digits else 0
+    magnitudes = [abs(item) for item in numbers]
+    return any(_number_matches(value, item, decimals) for item in magnitudes)
+
+
+def _tally_issues(pack: dict[str, Any], text: str) -> list[str]:
+    vote = pack.get("fomc_vote") if isinstance(pack.get("fomc_vote"), dict) else {}
+    allowed = (vote.get("votes_for"), vote.get("votes_against"))
+    issues: list[str] = []
+    for match in TALLY_RE.finditer(text):
+        window = text[max(0, match.start() - TALLY_WINDOW) : match.end() + TALLY_WINDOW]
+        if "vote" not in window.lower():
+            continue
+        if (int(match.group(1)), int(match.group(2))) != allowed:
+            issues.append(f"tally:{match.group(1)}-{match.group(2)}")
     return issues
 
 
