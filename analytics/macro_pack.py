@@ -49,32 +49,43 @@ def _month_shift(day: date, months: int) -> tuple[int, int]:
     return index // 12, index % 12 + 1
 
 
-def _same_month(points: Points, day: date, months: int) -> Decimal | None:
-    """Value for the calendar month `months` before `day`, or None if that print is missing.
+def _by_month(points: Points) -> dict[tuple[int, int], Decimal]:
+    return {(day.year, day.month): value for day, value in points}
+
+
+def index_changes(points: Points) -> tuple[float | None, float | None, str | None]:
+    """Monthly index: YoY vs the same month a year earlier, MoM vs the prior month.
 
     A gap in the source (e.g. no October 2025 CPI after the shutdown) must not fall back
-    to an older print: that would label a 13-month change as YoY.
+    to an older print: that would label a 13-month change as YoY. The third value says
+    why YoY is missing, so the writer and UI can say so.
     """
-    target = _month_shift(day, months)
-    for when, value in points:
-        if (when.year, when.month) == target:
-            return value
-    return None
+    ordered = sort_points(points)
+    if not ordered:
+        return None, None, None
+    last_date, last = ordered[-1]
+    if last == 0:
+        return None, None, None
+    months = _by_month(ordered)
+    prev = months.get(_month_shift(last_date, 1))
+    target = _month_shift(last_date, 12)
+    year = months.get(target)
+    mom = None if prev is None or prev == 0 else (last / prev - Decimal(1)) * 100
+    yoy = None if year is None or year == 0 else (last / year - Decimal(1)) * 100
+    note = None
+    if year is None:
+        first = ordered[0][0]
+        label = f"{target[0]}-{target[1]:02d}"
+        if (first.year, first.month) > target:
+            note = f"{label} print is outside the loaded window; YoY unavailable"
+        else:
+            note = f"no {label} print in source; YoY unavailable"
+    return _num(yoy, 2), _num(mom, 2), note
 
 
 def yoy_mom_pct(points: Points) -> tuple[float | None, float | None]:
-    """Monthly index: YoY vs the same month a year earlier, MoM vs the prior month."""
-    ordered = sort_points(points)
-    if not ordered:
-        return None, None
-    last_date, last = ordered[-1]
-    if last == 0:
-        return None, None
-    prev = _same_month(ordered, last_date, 1)
-    year = _same_month(ordered, last_date, 12)
-    mom = None if prev is None or prev == 0 else (last / prev - Decimal(1)) * 100
-    yoy = None if year is None or year == 0 else (last / year - Decimal(1)) * 100
-    return _num(yoy, 2), _num(mom, 2)
+    yoy, mom, _ = index_changes(points)
+    return yoy, mom
 
 
 def count_changes(points: Points) -> tuple[float | None, float | None, float | None]:
@@ -133,14 +144,13 @@ def series_row(
         row["w1_bp"] = _bp(w1)
         row["m1_bp"] = _bp(m1)
     elif view == "index_yoy":
-        yoy, mom = yoy_mom_pct(ordered)
+        yoy, mom, note = index_changes(ordered)
         row["value_index"] = _num(last)
         row["yoy_pct"] = yoy
         row["mom_pct"] = mom
         row["value"] = yoy
-        if yoy is None and last_date is not None:
-            year, month = _month_shift(last_date, 12)
-            row["yoy_note"] = f"no {year}-{month:02d} print in source; YoY unavailable"
+        if note:
+            row["yoy_note"] = note
     elif view == "count_diff":
         level, mom, avg = count_changes(ordered)
         label = "weekly" if meta.frequency == "weekly" else "monthly"
@@ -191,7 +201,7 @@ def compute_net_liquidity(rows: Sequence[dict[str, Any]]) -> dict[str, Any] | No
     net_liq_bn = net_liq_mn / 1000
 
     wow_change_bn = None
-    if walcl_row.get("w1") and rrp_row.get("w1") and tga_row.get("w1"):
+    if all(row.get("w1") is not None for row in (walcl_row, rrp_row, tga_row)):
         prior_net_liq = (
             (fed_bs - walcl_row["w1"]) - (rrp_level - rrp_row["w1"]) - (tga_level - tga_row["w1"])
         )
@@ -199,7 +209,7 @@ def compute_net_liquidity(rows: Sequence[dict[str, Any]]) -> dict[str, Any] | No
 
     return {
         "net_liquidity_bn": round(net_liq_bn, 1),
-        "wow_change_bn": round(wow_change_bn, 1) if wow_change_bn else None,
+        "wow_change_bn": round(wow_change_bn, 1) if wow_change_bn is not None else None,
         "components": {
             "fed_bs_bn": round(fed_bs / 1000, 1),
             "rrp_bn": round(rrp_level / 1000, 1),

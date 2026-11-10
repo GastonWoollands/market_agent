@@ -393,6 +393,7 @@ export type OutlookMacro = {
   stale: boolean;
   value: number | null;
   yoy_pct: number | null;
+  yoy_note?: string | null;
   mom_pct: number | null;
   d1_bp: number | null;
   w1_bp: number | null;

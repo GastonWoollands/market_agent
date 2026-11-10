@@ -324,3 +324,13 @@ def test_citation_rejects_invented_precision_but_keeps_rounding() -> None:
 
 def test_citation_allows_saar_unit() -> None:
     assert citation_issues({"macro": [{"value": 3.4}]}, "GDP 3.4 SAAR.") == []
+
+
+def test_coverage_requires_cpi_mom_when_yoy_unavailable() -> None:
+    pack = {"macro": [{"series_id": "CPIAUCSL", "yoy_pct": None, "mom_pct": 0.35}]}
+    assert coverage_issues(pack, "Equities fell.") == [
+        "coverage:CPIAUCSL",
+        "coverage:CPIAUCSL_mom",
+    ]
+    assert coverage_issues(pack, "CPI rose.") == ["coverage:CPIAUCSL_mom"]
+    assert coverage_issues(pack, "CPI rose 0.35% m/m.") == []
