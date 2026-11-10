@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 from typing import Any
 
-from analytics.lookback import sort_points, value_on_or_before, window_deltas
+from analytics.lookback import sort_points, window_deltas
 from store.catalog import FredSeriesItem
 
 Points = Sequence[tuple[date, Decimal]]
@@ -44,15 +44,34 @@ def is_stale(frequency: str, lag: int | None) -> bool:
     return lag > STALE_LAG_DAYS.get(frequency, 45)
 
 
+def _month_shift(day: date, months: int) -> tuple[int, int]:
+    index = day.year * 12 + day.month - 1 - months
+    return index // 12, index % 12 + 1
+
+
+def _same_month(points: Points, day: date, months: int) -> Decimal | None:
+    """Value for the calendar month `months` before `day`, or None if that print is missing.
+
+    A gap in the source (e.g. no October 2025 CPI after the shutdown) must not fall back
+    to an older print: that would label a 13-month change as YoY.
+    """
+    target = _month_shift(day, months)
+    for when, value in points:
+        if (when.year, when.month) == target:
+            return value
+    return None
+
+
 def yoy_mom_pct(points: Points) -> tuple[float | None, float | None]:
+    """Monthly index: YoY vs the same month a year earlier, MoM vs the prior month."""
     ordered = sort_points(points)
     if not ordered:
         return None, None
     last_date, last = ordered[-1]
     if last == 0:
         return None, None
-    prev = ordered[-2][1] if len(ordered) > 1 else None
-    year = value_on_or_before(ordered, last_date - timedelta(days=365))
+    prev = _same_month(ordered, last_date, 1)
+    year = _same_month(ordered, last_date, 12)
     mom = None if prev is None or prev == 0 else (last / prev - Decimal(1)) * 100
     yoy = None if year is None or year == 0 else (last / year - Decimal(1)) * 100
     return _num(yoy, 2), _num(mom, 2)
@@ -119,6 +138,9 @@ def series_row(
         row["yoy_pct"] = yoy
         row["mom_pct"] = mom
         row["value"] = yoy
+        if yoy is None and last_date is not None:
+            year, month = _month_shift(last_date, 12)
+            row["yoy_note"] = f"no {year}-{month:02d} print in source; YoY unavailable"
     elif view == "count_diff":
         level, mom, avg = count_changes(ordered)
         label = "weekly" if meta.frequency == "weekly" else "monthly"
@@ -170,8 +192,8 @@ def compute_net_liquidity(rows: Sequence[dict[str, Any]]) -> dict[str, Any] | No
 
     wow_change_bn = None
     if walcl_row.get("w1") and rrp_row.get("w1") and tga_row.get("w1"):
-        prior_net_liq = (fed_bs - walcl_row["w1"]) - (rrp_level - rrp_row["w1"]) - (
-            tga_level - tga_row["w1"]
+        prior_net_liq = (
+            (fed_bs - walcl_row["w1"]) - (rrp_level - rrp_row["w1"]) - (tga_level - tga_row["w1"])
         )
         wow_change_bn = (net_liq_mn - prior_net_liq) / 1000
 

@@ -577,6 +577,7 @@ WRITER_SERIES = frozenset(
         "T10YIE",
         "DFF",
         "CPIAUCSL",
+        "CPILFESL",
         "PCEPILFE",
         "PAYEMS",
         "ICSA",

@@ -18,6 +18,30 @@ def test_yoy_mom_from_index() -> None:
     assert mom == 0.97  # 312/309 - 1
 
 
+def test_yoy_none_when_prior_year_month_missing() -> None:
+    # FRED has no October 2025 CPI (shutdown): Oct-26 vs Sep-25 is 13 months, not YoY.
+    points = [
+        (date(2025, 9, 1), Decimal("324.245")),
+        (date(2025, 11, 1), Decimal("325.063")),
+        (date(2026, 9, 1), Decimal("336.298")),
+        (date(2026, 10, 1), Decimal("337.476")),
+    ]
+    yoy, mom = yoy_mom_pct(points)
+    assert yoy is None
+    assert mom == 0.35
+
+
+def test_mom_none_when_prior_month_missing() -> None:
+    points = [
+        (date(2024, 11, 1), Decimal("300")),
+        (date(2025, 9, 1), Decimal("310")),
+        (date(2025, 11, 1), Decimal("312")),
+    ]
+    yoy, mom = yoy_mom_pct(points)
+    assert yoy == 4.0
+    assert mom is None
+
+
 def test_count_changes_payrolls() -> None:
     points = [
         (date(2026, 5, 1), Decimal("159000")),
