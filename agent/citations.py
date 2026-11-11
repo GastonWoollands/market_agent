@@ -96,12 +96,14 @@ def coverage_issues(pack: dict[str, Any], text: str) -> list[str]:
     for row in pack.get("macro") or []:
         if not isinstance(row, dict):
             continue
-        if row.get("series_id") == "CPIAUCSL" and row.get("yoy_pct") is not None:
-            yoy = row["yoy_pct"]
-            if "cpiaucsl" not in blob and "cpi" not in blob:
+        if row.get("series_id") == "CPIAUCSL":
+            yoy, mom = row.get("yoy_pct"), row.get("mom_pct")
+            if (yoy is not None or mom is not None) and "cpi" not in blob:
                 issues.append("coverage:CPIAUCSL")
-            if str(yoy) not in text:
+            if yoy is not None and str(yoy) not in text:
                 issues.append("coverage:CPIAUCSL_yoy")
+            elif yoy is None and mom is not None and str(mom) not in text:
+                issues.append("coverage:CPIAUCSL_mom")
         if row.get("series_id") == "ICSA" and row.get("change_label") == "weekly":
             mentions = "icsa" in blob or "claims" in blob
             if mentions and "weekly" not in blob:

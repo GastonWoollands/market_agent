@@ -18,6 +18,30 @@ def test_yoy_mom_from_index() -> None:
     assert mom == 0.97  # 312/309 - 1
 
 
+def test_yoy_none_when_prior_year_month_missing() -> None:
+    # FRED has no October 2025 CPI (shutdown): Oct-26 vs Sep-25 is 13 months, not YoY.
+    points = [
+        (date(2025, 9, 1), Decimal("324.245")),
+        (date(2025, 11, 1), Decimal("325.063")),
+        (date(2026, 9, 1), Decimal("336.298")),
+        (date(2026, 10, 1), Decimal("337.476")),
+    ]
+    yoy, mom = yoy_mom_pct(points)
+    assert yoy is None
+    assert mom == 0.35
+
+
+def test_mom_none_when_prior_month_missing() -> None:
+    points = [
+        (date(2024, 11, 1), Decimal("300")),
+        (date(2025, 9, 1), Decimal("310")),
+        (date(2025, 11, 1), Decimal("312")),
+    ]
+    yoy, mom = yoy_mom_pct(points)
+    assert yoy == 4.0
+    assert mom is None
+
+
 def test_count_changes_payrolls() -> None:
     points = [
         (date(2026, 5, 1), Decimal("159000")),
@@ -295,3 +319,61 @@ def test_judgment_maps_boj_to_yen_and_ecb_to_deposit() -> None:
     assert by_title["BoJ decision"]["last_print"] == "DEXJPUS value 148.2"
     assert by_title["ECB decision"]["last_print"] == "ECBDFR value 2.0"
     assert judgment["co_moves"][0]["hint"] == "fx_jpy"
+
+
+def _cpi_meta() -> FredSeriesItem:
+    return FredSeriesItem(
+        id="CPIAUCSL",
+        name="CPI",
+        unit="index",
+        category="inflation",
+        frequency="monthly",
+        pack_view="index_yoy",
+    )
+
+
+def test_series_row_notes_source_gap_across_january() -> None:
+    # Jan-27 YoY needs Jan-26; it is missing although the window starts earlier.
+    points = [
+        (date(2025, 12, 1), Decimal("300")),
+        (date(2026, 2, 1), Decimal("301")),
+        (date(2026, 12, 1), Decimal("309")),
+        (date(2027, 1, 1), Decimal("310")),
+    ]
+    row = series_row(_cpi_meta(), points, as_of=date(2027, 2, 12))
+    assert row["yoy_pct"] is None
+    assert row["mom_pct"] == 0.32
+    assert row["yoy_note"] == "no 2026-01 print in source; YoY unavailable"
+
+
+def test_series_row_notes_window_not_source() -> None:
+    points = [(date(2026, 3, 1), Decimal("300")), (date(2026, 4, 1), Decimal("301"))]
+    row = series_row(_cpi_meta(), points, as_of=date(2026, 5, 12))
+    assert row["yoy_note"] == "2025-04 print is outside the loaded window; YoY unavailable"
+
+
+def test_series_row_has_no_note_when_yoy_present() -> None:
+    points = [(date(2025, 4, 1), Decimal("300")), (date(2026, 4, 1), Decimal("309"))]
+    row = series_row(_cpi_meta(), points, as_of=date(2026, 5, 12))
+    assert row["yoy_pct"] == 3.0
+    assert "yoy_note" not in row
+
+
+def test_judgment_falls_back_to_cpi_mom_and_pce_anchor() -> None:
+    macro = [
+        {"series_id": "CPIAUCSL", "yoy_pct": None, "mom_pct": 0.35},
+        {"series_id": "PCEPILFE", "yoy_pct": 3.12, "mom_pct": 0.32},
+    ]
+    judgment = build_judgment(
+        facts={"breakeven_10y": 2.22},
+        macro=macro,
+        odds=[],
+        events=[{"date": "2026-12-10", "kind": "cpi", "title": "CPI (November)"}],
+        as_of=date(2026, 11, 10),
+        risk_on=None,
+    )
+    assert judgment["regime"]["inflation"] == "market_below_trailing"
+    assert any("CPIAUCSL mom_pct 0.35" in item for item in judgment["takeaways"])
+    assert judgment["invalidation"] == "CPIAUCSL mom_pct above 0.35."
+    assert judgment["watch"][0]["last_print"] == "CPIAUCSL mom_pct 0.35"
+    assert any(t["right"] == "PCEPILFE yoy_pct 3.12" for t in judgment["tensions"])

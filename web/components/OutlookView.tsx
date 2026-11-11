@@ -697,7 +697,10 @@ function MacroSnapshot({ rows, title = "Spine" }: { rows: OutlookMacro[]; title?
                           {row.series_id}
                         </span>
                       </td>
-                      <td className={cn("px-4 py-3 text-right tabular-nums", dim ? "text-slate-600" : "text-slate-300")}>
+                      <td
+                        className={cn("px-4 py-3 text-right tabular-nums", dim ? "text-slate-600" : "text-slate-300")}
+                        title={row.yoy_note ?? undefined}
+                      >
                         {print}
                       </td>
                       <td className={cn("px-4 py-3 text-right tabular-nums", changeClass(change.signed))}>
@@ -899,7 +902,10 @@ function groupedSnapshot(rows: OutlookMacro[]): { category: string; rows: Outloo
 
 function snapshotPrint(row: OutlookMacro): string {
   if (row.pack_view === "index_yoy") {
-    return row.yoy_pct == null ? "—" : `${row.yoy_pct.toFixed(2)}% YoY`;
+    if (row.yoy_pct == null) {
+      return row.yoy_note ? "YoY n/a" : "—";
+    }
+    return `${row.yoy_pct.toFixed(2)}% YoY`;
   }
   if (row.pack_view === "count_diff") {
     const change = row.print_change ?? row.mom_change;

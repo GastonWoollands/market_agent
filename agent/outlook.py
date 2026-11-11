@@ -607,7 +607,9 @@ def _yoy_sentence(pack: dict[str, Any], series_id: str) -> str:
     mom = row.get("mom_pct")
     as_of = row.get("as_of") or "unavailable"
     if yoy is None:
-        return f"{series_id} unavailable."
+        if mom is None:
+            return f"{series_id} unavailable."
+        return f"{series_id} mom_pct {mom} as of {as_of} (YoY unavailable)."
     if mom is None:
         return f"{series_id} yoy_pct {yoy} as of {as_of}."
     return f"{series_id} yoy_pct {yoy} mom_pct {mom} as of {as_of}."

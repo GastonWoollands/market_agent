@@ -71,6 +71,12 @@ def build_judgment(
     fwd = _num(facts.get("forward_5y5y"))
     cpi_yoy = _num(cpi.get("yoy_pct"))
     pce_yoy = _num(pce.get("yoy_pct"))
+    cpi_mom = _num(cpi.get("mom_pct"))
+    # CPI YoY can be unavailable (source gap); core PCE YoY is then the trailing anchor.
+    if cpi_yoy is not None:
+        trailing_id, trailing = "CPIAUCSL", cpi_yoy
+    else:
+        trailing_id, trailing = "PCEPILFE", pce_yoy
     pay_chg = _change(pay)
     claims = _change(icsa)
     dgs10 = _num(facts.get("dgs10"))
@@ -82,8 +88,8 @@ def build_judgment(
     fed2y = _num(facts.get("fed_vs_2y_bp"))
 
     inflation = None
-    if be is not None and cpi_yoy is not None:
-        inflation = "market_below_trailing" if be < cpi_yoy else "market_above_trailing"
+    if be is not None and trailing is not None:
+        inflation = "market_below_trailing" if be < trailing else "market_above_trailing"
     labor = None
     if pay_chg is not None:
         labor = "one_weak_print" if pay_chg < 0 else "payrolls_positive"
@@ -91,11 +97,11 @@ def build_judgment(
     policy, odds_read = _policy_read(odds)
 
     tensions: list[dict[str, str]] = []
-    if be is not None and cpi_yoy is not None:
+    if be is not None and trailing is not None:
         tensions.append(
             {
                 "left": f"10Y BE {be}",
-                "right": f"CPIAUCSL yoy_pct {cpi_yoy}",
+                "right": f"{trailing_id} yoy_pct {trailing}",
                 "note": inflation or "unavailable",
             }
         )
@@ -149,6 +155,11 @@ def build_judgment(
         takeaways.append(
             f"breakeven_10y {be} vs CPIAUCSL yoy_pct {cpi_yoy}.{pce_bit}"
         )
+    elif cpi_mom is not None:
+        anchor = ""
+        if be is not None and pce_yoy is not None:
+            anchor = f" breakeven_10y {be} vs PCEPILFE yoy_pct {pce_yoy}."
+        takeaways.append(f"CPIAUCSL mom_pct {cpi_mom} (YoY unavailable).{anchor}")
     if pay_chg is not None:
         takeaways.append(f"PAYEMS print_change {pay_chg}.")
     if claims is not None:
@@ -172,6 +183,8 @@ def build_judgment(
             series_id, key = pair
             row = _row(macro, series_id)
             value = row.get(key)
+            if value is None and key == "yoy_pct" and row.get("mom_pct") is not None:
+                key, value = "mom_pct", row["mom_pct"]
             if value is not None:
                 last_print = f"{series_id} {key} {value}"
                 why = f"last {series_id} {value}"
@@ -191,6 +204,8 @@ def build_judgment(
         invalidation = f"Second negative PAYEMS print_change after {pay_chg}."
     elif cpi_yoy is not None:
         invalidation = f"CPIAUCSL yoy_pct above {cpi_yoy}."
+    elif cpi_mom is not None:
+        invalidation = f"CPIAUCSL mom_pct above {cpi_mom}."
 
     abstract_parts = list(takeaways)
     if comms and comms.get("event") and takeaways:

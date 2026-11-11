@@ -341,6 +341,7 @@ class OutlookMacro(BaseModel):
     stale: bool = False
     value: float | None = None
     yoy_pct: float | None = None
+    yoy_note: str | None = None
     mom_pct: float | None = None
     d1_bp: float | None = None
     w1_bp: float | None = None

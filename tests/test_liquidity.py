@@ -98,3 +98,14 @@ def test_compute_net_liquidity_falling_liquidity():
     # WoW change = 6200 - 6380 = -180B
     assert result["wow_change_bn"] < 0
     assert abs(result["wow_change_bn"] + 180.0) < 1.0
+
+
+def test_compute_net_liquidity_keeps_zero_weekly_change():
+    rows = [
+        {"series_id": "WALCL", "value": 6_700_000.0, "w1": 0.0},
+        {"series_id": "RRPONTSYD", "value": 0.0, "w1": 0.0},
+        {"series_id": "WTREGEN", "value": 900_000.0, "w1": 0.0},
+    ]
+    result = compute_net_liquidity(rows)
+    assert result is not None
+    assert result["wow_change_bn"] == 0.0
