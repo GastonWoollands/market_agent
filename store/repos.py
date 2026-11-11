@@ -523,6 +523,14 @@ def upsert_macro_observations(session: Session, points: list[MacroPoint]) -> int
     return len(rows)
 
 
+def replace_macro_observations(session: Session, series_id: str, points: list[MacroPoint]) -> int:
+    """Swap a series' stored points for this fetch (SEP: one release at a time)."""
+    if not points:
+        return 0
+    session.execute(delete(MacroObservation).where(MacroObservation.series_id == series_id))
+    return upsert_macro_observations(session, points)
+
+
 def observation_count_for_series(session: Session, series_id: str) -> int:
     stmt = (
         select(func.count())
@@ -859,10 +867,16 @@ def latest_policy_items(
     *,
     since: datetime | None = None,
     limit: int = 8,
+    kind: str | None = None,
+    until: datetime | None = None,
 ) -> list[PolicyItem]:
     stmt = select(PolicyItem)
     if since is not None:
         stmt = stmt.where(PolicyItem.published_at >= since)
+    if until is not None:
+        stmt = stmt.where(PolicyItem.published_at < until)
+    if kind is not None:
+        stmt = stmt.where(PolicyItem.kind == kind)
     stmt = stmt.order_by(PolicyItem.published_at.desc()).limit(limit)
     return list(session.execute(stmt).scalars())
 
