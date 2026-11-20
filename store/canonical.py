@@ -18,6 +18,16 @@ class DailyBar(BaseModel):
     volume: int = 0
 
 
+class StockSplit(BaseModel):
+    """A split from the Yahoo history. `ratio` = new shares per old (5 = 5:1, 0.2 = 1:5)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    yahoo_symbol: str
+    date: date
+    ratio: Decimal
+
+
 class IntradayBar(BaseModel):
     """5m (and similar) bars. Do not reuse DailyBar — that type collapses to a session date."""
 

@@ -9,6 +9,7 @@ from ingest.yahoo.parse import (
     bars_from_intraday,
     listing_from_chart_meta,
     snapshot_from_chart_meta,
+    splits_from_history,
 )
 
 NY = ZoneInfo("America/New_York")
@@ -100,3 +101,22 @@ def test_listing_from_chart_meta_uses_short_name() -> None:
     )
     assert name == "NVIDIA Corporation"
     assert exchange == "NMS"
+
+
+def test_splits_from_history_reads_forward_and_reverse() -> None:
+    days = [SESSION.replace(day=d) for d in (14, 15, 16)]
+    frame = pd.DataFrame(
+        {"Close": [1.0, 1.0, 1.0], "Stock Splits": [0.0, 5.0, 0.2]},
+        index=days,
+    )
+    splits = splits_from_history(frame, "NOW")
+    assert [(item.date.day, item.ratio) for item in splits] == [
+        (15, Decimal("5.0")),
+        (16, Decimal("0.2")),
+    ]
+    assert splits[0].yahoo_symbol == "NOW"
+
+
+def test_splits_from_history_without_actions_column() -> None:
+    frame = pd.DataFrame({"Close": [1.0]}, index=[SESSION])
+    assert splits_from_history(frame, "SPY") == []

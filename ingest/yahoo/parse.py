@@ -14,6 +14,7 @@ from store.canonical import (
     OptionUnderlying,
     QuarterlyStatement,
     QuoteSnapshot,
+    StockSplit,
 )
 
 ET = ZoneInfo("America/New_York")
@@ -96,6 +97,22 @@ def bars_from_history(frame: Any, symbol: str) -> list[DailyBar]:
     if not bars:
         raise YahooParseError(f"{symbol}: no usable daily bars")
     return bars
+
+
+def splits_from_history(frame: Any, symbol: str) -> list[StockSplit]:
+    """Split events from a `history(actions=True)` frame. No column or no events → []."""
+    if frame is None or getattr(frame, "empty", True):
+        return []
+    if "Stock Splits" not in getattr(frame, "columns", ()):
+        return []
+    splits: dict[date, StockSplit] = {}
+    for index_value, row in frame.iterrows():
+        ratio = _dec(row["Stock Splits"])
+        if ratio is None or ratio <= 0 or ratio == 1:
+            continue
+        day = _session_date(index_value)
+        splits[day] = StockSplit(yahoo_symbol=symbol, date=day, ratio=ratio)
+    return [splits[day] for day in sorted(splits)]
 
 
 def bars_from_intraday(frame: Any, symbol: str, interval: str) -> list[IntradayBar]:

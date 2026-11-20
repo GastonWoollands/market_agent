@@ -12,6 +12,7 @@ from store.repos import (
     upsert_instrument,
     upsert_intraday_bars,
     upsert_quotes,
+    upsert_stock_splits,
     upsert_universe,
 )
 from store.tickers import TickerError, normalize_us_ticker
@@ -55,8 +56,9 @@ def _hydrate(ticker: str, yahoo_symbol: str, *, need_chart: bool, need_quote: bo
     try:
         with YahooClient() as client:
             bars = []
+            splits = []
             if need_chart:
-                bars = client.fetch_chart(yahoo_symbol, range_="5y")
+                bars, splits = client.fetch_history(yahoo_symbol, range_="5y")
             meta = client.chart_meta(yahoo_symbol)
             name, exchange = listing_from_chart_meta(ticker, meta)
             quotes = client.fetch_quotes([yahoo_symbol]) if need_quote or need_chart else []
@@ -86,6 +88,7 @@ def _hydrate(ticker: str, yahoo_symbol: str, *, need_chart: bool, need_quote: bo
             instrument = existing
         if bars:
             upsert_daily_bars(session, instrument.id, bars)
+            upsert_stock_splits(session, instrument.id, splits)
         if quotes:
             mapped = [
                 (instrument.id, snap) for snap in quotes if snap.yahoo_symbol == yahoo_symbol

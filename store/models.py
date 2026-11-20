@@ -112,6 +112,19 @@ class BarDaily(Base):
     instrument: Mapped[Instrument] = relationship()
 
 
+class StockSplitRow(Base):
+    """Yahoo split events. Yahoo closes are split-adjusted; SEC share counts are as reported."""
+
+    __tablename__ = "stock_split"
+
+    instrument_id: Mapped[int] = mapped_column(
+        ForeignKey("instrument.id", ondelete="CASCADE"), primary_key=True
+    )
+    date: Mapped[date] = mapped_column(Date, primary_key=True)
+    ratio: Mapped[Decimal] = mapped_column(Numeric(18, 8), nullable=False)
+    source: Mapped[str] = mapped_column(String(16), nullable=False)
+
+
 class QuoteLatest(Base):
     __tablename__ = "quote_latest"
 

@@ -84,6 +84,21 @@ def test_ticker_desk_reads_ratios_and_read_time_ev() -> None:
     assert page.hint is None
 
 
+def test_desk_puts_pre_split_shares_on_the_close_basis() -> None:
+    # 5:1 split between the two filings: raw counts read as +400% dilution.
+    ttm = [
+        _ttm(date(2025, 6, 30), revenue=800.0, ebitda=160.0, shares=2.0),
+        _ttm(date(2026, 6, 30), shares=10.2),
+    ]
+    split = [(date(2025, 12, 18), 5)]
+    desk = build_ticker(_name(ttm=ttm, splits=split), _bench(), today=TODAY).desk
+    assert isclose(desk.share_change_1y, 10.2 / 10 - 1)
+    # Split newer than the last filing: the read-time market cap uses post-split shares.
+    newer = _name(ttm=ttm[1:], splits=[(date(2026, 9, 1), 2)])
+    page = build_ticker(newer, _bench(), today=TODAY)
+    assert isclose(page.desk.market_cap, page.price.close * 20.4)
+
+
 def test_stored_valuation_wins_only_for_members() -> None:
     value = SimpleNamespace(
         as_of=TODAY,

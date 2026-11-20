@@ -34,6 +34,22 @@ def test_fetch_chart_passes_caret_symbol() -> None:
     client.close()
 
 
+def test_fetch_history_returns_bars_and_splits_from_one_request() -> None:
+    frame = _frame()
+    frame["Stock Splits"] = [4.0]
+    ticker = MagicMock()
+    ticker.history.return_value = frame
+    with patch("ingest.yahoo.client.yf.Ticker", return_value=ticker):
+        client = YahooClient(session=object(), rate=100.0)
+        bars, splits = client.fetch_history("ANET", range_="5y")
+    ticker.history.assert_called_once()
+    assert ticker.history.call_args.kwargs["actions"] is True
+    assert ticker.history.call_args.kwargs["auto_adjust"] is False
+    assert len(bars) == 1
+    assert [item.ratio for item in splits] == [4]
+    client.close()
+
+
 def test_fetch_chart_maps_rate_limit() -> None:
     ticker = MagicMock()
     ticker.history.side_effect = YFRateLimitError()

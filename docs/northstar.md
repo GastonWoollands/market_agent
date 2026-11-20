@@ -127,7 +127,7 @@ Frozen for v1. A new vendor is a contract change: update this section first. Cat
 
 | Input | Vendor | Typical cadence |
 |-------|--------|-----------------|
-| Daily OHLCV, sector ETFs, proxy levers (gold = GLD), same-day Treasury yield indices (^IRX/^FVX/^TNX/^TYX) and ICE dollar index (DXY = `DX-Y.NYB`) | Yahoo via `yfinance` behind `YahooClient` | 16:30 ET |
+| Daily OHLCV plus split events (same request), sector ETFs, proxy levers (gold = GLD), same-day Treasury yield indices (^IRX/^FVX/^TNX/^TYX) and ICE dollar index (DXY = `DX-Y.NYB`) | Yahoo via `yfinance` behind `YahooClient` | 16:30 ET |
 | Quote tape (delayed) | Same yfinance session | 60s in session when you re-run |
 | Pre/post 5m gaps | Yahoo 5m | ~07:30 ET, **tape + watchlist only** |
 | Yields, VIX, CPI/PCE (as indexes; pack computes YoY/MoM), OAS, DXY (spine), WTI/Brent/copper, real yield, breakevens, payrolls, claims, durable goods, debt/GDP, ECB/BOJ/PBOC policy, dollar crosses (EUR/JPY/GBP/MXN/BRL/CNY), lag-stamped foreign 10Ys, FOMC SEP (fed funds median / range / central tendency by year, longer-run median, GDP / unemployment / PCE / core PCE medians; `pack_view: sep`, kept out of Live and macro rows) | FRED (`config/fred_series.yaml`) | 06:00 ET |
@@ -186,7 +186,7 @@ Keep vendor payloads out of hot tables. Polymarket `raw` JSONB is the exception.
 | Group | Tables | Purpose |
 |-------|--------|---------|
 | Identity | `instrument`, `universe`, `universe_member` | Tickers; `tape` / `valuation` / `watchlist` (later `gems`). `sector` = approximate GICS from the SEC SIC code (`config/sic_sectors.yaml`), `industry` = SEC `sicDescription` |
-| Market | `bar_daily`, `quote_latest`, `bar_intraday` | Daily history, delayed last, 5m for tape ∪ watchlist only |
+| Market | `bar_daily`, `quote_latest`, `bar_intraday`, `stock_split` | Daily history, delayed last, 5m for tape ∪ watchlist only; Yahoo split events (closes are split-adjusted, SEC share counts are not) |
 | Macro | `macro_series`, `macro_observation`, `odds_snapshot`, `regime_snapshot` | FRED prints; Polymarket implied yes keyed by catalog slot; daily growth / inflation / policy / volatility classification from stored FRED |
 | Fundamentals | `metric_ttm`, `metric_fy` | Point-in-time TTM and fiscal-year facts from SEC companyfacts (no `financial_fact` warehouse). `metric_ttm.source` is `sec` or `yahoo` (curated foreign filers only, labeled vendor data). TTM net income and equity feed P/E, P/B, ROE for banks. FY is for growth, accrual, gems — not an on-screen F/Z |
 | Derived | `valuation_daily`, `rrg_point`, `return_stats`, `risk_stats`, `opportunity_score`, `score_exclusion`, `quant_score` | Python → Postgres; the writer never computes these. `score_exclusion` lists valuation members kept out of the ranking by a data-quality rule, with the numbers behind it. `risk_stats` is per-name vol / downside vol / beta / drawdown from adjusted closes. `quant_score` holds a gem flag and ratio snapshot; legacy `f_score` / `z_score` columns stay NULL |
@@ -204,7 +204,7 @@ All of this is Python → Postgres. The writer never computes a multiple. Weight
 
 **RRG:** JdK RS-Ratio / RS-Momentum vs SPY. `analytics/rrg.py`. Quadrants Leading / Weakening / Lagging / Improving.
 
-**Valuation:** point-in-time TTM EBITDA; EV = market cap + net debt; percentile vs that name’s own 5y distribution; 1y decomposition ≈ EBITDA growth × multiple change. `analytics/valuation.py`.
+**Valuation:** point-in-time TTM EBITDA; EV = market cap + net debt, with SEC share counts put on the split basis of the closes (`analytics/splits.py`); percentile vs that name’s own 5y distribution; 1y decomposition ≈ EBITDA growth × multiple change. `analytics/valuation.py`.
 
 **Opportunities — quant first, LLM second**
 
