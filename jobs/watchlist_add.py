@@ -90,9 +90,7 @@ def _hydrate(ticker: str, yahoo_symbol: str, *, need_chart: bool, need_quote: bo
             upsert_daily_bars(session, instrument.id, bars)
             upsert_stock_splits(session, instrument.id, splits)
         if quotes:
-            mapped = [
-                (instrument.id, snap) for snap in quotes if snap.yahoo_symbol == yahoo_symbol
-            ]
+            mapped = [(instrument.id, snap) for snap in quotes if snap.yahoo_symbol == yahoo_symbol]
             upsert_quotes(session, mapped)
         if intraday:
             upsert_intraday_bars(session, instrument.id, intraday)

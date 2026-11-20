@@ -4,7 +4,7 @@ from math import isclose
 
 import pytest
 
-from analytics.splits import ShareBasis
+from analytics.splits import ShareBasis, is_whole_split
 
 Q = [date(2025, 3, 31), date(2025, 6, 30), date(2025, 9, 30), date(2025, 12, 31), date(2026, 3, 31)]
 
@@ -141,3 +141,40 @@ def test_spin_off_adjustment_near_one_scales_by_date() -> None:
     factors, matches = ShareBasis([(date(2025, 10, 30), Decimal("1.061"))]).explain(rows)
     assert factors == [1.061, 1.061, 1.0]
     assert matches[0].rule == "date"
+
+
+def test_one_jump_explains_one_split() -> None:
+    # Two 2:1 splits two quarters apart; the second is newer than the last filing and must not
+    # reuse the first one's jump through the two-rows-early candidate.
+    rows = _rows(100.0, 200.0, 201.0)
+    basis = ShareBasis([(date(2025, 6, 15), Decimal("2")), (date(2025, 10, 15), Decimal("2"))])
+    factors, matches = basis.explain(rows)
+    assert [m.rule for m in matches] == ["straddle", "after_last_filing"]
+    assert factors == [4.0, 2.0, 2.0]
+
+
+def test_spin_off_factor_far_from_one_scales_by_date() -> None:
+    # T: Yahoo books the 2022 spin-off as 1.324; the share count does not move.
+    rows = [(date(2021, 12, 31), 7141.0), (date(2022, 3, 31), 7142.9), (date(2022, 6, 30), 7159.0)]
+    factors, matches = ShareBasis([(date(2022, 4, 11), Decimal("1.324"))]).explain(rows)
+    assert factors == [1.324, 1.324, 1.0]
+    assert matches[0].rule == "date"
+
+
+@pytest.mark.parametrize(
+    ("ratio", "whole"),
+    [
+        (2.0, True),
+        (1.5, True),
+        (5.0, True),
+        (0.1, True),
+        (1 / 12, True),
+        (1.061, False),
+        (1.528, False),
+        (1.941, False),
+        (0.581, False),
+        (0.9535, False),
+    ],
+)
+def test_is_whole_split(ratio: float, whole: bool) -> None:
+    assert is_whole_split(ratio) is whole

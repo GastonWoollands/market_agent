@@ -1801,9 +1801,7 @@ def options_market_dates(session: Session) -> set[date]:
     return set(session.scalars(select(OptionsMarketStats.as_of).distinct()))
 
 
-def options_market_history(
-    session: Session, *, start: date
-) -> list[OptionsMarketStats]:
+def options_market_history(session: Session, *, start: date) -> list[OptionsMarketStats]:
     stmt = (
         select(OptionsMarketStats)
         .where(OptionsMarketStats.as_of >= start)
