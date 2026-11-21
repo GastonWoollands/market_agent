@@ -204,7 +204,7 @@ All of this is Python → Postgres. The writer never computes a multiple. Weight
 
 **RRG:** JdK RS-Ratio / RS-Momentum vs SPY. `analytics/rrg.py`. Quadrants Leading / Weakening / Lagging / Improving.
 
-**Valuation:** point-in-time TTM EBITDA; EV = market cap + net debt, with SEC share counts put on the split basis of the closes (`analytics/splits.py`); percentile vs that name’s own 5y distribution; 1y decomposition ≈ EBITDA growth × multiple change. `analytics/valuation.py`.
+**Valuation:** point-in-time TTM EBITDA; EV = market cap + net debt, with SEC share counts put on the split basis of the closes (`analytics/splits.py`). The SEC count (`ingest/sec/shares.py`) is the cover-page or balance-sheet count up to 200 days old, else the period's weighted average, else either up to 400 days old; a count 1000× off its reference (average, or net income ÷ basic EPS) is a unit slip and is rescaled, and a name with no usable count (per-class-only tags, e.g. V, COKE) has no shares rather than a stale one; percentile vs that name’s own 5y distribution; 1y decomposition ≈ EBITDA growth × multiple change. `analytics/valuation.py`.
 
 **Opportunities — quant first, LLM second**
 

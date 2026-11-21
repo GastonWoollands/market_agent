@@ -3,10 +3,14 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import date, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any
 
 from ingest.sec.errors import SecParseError
+from ingest.sec.shares import ShareCounts
+from ingest.sec.xbrl import as_date as _as_date
+from ingest.sec.xbrl import as_decimal as _as_decimal
+from ingest.sec.xbrl import unit_rows as _unit_rows
 from store.canonical import MetricFy, MetricTtm, SecProfile, SecTicker
 
 ALLOWED_EXCHANGES = {
@@ -117,14 +121,6 @@ CASH_CONCEPTS = (
     ("us-gaap", "CashAndCashEquivalentsAtCarryingValue"),
     ("us-gaap", "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents"),
     ("ifrs-full", "CashAndCashEquivalents"),
-)
-SHARE_CONCEPTS = (
-    ("dei", "EntityCommonStockSharesOutstanding"),
-    ("us-gaap", "CommonStockSharesOutstanding"),
-)
-WEIGHTED_SHARE_CONCEPTS = (
-    ("us-gaap", "WeightedAverageNumberOfSharesOutstandingBasic"),
-    ("us-gaap", "WeightedAverageNumberOfDilutedSharesOutstanding"),
 )
 NI_CONCEPTS = (
     ("us-gaap", "NetIncomeLoss"),
@@ -862,78 +858,4 @@ def _debt_on(facts: dict[str, Any], as_of: date) -> Decimal | None:
 
 
 def _latest_shares(facts: dict[str, Any], as_of: date) -> Decimal | None:
-    instant = _latest_instant(facts, SHARE_CONCEPTS, as_of, units=("shares", "pure"))
-    if instant is not None:
-        return instant
-    best: tuple[tuple[date, int], Decimal] | None = None
-    for taxonomy, concept in WEIGHTED_SHARE_CONCEPTS:
-        for row in _unit_rows(facts, taxonomy, concept, ("shares", "pure")):
-            start = _as_date(row.get("start"))
-            end = _as_date(row.get("end"))
-            value = _as_decimal(row.get("val"))
-            if end is None or value is None or value <= 0 or end > as_of:
-                continue
-            days = (end - start).days if start is not None else 90
-            score = (end, 1 if 60 <= days <= 120 else 0)
-            if best is None or score > best[0]:
-                best = (score, value)
-    return None if best is None else best[1]
-
-
-def _latest_instant(
-    facts: dict[str, Any],
-    concepts: tuple[tuple[str, str], ...],
-    as_of: date,
-    *,
-    units: tuple[str, ...] = ("USD",),
-) -> Decimal | None:
-    best: tuple[date, Decimal] | None = None
-    for taxonomy, concept in concepts:
-        for row in _unit_rows(facts, taxonomy, concept, units):
-            if row.get("start"):
-                continue
-            end = _as_date(row.get("end"))
-            value = _as_decimal(row.get("val"))
-            if end is None or value is None or end > as_of:
-                continue
-            if best is None or end > best[0]:
-                best = (end, value)
-    return None if best is None else best[1]
-
-
-def _unit_rows(
-    facts: dict[str, Any], taxonomy: str, concept: str, units: tuple[str, ...]
-) -> list[dict[str, Any]]:
-    node = facts.get(taxonomy)
-    if not isinstance(node, dict):
-        return []
-    concept_node = node.get(concept)
-    if not isinstance(concept_node, dict):
-        return []
-    unit_map = concept_node.get("units")
-    if not isinstance(unit_map, dict):
-        return []
-    rows: list[dict[str, Any]] = []
-    for unit in units:
-        raw = unit_map.get(unit)
-        if isinstance(raw, list):
-            rows.extend(item for item in raw if isinstance(item, dict))
-    return rows
-
-
-def _as_date(value: object) -> date | None:
-    if not value:
-        return None
-    try:
-        return date.fromisoformat(str(value)[:10])
-    except ValueError:
-        return None
-
-
-def _as_decimal(value: object) -> Decimal | None:
-    if value is None:
-        return None
-    try:
-        return Decimal(str(value))
-    except (InvalidOperation, ValueError):
-        return None
+    return ShareCounts(facts).on(as_of)
