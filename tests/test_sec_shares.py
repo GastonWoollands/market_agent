@@ -143,12 +143,23 @@ def test_impossible_count_is_read_as_thousands() -> None:
 
 
 def test_class_fragment_average_loses_to_a_recent_cover_count() -> None:
-    # FOUR: the only undimensioned average is a 1.7M-share class; the cover says 81M.
+    # FOUR: the only undimensioned average is a 1.7M-share class; the last cover says 83M.
     facts = _facts(
-        cover=[_instant("2024-02-20", 82_921_152)],
+        cover=[_instant("2023-02-20", 82_921_152)],
         average=[_span("2024-01-01", "2024-12-31", 1_668_826)],
     )
     assert ShareCounts(facts).on(date(2024, 12, 31)) == Decimal("82921152")
+
+
+def test_reverse_split_average_backed_by_eps_is_kept() -> None:
+    # FUBO 1:12 in March: the cover count is pre-split, NI / EPS agrees with the new average.
+    facts = _facts(
+        cover=[_instant("2025-09-30", 342_664_855)],
+        average=[_span("2026-04-01", "2026-06-30", 32_758_090)],
+        income=[_span("2026-04-01", "2026-06-30", -32_900_000)],
+        eps=[_span("2026-04-01", "2026-06-30", -1.00)],
+    )
+    assert ShareCounts(facts).on(AS_OF) == Decimal("32758090")
 
 
 def test_count_tagged_in_millions_of_thousands_is_rescaled_twice() -> None:

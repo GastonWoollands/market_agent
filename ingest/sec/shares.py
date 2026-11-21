@@ -37,6 +37,7 @@ MIN_SHARES = Decimal(100_000)
 MAX_SHARES = Decimal(50_000_000_000)
 # An average this many times below a recent cover count is a class fragment, not the total.
 FRAGMENT_RATIO = 10
+AGREE_TOLERANCE = Decimal("0.5")
 QUARTER_DAYS = (60, 120)
 
 
@@ -65,12 +66,19 @@ class ShareCounts:
                 reference = average if average is not None else self._latest_implied(as_of, floor)
                 return _plausible(rescale(instant, reference))
             if average is not None:
-                older = self._instant(as_of, as_of - timedelta(days=STALE_DAYS))
-                if older is not None and average * FRAGMENT_RATIO < older:
-                    # FOUR: the undimensioned average covers one small class only.
-                    return _plausible(older)
-                return _plausible(average)
+                return _plausible(self._unless_fragment(average, as_of, floor))
         return None
+
+    def _unless_fragment(self, average: Decimal, as_of: date, floor: date) -> Decimal:
+        """An average 10x below the last cover count is one share class (FOUR), unless NI / EPS
+        backs it (FUBO after a 1:12 reverse split). Without EPS the older count wins."""
+        older = self._instant(as_of, date.min)
+        if older is None or average * FRAGMENT_RATIO >= older:
+            return average
+        implied = self._latest_implied(as_of, floor)
+        if implied is not None and abs(average / implied - 1) <= AGREE_TOLERANCE:
+            return average
+        return older
 
     def _instant(self, as_of: date, floor: date) -> Decimal | None:
         best: tuple[date, Decimal] | None = None
