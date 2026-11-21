@@ -25,7 +25,7 @@ from store.repos import (
 def test_alembic_has_one_head() -> None:
     script = ScriptDirectory.from_config(Config("alembic.ini"))
     heads = script.get_heads()
-    assert heads == ["0026_score_exclusion"], heads
+    assert heads == ["0027_stock_split"], heads
 
 
 def test_schema_behind_error_maps_missing_table() -> None:
@@ -75,8 +75,9 @@ def test_retry_call_does_not_retry_429() -> None:
     with pytest.raises(YahooHttpError):
         retry_call(
             once,
-            retryable=lambda exc: isinstance(exc, YahooHttpError)
-            and retryable_status(exc.status_code),
+            retryable=lambda exc: (
+                isinstance(exc, YahooHttpError) and retryable_status(exc.status_code)
+            ),
             sleep=lambda _: None,
         )
     assert calls["n"] == 1
@@ -164,9 +165,7 @@ def test_yahoo_rerun_does_not_duplicate_daily_or_intraday_bars() -> None:
             select(func.count()).select_from(BarDaily).where(BarDaily.instrument_id == iid)
         ).scalar_one()
         intra_n = session.execute(
-            select(func.count())
-            .select_from(BarIntraday)
-            .where(BarIntraday.instrument_id == iid)
+            select(func.count()).select_from(BarIntraday).where(BarIntraday.instrument_id == iid)
         ).scalar_one()
         session.execute(delete(BarIntraday).where(BarIntraday.instrument_id == iid))
         session.execute(delete(BarDaily).where(BarDaily.instrument_id == iid))

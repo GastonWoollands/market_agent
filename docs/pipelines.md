@@ -121,7 +121,7 @@ Calendar still writes FOMC/CPI dates if Finnhub is unset; earnings just stay emp
 | # | Command | Why |
 |---|---------|-----|
 | 11 | `python -m jobs.ingest_sec --rebuild` | SEC tickers + TTM + fiscal-year snapshots; screens every listing into the ~700–1000 name universe (zip) |
-| 12 | `python -m jobs.ingest_yahoo --universe valuation` | Daily bars for those names (≤2 req/s — long) |
+| 12 | `python -m jobs.ingest_yahoo --universe valuation` | Daily bars and split events (`stock_split`, same request) for those names (≤2 req/s — long). `compute_valuation` reads the splits to put pre-split SEC share counts on the close basis |
 | 13 | `python -m jobs.compute_valuation` | EV/EBITDA, 5y percentile, growth × re-rating |
 | 14 | `python -m jobs.compute_quant` | Gem-candidate flag + ratio snapshot (`quant_score`). F-score / Z are not computed |
 | 14a | `python -m jobs.ingest_sec_profile --resume` | Sector (SIC → `config/sic_sectors.yaml`) + SEC industry on `instrument`; ~1 SEC request per name, `--resume` skips names that have a sector |
@@ -403,7 +403,7 @@ Both write to `outlook_report` table. UI displays latest for the date.
 | Job | Writes | Flags |
 |-----|--------|-------|
 | `jobs.seed_tape` | `instrument`, `universe`, `universe_member` | — |
-| `jobs.ingest_yahoo` | `bar_daily`, `quote_latest` | `--universe tape\|valuation\|watchlist`, `--tickers A,B`, `--resume` |
+| `jobs.ingest_yahoo` | `bar_daily`, `quote_latest`, `stock_split` | `--universe tape\|valuation\|watchlist`, `--tickers A,B`, `--resume` |
 | `jobs.ingest_fred` | `macro_series`, `macro_observation` | `--series DGS10,VIXCLS` |
 | `jobs.compute_regime` | `regime_snapshot` | `--as-of YYYY-MM-DD` |
 | `jobs.ingest_polymarket` | `odds_snapshot` | `--slots front_fomc,core_cpi_yoy`, `--slugs slug-a,slug-b` |

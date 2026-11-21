@@ -16,6 +16,7 @@ from ingest.yahoo.parse import (
     option_quotes_from_frame,
     quarterly_statements_from_frames,
     snapshot_from_chart_meta,
+    splits_from_history,
     underlying_from_quote,
 )
 from ingest.yahoo.rate_limit import TokenBucket
@@ -27,6 +28,7 @@ from store.canonical import (
     OptionUnderlying,
     QuarterlyStatement,
     QuoteSnapshot,
+    StockSplit,
 )
 
 
@@ -67,17 +69,24 @@ class YahooClient:
     def fetch_chart(
         self, symbol: str, *, range_: str = "5y", interval: str = "1d"
     ) -> list[DailyBar]:
+        bars, _splits = self.fetch_history(symbol, range_=range_, interval=interval)
+        return bars
+
+    def fetch_history(
+        self, symbol: str, *, range_: str = "5y", interval: str = "1d"
+    ) -> tuple[list[DailyBar], list[StockSplit]]:
+        """Daily bars plus split events from one request. Closes are split-adjusted by Yahoo."""
         ticker = self._ticker(symbol)
         frame = self._history(
             ticker,
             period=range_,
             interval=interval,
             auto_adjust=False,
-            actions=False,
+            actions=True,
             raise_errors=True,
             timeout=self._timeout,
         )
-        return bars_from_history(frame, symbol)
+        return bars_from_history(frame, symbol), splits_from_history(frame, symbol)
 
     def fetch_intraday(
         self,
@@ -181,14 +190,13 @@ class YahooClient:
             except YahooHttpError:
                 raise
             except Exception as exc:
-                raise YahooHttpError(
-                    f"request failed ({exc.__class__.__name__})"
-                ) from exc
+                raise YahooHttpError(f"request failed ({exc.__class__.__name__})") from exc
 
         return retry_call(
             once,
-            retryable=lambda exc: isinstance(exc, YahooHttpError)
-            and retryable_status(exc.status_code),
+            retryable=lambda exc: (
+                isinstance(exc, YahooHttpError) and retryable_status(exc.status_code)
+            ),
         )
 
     def _ticker(self, symbol: str) -> yf.Ticker:

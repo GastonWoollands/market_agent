@@ -53,3 +53,25 @@ def test_short_history_is_not_comparable() -> None:
     assert row.comparable is False
     assert row.pctile_5y is None
     assert row.ev_ebitda == pytest.approx(2.0)
+
+
+def test_job_fundamentals_put_pre_split_rows_on_the_close_basis() -> None:
+    from types import SimpleNamespace
+
+    from analytics.splits import ShareBasis
+    from jobs.compute_valuation import fundamentals
+
+    def row(day: date, shares: float, ebitda: float = 100.0) -> SimpleNamespace:
+        return SimpleNamespace(as_of=day, shares=shares, ebitda=ebitda, net_debt=0.0)
+
+    metrics = [
+        row(date(2025, 6, 30), 200.0),
+        # Negative EBITDA drops this row from EV/EBITDA but not from the share series.
+        row(date(2025, 9, 30), 201.0, ebitda=-5.0),
+        row(date(2025, 12, 31), 1005.0),
+    ]
+    funds = fundamentals(metrics, ShareBasis([(date(2025, 12, 18), 5)]))
+    assert [(item.as_of, item.shares) for item in funds] == [
+        (date(2025, 6, 30), 1000.0),
+        (date(2025, 12, 31), 1005.0),
+    ]

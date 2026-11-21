@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 
+from analytics.splits import ShareBasis
 from analytics.valuation import LOOKBACK_DAYS, Fundamental, snapshot
 from jobs.runtime import record_job
 from store.catalog import load_universes
@@ -15,6 +16,7 @@ from store.repos import (
     closes_for_instrument_ids,
     instruments_in_universe,
     metric_ttm_history,
+    splits_for_instrument_ids,
     upsert_valuation_daily,
 )
 
@@ -35,6 +37,27 @@ def _dec(value: float | None, places: int = 6) -> Decimal | None:
     return Decimal(str(round(value, places)))
 
 
+def fundamentals(metrics: list, basis: ShareBasis) -> list[Fundamental]:
+    """TTM rows usable for EV/EBITDA, shares put on the split basis of the stored closes.
+
+    The basis is placed on the full share series: dropping a negative-EBITDA quarter first
+    would break the adjacent-pair match in ShareBasis.
+    """
+    counted = [metric for metric in metrics if metric.shares is not None and metric.shares > 0]
+    factors = basis.factors([(metric.as_of, float(metric.shares)) for metric in counted])
+    factor_by_day = {metric.as_of: factor for metric, factor in zip(counted, factors, strict=True)}
+    return [
+        Fundamental(
+            as_of=metric.as_of,
+            ebitda=float(metric.ebitda),
+            net_debt=float(metric.net_debt),
+            shares=float(metric.shares) * factor_by_day[metric.as_of],
+        )
+        for metric in counted
+        if metric.ebitda is not None and metric.net_debt is not None and metric.ebitda > 0
+    ]
+
+
 def compute() -> dict[str, object]:
     start = date.today() - timedelta(days=LOOKBACK_DAYS)
     # Banks (curated, Phase 1.15) get P/E, P/B, ROE; EV/EBITDA does not apply to them.
@@ -48,22 +71,11 @@ def compute() -> dict[str, object]:
         ids = [item.id for item in instruments]
         closes = closes_for_instrument_ids(session, ids, start=start)
         history = metric_ttm_history(session, ids)
-        funds_by_id: dict[int, list[Fundamental]] = {}
-        for instrument_id, metrics in history.items():
-            funds_by_id[instrument_id] = [
-                Fundamental(
-                    as_of=metric.as_of,
-                    ebitda=float(metric.ebitda),
-                    net_debt=float(metric.net_debt),
-                    shares=float(metric.shares),
-                )
-                for metric in metrics
-                if metric.ebitda is not None
-                and metric.net_debt is not None
-                and metric.shares is not None
-                and metric.ebitda > 0
-                and metric.shares > 0
-            ]
+        splits = splits_for_instrument_ids(session, ids)
+        funds_by_id = {
+            instrument_id: fundamentals(metrics, ShareBasis(splits.get(instrument_id, [])))
+            for instrument_id, metrics in history.items()
+        }
         prices_by_id = {
             instrument_id: [(day, float(close)) for day, close in rows]
             for instrument_id, rows in closes.items()

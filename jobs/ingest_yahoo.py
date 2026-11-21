@@ -14,6 +14,7 @@ from store.repos import (
     instruments_in_universe,
     upsert_daily_bars,
     upsert_quotes,
+    upsert_stock_splits,
 )
 
 log = logging.getLogger("jobs.ingest_yahoo")
@@ -55,12 +56,13 @@ def ingest(
         )
     if not instruments:
         if resume:
-            return {"bar_rows": 0, "quote_rows": 0, "failures": []}
+            return {"bar_rows": 0, "split_rows": 0, "quote_rows": 0, "failures": []}
         raise RuntimeError(f"{universe} universe is empty — run the seed/SEC job first")
 
     by_yahoo = {item.yahoo_symbol: item for item in instruments}
     failures: list[str] = []
     bar_rows = 0
+    split_rows = 0
     quote_rows = 0
     required = {ticker.upper() for ticker in REQUIRED.get(universe, ())}
     if tickers:
@@ -71,7 +73,7 @@ def ingest(
     with YahooClient() as client:
         for index, instrument in enumerate(ordered, start=1):
             try:
-                bars = client.fetch_chart(instrument.yahoo_symbol, range_=CHART_RANGE)
+                bars, splits = client.fetch_history(instrument.yahoo_symbol, range_=CHART_RANGE)
             except YahooHttpError as exc:
                 log.warning("%s chart failed: %s", instrument.ticker, exc)
                 failures.append(f"{instrument.ticker}: {exc}")
@@ -83,8 +85,10 @@ def ingest(
                 log.warning("%s chart failed: %s", instrument.ticker, exc)
                 failures.append(f"{instrument.ticker}: {exc}")
                 continue
+            # Same transaction: the close basis and the split table must not diverge.
             with session_scope() as session:
                 bar_rows += upsert_daily_bars(session, instrument.id, bars)
+                split_rows += upsert_stock_splits(session, instrument.id, splits)
             if index % 50 == 0:
                 log.info("yahoo %s %s/%s", universe, index, len(ordered))
 
@@ -111,6 +115,7 @@ def ingest(
 
     return {
         "bar_rows": bar_rows,
+        "split_rows": split_rows,
         "quote_rows": quote_rows,
         "failures": failures,
     }
@@ -149,6 +154,7 @@ def main() -> None:
             run.rows = int(result["bar_rows"]) + int(result["quote_rows"])
             run.extra = {
                 "bar_rows": result["bar_rows"],
+                "split_rows": result.get("split_rows", 0),
                 "quote_rows": result["quote_rows"],
                 "failures": failures,
                 "universe": args.universe,

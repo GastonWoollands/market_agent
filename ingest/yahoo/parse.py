@@ -14,6 +14,7 @@ from store.canonical import (
     OptionUnderlying,
     QuarterlyStatement,
     QuoteSnapshot,
+    StockSplit,
 )
 
 ET = ZoneInfo("America/New_York")
@@ -98,6 +99,22 @@ def bars_from_history(frame: Any, symbol: str) -> list[DailyBar]:
     return bars
 
 
+def splits_from_history(frame: Any, symbol: str) -> list[StockSplit]:
+    """Split events from a `history(actions=True)` frame. No column or no events → []."""
+    if frame is None or getattr(frame, "empty", True):
+        return []
+    if "Stock Splits" not in getattr(frame, "columns", ()):
+        return []
+    splits: dict[date, StockSplit] = {}
+    for index_value, row in frame.iterrows():
+        ratio = _dec(row["Stock Splits"])
+        if ratio is None or ratio <= 0 or ratio == 1:
+            continue
+        day = _session_date(index_value)
+        splits[day] = StockSplit(yahoo_symbol=symbol, date=day, ratio=ratio)
+    return [splits[day] for day in sorted(splits)]
+
+
 def bars_from_intraday(frame: Any, symbol: str, interval: str) -> list[IntradayBar]:
     if frame is None or getattr(frame, "empty", True):
         raise YahooParseError(f"{symbol}: intraday is empty")
@@ -164,9 +181,7 @@ def snapshot_from_chart_meta(symbol: str, meta: dict[str, Any] | None) -> QuoteS
     )
 
 
-def option_quotes_from_frame(
-    frame: Any, symbol: str, expiry: date, kind: str
-) -> list[OptionQuote]:
+def option_quotes_from_frame(frame: Any, symbol: str, expiry: date, kind: str) -> list[OptionQuote]:
     """One side of `option_chain(expiry)`. Rows without a strike are dropped."""
     if frame is None or getattr(frame, "empty", True):
         return []

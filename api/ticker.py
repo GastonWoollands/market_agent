@@ -25,6 +25,7 @@ from analytics.desk import (
 )
 from analytics.risk import snapshot as risk_snapshot
 from analytics.rrg import align_pair
+from analytics.splits import ShareBasis
 from analytics.technicals import indexed, relative_return, technicals
 from api.schemas import (
     CompareResponse,
@@ -55,6 +56,7 @@ from store.repos import (
     metric_ttm_history,
     news_for_name,
     opportunity_score_map,
+    splits_for_instrument_ids,
     universes_for_instrument,
     upcoming_events_for_ticker,
 )
@@ -81,6 +83,8 @@ class NameInputs:
     adj_closes: Series = field(default_factory=list)
     ttm: list[Any] = field(default_factory=list)
     fy: list[Any] = field(default_factory=list)
+    # Yahoo split events (date, ratio): TTM share counts are put on the close basis.
+    splits: list[tuple[date, Any]] = field(default_factory=list)
     valuation: Any | None = None
     score: Any | None = None
     ranked: int = 0
@@ -214,7 +218,8 @@ def _desk(item: NameInputs, price: TickerPrice | None) -> TickerDesk | None:
     value = item.valuation if "valuation" in item.universes else None
     if latest is None and value is None:
         return None
-    shares = _num(getattr(latest, "shares", None))
+    split_shares = _split_basis_shares(item)
+    shares = split_shares.get(getattr(latest, "as_of", None))
     net_debt = _num(getattr(latest, "net_debt", None))
     ebitda = _num(getattr(latest, "ebitda", None))
     market_cap = price.close * shares if price and shares else None
@@ -249,7 +254,7 @@ def _desk(item: NameInputs, price: TickerPrice | None) -> TickerDesk | None:
         interest_coverage=interest_coverage(
             getattr(latest, "ebit", None), getattr(latest, "interest_expense", None)
         ),
-        share_change_1y=share_change(shares, getattr(prior, "shares", None)),
+        share_change_1y=share_change(shares, split_shares.get(getattr(prior, "as_of", None))),
         financing_gap=financing_gap(
             getattr(latest, "capex", None), getattr(latest, "cfo", None), market_cap
         ),
@@ -371,6 +376,17 @@ def _indexed_points(series: Series) -> list[DynamicsPoint]:
     return [DynamicsPoint(date=day, value=value) for day, value in indexed(series)]
 
 
+def _split_basis_shares(item: NameInputs) -> dict[date, float]:
+    """TTM share counts by as_of, on the split basis of Yahoo's closes."""
+    rows = [
+        (row.as_of, float(row.shares))
+        for row in item.ttm
+        if getattr(row, "shares", None) is not None and row.shares > 0
+    ]
+    adjusted = ShareBasis(item.splits).adjust(rows)
+    return {day: count for (day, _raw), count in zip(rows, adjusted, strict=True)}
+
+
 def _year_ago(rows: Sequence[Any]) -> Any | None:
     if not rows:
         return None
@@ -445,6 +461,7 @@ def load_names(
     adj = adj_closes_for_instrument_ids(db, ids, start=start)
     ttm = metric_ttm_history(db, ids)
     fy = metric_fy_history(db, ids)
+    splits = splits_for_instrument_ids(db, ids)
     values = latest_valuation_map(db, ids)
     scores, ranked = opportunity_score_map(db, ids)
     risk = latest_risk_stats(db, ids)
@@ -458,6 +475,7 @@ def load_names(
             adj_closes=_floats(adj.get(inst.id, [])),
             ttm=ttm.get(inst.id, []),
             fy=fy.get(inst.id, []),
+            splits=splits.get(inst.id, []),
             valuation=values.get(inst.id),
             score=scores.get(inst.id),
             ranked=ranked,

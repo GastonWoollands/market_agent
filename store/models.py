@@ -89,9 +89,7 @@ class JobRun(Base):
     error: Mapped[str | None] = mapped_column(Text)
     extra: Mapped[dict[str, Any] | None] = mapped_column("meta", JSONB)
 
-    __table_args__ = (
-        CheckConstraint("status IN ('running', 'ok', 'error')", name="status"),
-    )
+    __table_args__ = (CheckConstraint("status IN ('running', 'ok', 'error')", name="status"),)
 
 
 class BarDaily(Base):
@@ -110,6 +108,19 @@ class BarDaily(Base):
     source: Mapped[str] = mapped_column(String(16), nullable=False)
 
     instrument: Mapped[Instrument] = relationship()
+
+
+class StockSplitRow(Base):
+    """Yahoo split events. Yahoo closes are split-adjusted; SEC share counts are as reported."""
+
+    __tablename__ = "stock_split"
+
+    instrument_id: Mapped[int] = mapped_column(
+        ForeignKey("instrument.id", ondelete="CASCADE"), primary_key=True
+    )
+    date: Mapped[date] = mapped_column(Date, primary_key=True)
+    ratio: Mapped[Decimal] = mapped_column(Numeric(18, 8), nullable=False)
+    source: Mapped[str] = mapped_column(String(16), nullable=False)
 
 
 class QuoteLatest(Base):
@@ -270,9 +281,7 @@ class OptionChainSnapshot(Base):
     iv: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
     last_trade_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
-    __table_args__ = (
-        CheckConstraint("kind IN ('C', 'P')", name="ck_option_chain_snapshot_kind"),
-    )
+    __table_args__ = (CheckConstraint("kind IN ('C', 'P')", name="ck_option_chain_snapshot_kind"),)
 
 
 class OptionStats(Base):

@@ -17,6 +17,7 @@ from store.canonical import (
     OddsPoint,
     PolicyDoc,
     QuoteSnapshot,
+    StockSplit,
 )
 from store.canonical import MetricFy as FySnapshot
 from store.canonical import MetricTtm as TtmSnapshot
@@ -53,6 +54,7 @@ from store.models import (
     RrgPoint,
     ScoreExclusion,
     ShortInterest,
+    StockSplitRow,
     Universe,
     UniverseMember,
     ValuationDaily,
@@ -269,6 +271,45 @@ def upsert_daily_bars(
     )
     session.execute(stmt)
     return len(rows)
+
+
+def upsert_stock_splits(
+    session: Session,
+    instrument_id: int,
+    splits: Sequence[StockSplit],
+    *,
+    source: str = "yahoo",
+) -> int:
+    if not splits:
+        return 0
+    rows = [
+        {"instrument_id": instrument_id, "date": item.date, "ratio": item.ratio, "source": source}
+        for item in splits
+    ]
+    stmt = insert(StockSplitRow).values(rows)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["instrument_id", "date"],
+        set_={"ratio": stmt.excluded.ratio, "source": stmt.excluded.source},
+    )
+    session.execute(stmt)
+    return len(rows)
+
+
+def splits_for_instrument_ids(
+    session: Session, instrument_ids: Sequence[int]
+) -> dict[int, list[tuple[date, Decimal]]]:
+    """Split events per instrument, oldest first. Names without splits map to []."""
+    out: dict[int, list[tuple[date, Decimal]]] = {int(item): [] for item in instrument_ids}
+    if not instrument_ids:
+        return out
+    stmt = (
+        select(StockSplitRow.instrument_id, StockSplitRow.date, StockSplitRow.ratio)
+        .where(StockSplitRow.instrument_id.in_(list(instrument_ids)))
+        .order_by(StockSplitRow.instrument_id, StockSplitRow.date)
+    )
+    for instrument_id, day, ratio in session.execute(stmt):
+        out.setdefault(instrument_id, []).append((day, ratio))
+    return out
 
 
 def upsert_intraday_bars(
@@ -1760,9 +1801,7 @@ def options_market_dates(session: Session) -> set[date]:
     return set(session.scalars(select(OptionsMarketStats.as_of).distinct()))
 
 
-def options_market_history(
-    session: Session, *, start: date
-) -> list[OptionsMarketStats]:
+def options_market_history(session: Session, *, start: date) -> list[OptionsMarketStats]:
     stmt = (
         select(OptionsMarketStats)
         .where(OptionsMarketStats.as_of >= start)
