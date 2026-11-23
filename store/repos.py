@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -1433,6 +1433,16 @@ def latest_valuation_rows(
         .order_by(Instrument.ticker)
     )
     return list(session.execute(stmt).all())
+
+
+def delete_valuation_daily(session: Session, instrument_ids: Iterable[int]) -> int:
+    """Drop every stored multiple for names the last run could not value, so a row computed
+    from inputs since found wrong (a stale share count) never stays the latest."""
+    ids = list(instrument_ids)
+    if not ids:
+        return 0
+    stmt = delete(ValuationDaily).where(ValuationDaily.instrument_id.in_(ids))
+    return session.execute(stmt).rowcount or 0
 
 
 def prune_opportunity_scores(session: Session, keep: set[int]) -> int:

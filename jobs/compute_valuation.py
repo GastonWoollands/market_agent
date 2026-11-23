@@ -14,6 +14,7 @@ from store.catalog import load_universes
 from store.engine import session_scope
 from store.repos import (
     closes_for_instrument_ids,
+    delete_valuation_daily,
     instruments_in_universe,
     metric_ttm_history,
     splits_for_instrument_ids,
@@ -86,11 +87,13 @@ def compute() -> dict[str, object]:
 
     rows: list[dict[str, object]] = []
     skipped: list[str] = []
+    skipped_ids: list[int] = []
     comparable = 0
     for instrument in instruments:
         point = snapshot(prices_by_id.get(instrument.id, []), funds_by_id.get(instrument.id, []))
         if point is None:
             skipped.append(instrument.ticker)
+            skipped_ids.append(instrument.id)
             continue
         if point.comparable:
             comparable += 1
@@ -114,6 +117,9 @@ def compute() -> dict[str, object]:
 
     with session_scope() as session:
         written = upsert_valuation_daily(session, rows)
+        # A member with no snapshot now (e.g. no usable share count) shows no multiple rather
+        # than its last one, which scores and the Ticker page would keep reading as current.
+        cleared = delete_valuation_daily(session, skipped_ids)
 
     as_of = max(row["as_of"] for row in rows)
     return {
@@ -122,6 +128,7 @@ def compute() -> dict[str, object]:
         "comparable": comparable,
         "members": len(instruments),
         "skipped": skipped,
+        "cleared": cleared,
     }
 
 
@@ -152,12 +159,13 @@ def main() -> None:
         extra=result,
     )
     log.info(
-        "compute_valuation as_of=%s written=%s comparable=%s/%s skipped=%s",
+        "compute_valuation as_of=%s written=%s comparable=%s/%s skipped=%s cleared=%s",
         result["as_of"],
         result["written"],
         result["comparable"],
         result["members"],
         len(result["skipped"]) if isinstance(result["skipped"], list) else result["skipped"],
+        result["cleared"],
     )
 
 
