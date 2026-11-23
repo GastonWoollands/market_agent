@@ -122,7 +122,7 @@ Calendar still writes FOMC/CPI dates if Finnhub is unset; earnings just stay emp
 |---|---------|-----|
 | 11 | `python -m jobs.ingest_sec --rebuild` | SEC tickers + TTM + fiscal-year snapshots; screens every listing into the ~700–1000 name universe (zip) |
 | 12 | `python -m jobs.ingest_yahoo --universe valuation` | Daily bars and split events (`stock_split`, same request) for those names (≤2 req/s — long). `compute_valuation` reads the splits to put pre-split SEC share counts on the close basis |
-| 13 | `python -m jobs.compute_valuation` | EV/EBITDA, 5y percentile, growth × re-rating |
+| 13 | `python -m jobs.compute_valuation` | EV/EBITDA, 5y percentile, growth × re-rating. A member it cannot value (no usable shares, EBITDA or bars) loses its stored rows (`meta.cleared`), so no stale multiple stays the latest |
 | 14 | `python -m jobs.compute_quant` | Gem-candidate flag + ratio snapshot (`quant_score`). F-score / Z are not computed |
 | 14a | `python -m jobs.ingest_sec_profile --resume` | Sector (SIC → `config/sic_sectors.yaml`) + SEC industry on `instrument`; ~1 SEC request per name, `--resume` skips names that have a sector |
 | 14b | `python -m jobs.compute_risk` | Vol 3m/1y, downside vol, beta vs SPY/QQQ, drawdown → `risk_stats` (valuation ∪ watchlist ∪ tape) |

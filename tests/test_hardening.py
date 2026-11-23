@@ -14,11 +14,13 @@ from jobs.runtime import MIGRATE_HINT, schema_behind_error
 from store.canonical import DailyBar, IntradayBar
 from store.catalog import CatalogInstrument
 from store.engine import session_scope
-from store.models import BarDaily, BarIntraday, Instrument
+from store.models import BarDaily, BarIntraday, Instrument, ValuationDaily
 from store.repos import (
+    delete_valuation_daily,
     upsert_daily_bars,
     upsert_instrument,
     upsert_intraday_bars,
+    upsert_valuation_daily,
 )
 
 
@@ -184,3 +186,41 @@ def test_catalog_upsert_keeps_stored_cik() -> None:
         kept = upsert_instrument(session, catalog).cik
         session.execute(delete(Instrument).where(Instrument.id == iid))
     assert kept == "0000000001"
+
+
+@pytest.mark.skipif(not _postgres_up(), reason="postgres not available")
+def test_unvalued_member_loses_its_stored_multiples() -> None:
+    with session_scope() as session:
+        kept, gone = (
+            upsert_instrument(session, CatalogInstrument(ticker=t, yahoo=t, name=t))
+            for t in ("ZZVKP", "ZZVGN")
+        )
+        session.flush()
+        ids = [kept.id, gone.id]
+        rows = [
+            {
+                "instrument_id": iid,
+                "as_of": day,
+                "ev": Decimal("100"),
+                "ebitda": Decimal("10"),
+                "ev_ebitda": Decimal("10"),
+                "comparable": False,
+                "sample_size": 1,
+            }
+            for iid in ids
+            for day in (date(2026, 11, 19), date(2026, 11, 20))
+        ]
+        upsert_valuation_daily(session, rows)
+        cleared = delete_valuation_daily(session, [gone.id])
+        assert delete_valuation_daily(session, []) == 0
+        left = dict(
+            session.execute(
+                select(ValuationDaily.instrument_id, func.count())
+                .where(ValuationDaily.instrument_id.in_(ids))
+                .group_by(ValuationDaily.instrument_id)
+            ).all()
+        )
+        session.execute(delete(ValuationDaily).where(ValuationDaily.instrument_id.in_(ids)))
+        session.execute(delete(Instrument).where(Instrument.id.in_(ids)))
+    assert cleared == 2
+    assert left == {kept.id: 2}
